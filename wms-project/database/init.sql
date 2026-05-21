@@ -8,9 +8,12 @@ Create table orders (
 );
 CREATE TABLE products (
                         products_id SERIAL PRIMARY KEY,
+                        sku VARCHAR(50) UNIQUE,
                         barcode VARCHAR(50) UNIQUE,
                         name VARCHAR(150) NOT NULL,
+                        category VARCHAR(80) DEFAULT 'General',
                         price NUMERIC(10, 2),
+                        reorder_threshold INT DEFAULT 20 CHECK (reorder_threshold >= 0),
                         date_added TIMESTAMP DEFAULT NOW()
 );
 CREATE TABLE order_items (
@@ -30,4 +33,19 @@ CREATE TABLE storage_stock (
                                location_id INT REFERENCES warehouse_locations(location_id),
                                quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
                                CONSTRAINT unique_product_location UNIQUE (products_id, location_id)
+);
+CREATE TABLE users (
+                       user_id SERIAL PRIMARY KEY,
+                       employee_id VARCHAR(30) UNIQUE NOT NULL,
+                       first_name VARCHAR(80) NOT NULL,
+                       last_name VARCHAR(80) NOT NULL,
+                       email VARCHAR(150) UNIQUE NOT NULL,
+                       role VARCHAR(60) NOT NULL,
+                       zone_assignment VARCHAR(150) DEFAULT 'Unassigned',
+                       status VARCHAR(30) DEFAULT 'Active',
+                       avatar_url TEXT,
+                       password_hash TEXT NOT NULL,
+                       created_at TIMESTAMP DEFAULT NOW(),
+                       updated_at TIMESTAMP DEFAULT NOW(),
+                       CONSTRAINT users_status_check CHECK (status IN ('Active', 'Suspended'))
 );
