@@ -5,6 +5,7 @@
 **/.env
 **/.env.*
 !.env.example
+passwords
 
 # Logs
 *.log
