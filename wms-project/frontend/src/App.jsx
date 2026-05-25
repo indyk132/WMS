@@ -34,12 +34,12 @@ export default function App() {
 
     // Core reactive dataset
     const [products, setProducts] = useState([
-        { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99 },
-        { sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00 },
-        { sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99 },
-        { sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Artykuły chemiczne', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99 },
-        { sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99 },
-        { sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00 }
+        { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, stockEntries: [{ locationCode: 'C-03-01-01', quantity: 50 }, { locationCode: 'C-03-02-02', quantity: 70 }] },
+        { sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, stockEntries: [{ locationCode: 'A-01-01-02', quantity: 15 }] },
+        { sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99, stockEntries: [] },
+        { sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Artykuły chemiczne', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99, stockEntries: [{ locationCode: 'C-02-03-01', quantity: 8 }] },
+        { sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99, stockEntries: [{ locationCode: 'A-03-01-01', quantity: 120 }, { locationCode: 'A-03-02-04', quantity: 125 }] },
+        { sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, stockEntries: [{ locationCode: 'B-02-01-03', quantity: 45 }, { locationCode: 'B-02-03-02', quantity: 40 }] }
     ]);
 
     const [orders, setOrders] = useState([
@@ -213,7 +213,26 @@ export default function App() {
 
     // Outbound order adding
     const handleAddOrder = (newOrder) => {
-        setOrders([newOrder, ...orders]);
+        const enrichedOrder = {
+            ...newOrder,
+            internalNotesActor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System',
+            waybillNumber: `DPD${newOrder.id.replace('ORD-', '')}PL`,
+            waybillPdfDate: new Date().toLocaleDateString('pl-PL'),
+            pickingZones: [
+                { name: 'Strefa A', percentage: 100 }
+            ],
+            activityHistory: [
+                { 
+                    id: `act-${Date.now()}`, 
+                    title: 'Utworzono zlecenie wyjazdu', 
+                    actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System', 
+                    date: new Date().toLocaleDateString('pl-PL') 
+                }
+            ],
+            changeLogs: []
+        };
+        
+        setOrders([enrichedOrder, ...orders]);
 
         // Reduce corresponding items stock!
         newOrder.items.forEach(orderItem => {
@@ -234,6 +253,67 @@ export default function App() {
                 });
             });
         });
+    };
+
+    // Update order fields (e.g. customerName, internalNotes)
+    const handleUpdateOrder = (orderId, updatedFields) => {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedFields } : o));
+    };
+
+    // Update order status
+    const handleUpdateOrderStatus = (orderId, status) => {
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    };
+
+    // Add order change log and history
+    const handleAddOrderChangeLog = (orderId, title, description) => {
+        setOrders(prev => prev.map(o => {
+            if (o.id === orderId) {
+                const logs = o.changeLogs || [];
+                const newLog = {
+                    id: `log-${Date.now()}-${Math.random()}`,
+                    title,
+                    description,
+                    date: new Date().toLocaleString('pl-PL'),
+                    actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Użytkownik'
+                };
+                const history = o.activityHistory || [];
+                const newAct = {
+                    id: `act-${Date.now()}-${Math.random()}`,
+                    title: `${title}: ${description}`,
+                    actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Użytkownik',
+                    date: new Date().toLocaleString('pl-PL')
+                };
+                return { 
+                    ...o, 
+                    changeLogs: [newLog, ...logs],
+                    activityHistory: [newAct, ...history]
+                };
+            }
+            return o;
+        }));
+    };
+
+    // Delete staff user
+    const handleDeleteStaff = async (staffId) => {
+        try {
+            await deleteUser(staffId);
+        } catch (error) {
+            console.error('Delete user backend failed, doing local deletion:', error);
+        }
+        setStaffList(prev => prev.filter(u => u.id !== staffId));
+    };
+
+    // Update staff user
+    const handleUpdateStaff = async (staffId, updates) => {
+        let updatedUser = { id: staffId, ...updates };
+        try {
+            updatedUser = await updateUser(staffId, updates);
+        } catch (error) {
+            console.error('Update user backend failed, doing local update:', error);
+        }
+        setStaffList(prev => prev.map(u => u.id === staffId ? { ...u, ...updatedUser } : u));
+        return updatedUser;
     };
 
     // Modify SKU stock through backend and reload inventory.
@@ -282,11 +362,11 @@ export default function App() {
 
     // Sidebar navigation options
     const sideNavItems = [
-        { id: 'overview', label: 'Inventory Overview', icon: LayoutDashboard },
-        { id: 'orders', label: 'Order Management', icon: FileText },
-        { id: 'products', label: 'SKUs Inventory', icon: Package },
-        { id: 'zones', label: 'Warehouse Zones', icon: Map },
-        { id: 'permissions', label: 'User Permissions', icon: ShieldAlert },
+        { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+        { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+        { id: 'products', label: 'Stany Zapasów SKU', icon: Package },
+        { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+        { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
     ];
 
     return (
@@ -303,7 +383,7 @@ export default function App() {
                     </div>
                     <div>
                         <h1 className="font-bold text-base tracking-tight text-white leading-tight">Logistics OS</h1>
-                        <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mt-0.5 leading-none">Warehouse Control</p>
+                        <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mt-0.5 leading-none">Zarządzanie Magazynem</p>
                     </div>
                 </div>
 
@@ -348,7 +428,7 @@ export default function App() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-md text-xs font-bold transition-all"
                     >
                         <LogOut className="w-4 h-4 text-zinc-400" />
-                        <span>Wyloguj (Sign Out)</span>
+                        <span>Wyloguj się</span>
                     </button>
                 </div>
             </nav>
@@ -375,7 +455,7 @@ export default function App() {
                 <main className="mt-14 p-6 flex-grow max-w-[1600px] w-full mx-auto flex flex-col gap-6">
                     {inventorySync.isLoading && (
                         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-xs font-semibold">
-                            Laczenie z backendem inventory...
+                            Łączenie z backendem inventory...
                         </div>
                     )}
 
@@ -399,6 +479,9 @@ export default function App() {
                             orders={orders}
                             products={products}
                             onAddOrder={handleAddOrder}
+                            onUpdateOrder={handleUpdateOrder}
+                            onUpdateOrderStatus={handleUpdateOrderStatus}
+                            onAddOrderChangeLog={handleAddOrderChangeLog}
                         />
                     )}
 
@@ -422,6 +505,8 @@ export default function App() {
                         <UsersPermissions
                             staffList={staffList}
                             onAddStaff={handleAddStaff}
+                            onUpdateStaff={handleUpdateStaff}
+                            onDeleteStaff={handleDeleteStaff}
                             usersSync={usersSync}
                         />
                     )}

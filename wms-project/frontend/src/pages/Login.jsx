@@ -48,7 +48,7 @@ export default function Login({ onLoginSuccess }) {
                     Logistics OS
                 </h2>
                 <p className="mt-1.5 text-zinc-400 font-medium tracking-wide">
-                    Warehouse Control Portal
+                    Portal Kontroli Magazynu
                 </p>
             </div>
 
@@ -121,7 +121,7 @@ export default function Login({ onLoginSuccess }) {
                             >
                                 <div className="font-bold text-zinc-800 text-[11px] flex items-center gap-1">
                                     <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                                    System Admin
+                                    Administrator Systemu
                                 </div>
                                 <div className="text-[10px] text-zinc-500 mt-1">
                                     Haslo: <span className="font-mono font-semibold">admin</span>
@@ -135,7 +135,7 @@ export default function Login({ onLoginSuccess }) {
                             >
                                 <div className="font-bold text-zinc-800 text-[11px] flex items-center gap-1">
                                     <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-                                    Warehouse Manager
+                                    Kierownik Magazynu
                                 </div>
                                 <div className="text-[10px] text-zinc-500 mt-1">
                                     Haslo: <span className="font-mono font-semibold">manager</span>

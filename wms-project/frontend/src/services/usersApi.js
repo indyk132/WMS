@@ -44,3 +44,9 @@ export const updateUser = async (id, updates) => {
         body: JSON.stringify(updates),
     });
 };
+
+export const deleteUser = async (id) => {
+    return requestJson(`/api/users/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+    });
+};

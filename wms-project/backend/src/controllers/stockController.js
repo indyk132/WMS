@@ -1,6 +1,20 @@
 const { pool, table } = require('../db');
 const { sendDbError, toInteger } = require('../utils/httpErrors');
 
+const CATEGORY_ZONE_GROUPS = {
+    Zywnosc: ['Zywnosc', 'Przyjecia mieszane'],
+    Elektronika: ['Elektronika i biuro', 'Przyjecia mieszane'],
+    Biuro: ['Elektronika i biuro', 'Przyjecia mieszane'],
+    Motoryzacja: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+    Chemia: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+    BHP: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+};
+
+const isCategoryAllowedInZoneGroup = (category, zoneGroup) => {
+    const allowedGroups = CATEGORY_ZONE_GROUPS[category] || ['Przyjecia mieszane'];
+    return allowedGroups.includes(zoneGroup);
+};
+
 const parseNonNegativeInteger = (value) => {
     const parsed = toInteger(value);
     return parsed !== null && parsed >= 0 ? parsed : null;
@@ -23,6 +37,7 @@ const stockSelect = () => `
         p.reorder_threshold,
         s.location_id,
         wl.location_code,
+        wl.zone_group,
         s.quantity
     FROM ${table('storage_stock')} s
     JOIN ${table('products')} p ON p.products_id = s.products_id
@@ -40,6 +55,25 @@ const fetchStockById = async (client, stockId) => {
 
 const listStock = async (req, res) => {
     try {
+        const validation = await pool.query(`
+            SELECT p.category, wl.zone_group
+            FROM ${table('products')} p
+            CROSS JOIN ${table('warehouse_locations')} wl
+            WHERE p.products_id = $1 AND wl.location_id = $2
+        `, [productsId, locationId]);
+
+        const target = validation.rows[0];
+
+        if (!target) {
+            return res.status(404).json({ error: 'Produkt albo lokalizacja nie istnieje.' });
+        }
+
+        if (!isCategoryAllowedInZoneGroup(target.category, target.zone_group)) {
+            return res.status(400).json({
+                error: `Produkt z kategorii ${target.category} nie moze byc dodany do grupy ${target.zone_group}.`,
+            });
+        }
+
         const { rows } = await pool.query(`
             ${stockSelect()}
             ORDER BY wl.location_code, p.name
@@ -173,6 +207,27 @@ const transferStock = async (req, res) => {
 
     try {
         await client.query('BEGIN');
+
+        const targetValidation = await client.query(`
+            SELECT p.category, wl.zone_group
+            FROM ${table('products')} p
+            CROSS JOIN ${table('warehouse_locations')} wl
+            WHERE p.products_id = $1 AND wl.location_id = $2
+        `, [productsId, toLocationId]);
+
+        const target = targetValidation.rows[0];
+
+        if (!target) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Produkt albo lokalizacja docelowa nie istnieje.' });
+        }
+
+        if (!isCategoryAllowedInZoneGroup(target.category, target.zone_group)) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: `Produkt z kategorii ${target.category} nie moze byc przeniesiony do grupy ${target.zone_group}.`,
+            });
+        }
 
         const sourceResult = await client.query(`
             SELECT id, quantity

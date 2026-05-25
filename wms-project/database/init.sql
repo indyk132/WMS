@@ -25,7 +25,8 @@ CREATE TABLE order_items (
 );
 CREATE TABLE warehouse_locations (
                                      location_id SERIAL PRIMARY KEY,
-                                     location_code VARCHAR(20) UNIQUE NOT NULL
+                                     location_code VARCHAR(20) UNIQUE NOT NULL,
+                                     zone_group VARCHAR(80) DEFAULT 'General'
 );
 CREATE TABLE storage_stock (
                                id SERIAL PRIMARY KEY,

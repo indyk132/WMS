@@ -21,12 +21,38 @@ export default function Dashboard({
     const lowStockCount = products.filter(p => p.status === 'Low Stock').length;
     const totalStockSum = products.reduce((acc, p) => acc + p.stock, 0);
 
+    const getZoneGroup = (zoneId) => {
+        if (zoneId?.startsWith('A')) return 'Żywność';
+        if (zoneId?.startsWith('B')) return 'Elektronika i biuro';
+        if (zoneId?.startsWith('C')) return 'Motoryzacja, chemia i BHP';
+        return 'Ogólna';
+    };
+
+    const isCategoryAllowedInZone = (category, zoneId) => {
+        const zoneGroup = getZoneGroup(zoneId);
+        const allowedGroups = {
+            Zywnosc: ['Żywność'],
+            Elektronika: ['Elektronika i biuro'],
+            Biuro: ['Elektronika i biuro'],
+            Motoryzacja: ['Motoryzacja, chemia i BHP'],
+            Chemia: ['Motoryzacja, chemia i BHP'],
+            BHP: ['Motoryzacja, chemia i BHP'],
+        }[category] || [];
+
+        return allowedGroups.includes(zoneGroup);
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formSku) return;
 
         // Find product description
-        const prod = products.find(p => p.sku === formSku) || { name: 'Unknown Commodity' };
+        const prod = products.find(p => p.sku === formSku) || { name: 'Nieznany towar' };
+
+        if (!isCategoryAllowedInZone(prod.category, formZone)) {
+            alert(`Nie można dodać kategorii ${prod.category} do strefy ${getZoneGroup(formZone)}.`);
+            return;
+        }
 
         onAddAllocation({
             timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
@@ -51,7 +77,7 @@ export default function Dashboard({
                 <div className="bg-red-50 border-l-4 border-red-600 p-4 rounded shadow-sm flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-red-650 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                        <h4 className="font-bold text-red-800 text-xs uppercase tracking-wider">STAN KRYTYCZNY (Critical warning)</h4>
+                        <h4 className="font-bold text-red-800 text-xs uppercase tracking-wider">STAN KRYTYCZNY</h4>
                         <p className="text-red-700 text-xs mt-1 leading-relaxed">
                             Wykryto {outOfStockCount} pozycje bez żadnych zapasów na regałach. Strefa COLD STORAGE oraz HAZMAT wymaga natychmiastowej dyspozycji i weryfikacji dostaw.
                         </p>
@@ -63,10 +89,10 @@ export default function Dashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">
-                        Inventory Overview
+                        Podgląd Magazynu
                     </h2>
                     <p className="text-zinc-500 text-xs mt-1 leading-relaxed">
-                        Real-time status across all active warehouse zones.
+                        Stan stref magazynowych w czasie rzeczywistym.
                     </p>
                 </div>
                 <div className="flex gap-3">
@@ -87,7 +113,7 @@ export default function Dashboard({
                         className="h-9 px-4 rounded bg-zinc-900 hover:bg-zinc-850 text-white text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
                     >
                         <Plus className="w-4 h-4" />
-                        New Allocation
+                        Nowa Alokacja
                     </button>
                 </div>
             </div>
@@ -97,7 +123,7 @@ export default function Dashboard({
                 {/* Metric 1 */}
                 <div className="bg-white/90 backdrop-blur rounded-lg p-5 border border-zinc-200 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
-                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">TOTAL SKUS</span>
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">SUMA SKU</span>
                         <span className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-800 font-semibold text-xs">SKU</span>
                     </div>
                     <div className="text-2xl font-extrabold text-zinc-900 mb-1">
@@ -112,21 +138,21 @@ export default function Dashboard({
                 {/* Metric 2 */}
                 <div className="bg-white/95 backdrop-blur rounded-lg p-5 border border-red-250 shadow-sm bg-gradient-to-br from-white to-red-50/10">
                     <div className="flex justify-between items-start mb-2">
-                        <span className="text-[11px] font-bold text-red-600 uppercase tracking-widest">OUT OF STOCK</span>
+                        <span className="text-[11px] font-bold text-red-600 uppercase tracking-widest">BRAK NA STANIE</span>
                         <AlertTriangle className="w-4.5 h-4.5 text-red-600" />
                     </div>
                     <div className="text-2xl font-extrabold text-red-750 mb-1">
                         {outOfStockCount}
                     </div>
                     <div className="text-xs text-zinc-500 font-medium">
-                        Wymaga pilnej weryfikacji (Action required)
+                        Wymaga pilnej weryfikacji
                     </div>
                 </div>
 
                 {/* Metric 3 */}
                 <div className="bg-white/90 backdrop-blur rounded-lg p-5 border border-zinc-200 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
-                        <span className="text-[11px] font-bold text-amber-600 uppercase tracking-widest">LOW STOCK</span>
+                        <span className="text-[11px] font-bold text-amber-600 uppercase tracking-widest">NISKI STAN</span>
                         <AlertTriangle className="w-4.5 h-4.5 text-amber-500" />
                     </div>
                     <div className="text-2xl font-extrabold text-zinc-900 mb-1">
@@ -140,7 +166,7 @@ export default function Dashboard({
                 {/* Metric 4 */}
                 <div className="bg-white/90 backdrop-blur rounded-lg p-5 border border-zinc-200 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
-                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">INCOMING SHIPMENTS</span>
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">NADCHODZĄCE DOSTAWY</span>
                         <Database className="w-4.5 h-4.5 text-blue-600" />
                     </div>
                     <div className="text-2xl font-extrabold text-zinc-900 mb-1">
@@ -161,7 +187,7 @@ export default function Dashboard({
                             <Layers className="w-4 h-4 text-blue-600" />
                             Obciążenie stref według grup regałowych
                         </h3>
-                        <p className="text-zinc-500 text-xs mb-4">Wizualizacja zajętości procentowej palet w strefach halowych.</p>
+                        <p className="text-zinc-500 text-xs mb-4">Wizualizacja zajętości procentowej stanów w strefach halowych.</p>
                     </div>
 
                     <div className="space-y-4 my-2">
@@ -172,7 +198,7 @@ export default function Dashboard({
                                 <div key={zone.id} className="space-y-1">
                                     <div className="flex justify-between text-xs font-semibold text-zinc-800">
                                         <span className="font-mono">Regał {zone.id} ({zone.block})</span>
-                                        <span>{zone.totalPallets} / {zone.maxPallets} palet ({cap}%)</span>
+                                        <span>{zone.totalPallets} / {zone.maxPallets} szt. ({cap}%)</span>
                                     </div>
                                     <div className="w-full bg-zinc-100 rounded-full h-3.5 overflow-hidden border border-zinc-200 flex">
                                         <div className={`${barColor} h-full transition-all duration-500 rounded-full`} style={{ width: `${cap}%` }} />
@@ -188,14 +214,14 @@ export default function Dashboard({
                             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-amber-500 rounded-sm"></span> Normalne (20-90%)</span>
                             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></span> Niskie (&lt;20%)</span>
                         </div>
-                        <span className="font-bold text-blue-600 hover:underline cursor-pointer">Szczegołowa pojemność hal</span>
+                        <span className="font-bold text-blue-600 hover:underline cursor-pointer">Szczegółowa pojemność hal</span>
                     </div>
                 </div>
 
                 {/* Low Stock Watchlist */}
                 <div className="bg-white rounded-lg border border-zinc-200 p-5 shadow-sm">
                     <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wide mb-4">
-                        Krytyczny stan SKU (Watchlist)
+                        Krytyczny stan SKU (Lista obserwacyjna)
                     </h3>
                     <div className="space-y-3 max-h-[295px] overflow-y-auto pr-1">
                         {products
@@ -224,7 +250,7 @@ export default function Dashboard({
             <div className="bg-white rounded-lg border border-[#c6c6cd] shadow-sm overflow-hidden mt-6">
                 <div className="px-5 py-4 border-b border-[#c6c6cd] flex justify-between items-center">
                     <h3 className="font-bold text-zinc-900 uppercase tracking-wide">
-                        Ostatnie alokacje towaru (Recent Allocations Log)
+                        Dziennik ostatnich alokacji towaru
                     </h3>
                     <span className="text-[11px] font-mono text-zinc-500">Auto-odświeżanie aktywne</span>
                 </div>
@@ -236,15 +262,15 @@ export default function Dashboard({
                             <th className="py-2.5 px-4">Typ operacji</th>
                             <th className="py-2.5 px-4">SKU</th>
                             <th className="py-2.5 px-4">Nazwa towaru</th>
-                            <th className="py-2.5 px-4">Aisle (Korytarz)</th>
-                            <th className="py-2.5 px-4 text-right">Ilość palet</th>
+                            <th className="py-2.5 px-4">Korytarz</th>
+                            <th className="py-2.5 px-4 text-right">Ilość szt.</th>
                             <th className="py-2.5 px-4 text-right">Operator</th>
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-200 truncate text-[12px] text-zinc-800">
                         {allocationsLog.length === 0 ? (
                             <tr>
-                                <td colSpan="7" className="py-6 text-center text-zinc-500 font-medium">Brak niedawnych alokacji. Kliknij "New Allocation" u góry aby dodać.</td>
+                                <td colSpan="7" className="py-6 text-center text-zinc-500 font-medium">Brak niedawnych alokacji. Kliknij "Nowa Alokacja" u góry, aby dodać.</td>
                             </tr>
                         ) : (
                             allocationsLog.map((log, idx) => (
@@ -256,7 +282,7 @@ export default function Dashboard({
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                               : 'bg-blue-100 text-blue-800 border border-blue-200'
                       }`}>
-                        {log.type}
+                        {log.type === 'Inbound Receive' ? 'Rozładunek (Inbound)' : 'Przeniesienie wewnętrzne'}
                       </span>
                                     </td>
                                     <td className="py-2 px-4 font-mono font-semibold text-blue-600">{log.sku}</td>
@@ -308,7 +334,7 @@ export default function Dashboard({
                                         className="w-full p-2 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-zinc-950 bg-white"
                                     >
                                         {zones.map(z => (
-                                            <option key={z.id} value={z.id}>Korytarz {z.id} ({z.block})</option>
+                                            <option key={z.id} value={z.id}>Korytarz {z.id} ({getZoneGroup(z.id)})</option>
                                         ))}
                                     </select>
                                 </div>

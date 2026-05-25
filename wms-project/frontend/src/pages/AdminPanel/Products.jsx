@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Package, Search, PlusCircle, AlertTriangle, PlayCircle, Info, RefreshCw, Layers } from 'lucide-react';
 
+const polishStatusMap = {
+    'In Stock': 'Dostępny',
+    'Low Stock': 'Niski stan',
+    'Out of Stock': 'Brak na stanie',
+};
+
 export default function Products({ products, onUpdateStock, onRestockItem }) {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
@@ -50,8 +56,8 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
             {/* Page Header */}
             <div className="flex justify-between items-end mb-2">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight border-none">SKUs Inventory Directory</h2>
-                    <p className="text-zinc-500 text-xs mt-1">Real-time product stock level, reorder threshold values, and aisle positions.</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight border-none">Katalog Zapasów SKU</h2>
+                    <p className="text-zinc-500 text-xs mt-1">Stan zapasów produktów w czasie rzeczywistym, poziomy ostrzegawcze i lokalizacje.</p>
                 </div>
                 <button
                     onClick={async () => {
@@ -120,9 +126,9 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                         className="w-full p-2 border border-zinc-350 rounded bg-white text-xs text-zinc-800 outline-none"
                     >
                         <option value="">Wszystkie statusy</option>
-                        <option value="In Stock">Dostępny (In Stock)</option>
-                        <option value="Low Stock">Niski stan (Low Stock)</option>
-                        <option value="Out of Stock">Brak na stanie (Out of Stock)</option>
+                        <option value="In Stock">Dostępny</option>
+                        <option value="Low Stock">Niski stan</option>
+                        <option value="Out of Stock">Brak na stanie</option>
                     </select>
                 </div>
             </div>
@@ -136,7 +142,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                             <th className="py-2.5 px-4 font-bold">Kod SKU</th>
                             <th className="py-2.5 px-4 font-bold">Nazwa towaru podzespołu</th>
                             <th className="py-2.5 px-4 font-bold">Kategoria</th>
-                            <th className="py-2.5 px-4 font-bold">Położenie (Aisle)</th>
+                            <th className="py-2.5 px-4 font-bold">Położenie</th>
                             <th className="py-2.5 px-4 text-right font-bold">Próg ostrzeżenia</th>
                             <th className="py-2.5 px-4 text-right font-bold">Cena jednostkowa</th>
                             <th className="py-2.5 px-4 text-center font-bold">Status</th>
@@ -155,7 +161,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                     <td className="py-3 px-4 font-mono font-bold text-blue-600">{p.sku}</td>
                                     <td className="py-3 px-4 font-bold text-zinc-900">{p.name}</td>
                                     <td className="py-3 px-4 text-zinc-500">{p.category}</td>
-                                    <td className="py-3 px-4 font-mono font-bold text-zinc-650">{p.locationCode || `Aisle ${p.zone}`}</td>
+                                    <td className="py-3 px-4 font-mono font-bold text-zinc-650">{p.locationCode || `Korytarz ${p.zone}`}</td>
                                     <td className="py-3 px-4 text-right font-mono text-zinc-500">{p.reorderThreshold} szt.</td>
                                     <td className="py-3 px-4 text-right font-mono text-zinc-650">{(p.price || 199.99).toFixed(2)} PLN</td>
                                     <td className="py-3 px-4 text-center">
@@ -166,7 +172,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                   ? 'bg-amber-50 text-amber-800 border-amber-200'
                                   : 'bg-red-50 text-red-750 border-red-200'
                       }`}>
-                        {p.status}
+                        {polishStatusMap[p.status] || p.status}
                       </span>
                                     </td>
                                     <td className="py-3 px-4 text-right font-mono font-extrabold text-[#0b1c30]">{p.stock}</td>

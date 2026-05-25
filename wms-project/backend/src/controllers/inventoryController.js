@@ -1,6 +1,20 @@
 const { pool, table } = require('../db');
 const { sendDbError, toInteger } = require('../utils/httpErrors');
 
+const CATEGORY_ZONE_GROUPS = {
+    Zywnosc: ['Zywnosc', 'Przyjecia mieszane'],
+    Elektronika: ['Elektronika i biuro', 'Przyjecia mieszane'],
+    Biuro: ['Elektronika i biuro', 'Przyjecia mieszane'],
+    Motoryzacja: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+    Chemia: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+    BHP: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+};
+
+const isCategoryAllowedInZoneGroup = (category, zoneGroup) => {
+    const allowedGroups = CATEGORY_ZONE_GROUPS[category] || ['Przyjecia mieszane'];
+    return allowedGroups.includes(zoneGroup);
+};
+
 const getInventoryStatus = async (req, res) => {
     try {
         const { rows } = await pool.query(`
@@ -15,6 +29,7 @@ const getInventoryStatus = async (req, res) => {
                 p.reorder_threshold,
                 wl.location_id,
                 wl.location_code,
+                wl.zone_group,
                 COALESCE(s.quantity, 0) AS quantity
             FROM ${table('products')} p
             LEFT JOIN ${table('storage_stock')} s ON s.products_id = p.products_id
@@ -30,19 +45,26 @@ const getInventoryStatus = async (req, res) => {
 
 const getPreferredLocationId = async (client, product, requestedLocationId) => {
     if (requestedLocationId) {
-        return requestedLocationId;
+        const locationResult = await client.query(`
+            SELECT location_id, zone_group
+            FROM ${table('warehouse_locations')}
+            WHERE location_id = $1
+        `, [requestedLocationId]);
+
+        return locationResult.rows[0] || null;
     }
 
     const existingLocation = await client.query(`
-        SELECT location_id
+        SELECT location_id, zone_group
         FROM ${table('storage_stock')}
+        JOIN ${table('warehouse_locations')} USING (location_id)
         WHERE products_id = $1
         ORDER BY id
         LIMIT 1
     `, [product.products_id]);
 
     if (existingLocation.rows[0]) {
-        return existingLocation.rows[0].location_id;
+        return existingLocation.rows[0];
     }
 
     const categoryPrefix = {
@@ -55,7 +77,7 @@ const getPreferredLocationId = async (client, product, requestedLocationId) => {
     }[product.category] || 'A-%';
 
     const preferredLocation = await client.query(`
-        SELECT location_id
+        SELECT location_id, zone_group
         FROM ${table('warehouse_locations')}
         WHERE location_code LIKE $1
         ORDER BY location_code
@@ -63,17 +85,17 @@ const getPreferredLocationId = async (client, product, requestedLocationId) => {
     `, [categoryPrefix]);
 
     if (preferredLocation.rows[0]) {
-        return preferredLocation.rows[0].location_id;
+        return preferredLocation.rows[0];
     }
 
     const fallbackLocation = await client.query(`
-        SELECT location_id
+        SELECT location_id, zone_group
         FROM ${table('warehouse_locations')}
         ORDER BY location_code
         LIMIT 1
     `);
 
-    return fallbackLocation.rows[0]?.location_id || null;
+    return fallbackLocation.rows[0] || null;
 };
 
 const adjustInventoryQuantity = async (req, res) => {
@@ -109,11 +131,18 @@ const adjustInventoryQuantity = async (req, res) => {
         }
 
         if (delta > 0) {
-            const locationId = await getPreferredLocationId(client, product, requestedLocationId);
+            const location = await getPreferredLocationId(client, product, requestedLocationId);
 
-            if (!locationId) {
+            if (!location) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Brak lokalizacji docelowej dla produktu.' });
+            }
+
+            if (!isCategoryAllowedInZoneGroup(product.category, location.zone_group)) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({
+                    error: `Produkt z kategorii ${product.category} nie moze byc dodany do grupy ${location.zone_group}.`,
+                });
             }
 
             const existingStock = await client.query(`
@@ -121,7 +150,7 @@ const adjustInventoryQuantity = async (req, res) => {
                 FROM ${table('storage_stock')}
                 WHERE products_id = $1 AND location_id = $2
                 FOR UPDATE
-            `, [product.products_id, locationId]);
+            `, [product.products_id, location.location_id]);
 
             if (existingStock.rows[0]) {
                 await client.query(`
@@ -133,7 +162,7 @@ const adjustInventoryQuantity = async (req, res) => {
                 await client.query(`
                     INSERT INTO ${table('storage_stock')} (products_id, location_id, quantity)
                     VALUES ($1, $2, $3)
-                `, [product.products_id, locationId, delta]);
+                `, [product.products_id, location.location_id, delta]);
             }
         } else {
             let remaining = Math.abs(delta);

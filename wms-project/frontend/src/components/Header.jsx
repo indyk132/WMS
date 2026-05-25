@@ -15,17 +15,17 @@ export default function Header({
     const getTabLabel = () => {
         switch (currentTab) {
             case 'overview':
-                return 'Inventory Overview';
+                return 'Podgląd Magazynu';
             case 'orders':
-                return 'Order Management';
+                return 'Zarządzanie Zamówieniami';
             case 'zones':
-                return 'Warehouse Zones';
+                return 'Strefy Magazynowe';
             case 'permissions':
-                return 'User Permissions';
+                return 'Uprawnienia Użytkowników';
             case 'products':
-                return 'SKUs Inventory';
+                return 'Stany Zapasów SKU';
             default:
-                return 'Admin Panel';
+                return 'Panel Administracyjny';
         }
     };
 
@@ -42,7 +42,7 @@ export default function Header({
                 </button>
 
                 <h2 className="font-sans text-sm font-bold text-zinc-900 hidden sm:block">
-                    Admin Dashboard
+                    Panel Administratora
                 </h2>
                 <div className="h-4 w-px bg-zinc-200 hidden sm:block"></div>
                 <span className="font-sans text-[11px] text-zinc-500 font-medium flex items-center gap-1.5">
@@ -122,7 +122,7 @@ export default function Header({
                                         className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-semibold"
                                     >
                                         <LogOut className="w-3.5 h-3.5" />
-                                        Wyloguj (Sign Out)
+                                        Wyloguj się
                                     </button>
                                 </div>
                             </>

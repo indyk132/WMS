@@ -1,8 +1,47 @@
 import React, { useState } from 'react';
 import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, Home, CalendarRange } from 'lucide-react';
+import { OrderDetail } from '../../components/OrderDetail';
 
-export default function Orders({ orders, products, onAddOrder }) {
+function normalizeOrder(order) {
+    if (!order) return null;
+    
+    const normalizedItems = (order.items || []).map((item, index) => {
+        return {
+            lp: item.lp || (index + 1),
+            sku: item.sku || 'SKU-UNKNOWN',
+            product: item.product || item.name || 'Nieznany produkt',
+            quantity: item.quantity || item.qty || 0,
+            zone: item.zone || 'A1',
+            status: item.status || 'Skompletowano'
+        };
+    });
+
+    return {
+        ...order,
+        customerName: order.customerName || order.customer || 'Nieznany Klient',
+        email: order.email || 'kontakt@wms-logistics.pl',
+        phone: order.phone || '+48 500 600 700',
+        shippingAddress: order.shippingAddress || order.destination || 'Brak adresu dostawy',
+        shippingMethod: order.shippingMethod || 'DPD Standard',
+        estimatedDelivery: order.estimatedDelivery || order.shipmentDate || 'Nieustalony',
+        internalNotes: order.internalNotes || '',
+        internalNotesActor: order.internalNotesActor || 'System',
+        waybillNumber: order.waybillNumber || `DPD${order.id?.replace('ORD-', '') || '000000'}PL`,
+        waybillPdfDate: order.waybillPdfDate || new Date().toLocaleDateString('pl-PL'),
+        pickingZones: order.pickingZones || [
+            { name: 'Strefa A', percentage: 100 }
+        ],
+        activityHistory: order.activityHistory || [
+            { id: 'act-1', title: 'Utworzono zlecenie wyjazdu', actor: 'System', date: order.shipmentDate || 'Nieustalony' }
+        ],
+        changeLogs: order.changeLogs || [],
+        items: normalizedItems
+    };
+}
+
+export default function Orders({ orders, products, onAddOrder, onUpdateOrder, onUpdateOrderStatus, onAddOrderChangeLog }) {
     const [selectedOrders, setSelectedOrders] = useState([]);
+    const [selectedOrderId, setSelectedOrderId] = useState(null);
     const [statusFilter, setStatusFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -88,27 +127,42 @@ export default function Orders({ orders, products, onAddOrder }) {
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + rowsPerPage);
 
+    const currentSelectedOrder = orders.find(o => o.id === selectedOrderId);
+
+    if (selectedOrderId && currentSelectedOrder) {
+        const normalized = normalizeOrder(currentSelectedOrder);
+        return (
+            <OrderDetail
+                order={normalized}
+                onBack={() => setSelectedOrderId(null)}
+                onUpdateStatus={onUpdateOrderStatus}
+                onAddChangeLog={onAddOrderChangeLog}
+                onUpdateOrder={onUpdateOrder}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6 font-sans text-sm text-[#0b1c30]">
             {/* Page Header */}
             <div className="flex justify-between items-end mb-2">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">Active Orders</h2>
-                    <p className="text-zinc-500 text-xs mt-1">Manage, filter, and track outbound shipments.</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">Aktywne Zamówienia</h2>
+                    <p className="text-zinc-500 text-xs mt-1">Zarządzaj, filtruj i śledź wysyłki wyjazdowe.</p>
                 </div>
                 <div className="flex gap-3">
                     <button
                         onClick={triggerCsvExport}
                         className="h-9 px-4 rounded border border-[#c6c6cd] text-zinc-700 font-semibold text-xs flex items-center gap-2 hover:bg-zinc-50 transition-colors shadow-sm bg-white cursor-pointer"
                     >
-                        <Download className="w-4 h-4 text-zinc-500" /> Export CSV
+                        <Download className="w-4 h-4 text-zinc-500" /> Eksportuj CSV
                     </button>
 
                     <button
                         onClick={() => setIsNewOrderModalOpen(true)}
                         className="h-9 px-4 rounded bg-[#0058be] hover:bg-blue-750 text-white font-bold text-xs flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
                     >
-                        <Plus className="w-4 h-4" /> New Order
+                        <Plus className="w-4 h-4" /> Nowe Zamówienie
                     </button>
                 </div>
             </div>
@@ -213,7 +267,14 @@ export default function Orders({ orders, products, onAddOrder }) {
                                                 )}
                                             </button>
                                         </td>
-                                        <td className="py-3 px-4 font-mono font-bold text-blue-650">{order.id}</td>
+                                        <td className="py-3 px-4">
+                                            <button
+                                                onClick={() => setSelectedOrderId(order.id)}
+                                                className="font-mono font-bold text-blue-650 hover:underline text-left cursor-pointer outline-none"
+                                            >
+                                                {order.id}
+                                            </button>
+                                        </td>
                                         <td className="py-3 px-4 font-bold text-zinc-900">{order.customer}</td>
                                         <td className="py-3 px-4 text-zinc-600">{order.destination}</td>
                                         <td className="py-3 px-4 text-zinc-800">

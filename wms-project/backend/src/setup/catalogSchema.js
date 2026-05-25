@@ -1,19 +1,19 @@
 const { pool, table } = require('../db');
 
 const LOCATIONS = [
-    'A-01-01',
-    'A-01-02',
-    'A-02-01',
-    'A-02-02',
-    'A-03-01',
-    'B-01-01',
-    'B-01-02',
-    'B-02-01',
-    'B-02-02',
-    'C-01-01',
-    'C-01-02',
-    'C-02-01',
-    'RAMPA-PRZYJEC',
+    { code: 'A-01-01', group: 'Zywnosc' },
+    { code: 'A-01-02', group: 'Zywnosc' },
+    { code: 'A-02-01', group: 'Zywnosc' },
+    { code: 'A-02-02', group: 'Zywnosc' },
+    { code: 'A-03-01', group: 'Zywnosc' },
+    { code: 'B-01-01', group: 'Elektronika i biuro' },
+    { code: 'B-01-02', group: 'Elektronika i biuro' },
+    { code: 'B-02-01', group: 'Elektronika i biuro' },
+    { code: 'B-02-02', group: 'Elektronika i biuro' },
+    { code: 'C-01-01', group: 'Motoryzacja, chemia i BHP' },
+    { code: 'C-01-02', group: 'Motoryzacja, chemia i BHP' },
+    { code: 'C-02-01', group: 'Motoryzacja, chemia i BHP' },
+    { code: 'RAMPA-PRZYJEC', group: 'Przyjecia mieszane' },
 ];
 
 const PRODUCTS = [
@@ -42,18 +42,94 @@ const PRODUCTS = [
     { sku: 'BIUR-ETY-001', barcode: '5906000000012', name: 'Etykiety logistyczne 100x150', category: 'Biuro', price: 49.99, reorderThreshold: 20, location: 'B-01-02', quantity: 27 },
 ];
 
+const GROUP_RULES = {
+    Zywnosc: { group: 'Zywnosc', fallbackLocation: 'A-01-01' },
+    Elektronika: { group: 'Elektronika i biuro', fallbackLocation: 'B-01-01' },
+    Biuro: { group: 'Elektronika i biuro', fallbackLocation: 'B-01-02' },
+    Motoryzacja: { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-01' },
+    Chemia: { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-02' },
+    BHP: { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-01' },
+};
+
+const reconcileProductLocations = async () => {
+    const { rows } = await pool.query(`
+        SELECT
+            s.id,
+            s.products_id,
+            s.quantity,
+            p.category,
+            wl.location_id,
+            wl.zone_group
+        FROM ${table('storage_stock')} s
+        JOIN ${table('products')} p ON p.products_id = s.products_id
+        JOIN ${table('warehouse_locations')} wl ON wl.location_id = s.location_id
+        WHERE p.category IS NOT NULL
+    `);
+
+    for (const stock of rows) {
+        const rule = GROUP_RULES[stock.category];
+
+        if (!rule || stock.zone_group === rule.group || stock.zone_group === 'Przyjecia mieszane') {
+            continue;
+        }
+
+        const targetLocationResult = await pool.query(`
+            SELECT location_id
+            FROM ${table('warehouse_locations')}
+            WHERE location_code = $1
+        `, [rule.fallbackLocation]);
+
+        const targetLocationId = targetLocationResult.rows[0]?.location_id;
+
+        if (!targetLocationId || targetLocationId === stock.location_id) {
+            continue;
+        }
+
+        const targetStockResult = await pool.query(`
+            SELECT id
+            FROM ${table('storage_stock')}
+            WHERE products_id = $1 AND location_id = $2
+        `, [stock.products_id, targetLocationId]);
+
+        if (targetStockResult.rows[0]) {
+            await pool.query(`
+                UPDATE ${table('storage_stock')}
+                SET quantity = quantity + $1
+                WHERE id = $2
+            `, [stock.quantity, targetStockResult.rows[0].id]);
+        } else {
+            await pool.query(`
+                INSERT INTO ${table('storage_stock')} (products_id, location_id, quantity)
+                VALUES ($1, $2, $3)
+            `, [stock.products_id, targetLocationId, stock.quantity]);
+        }
+
+        await pool.query(`
+            DELETE FROM ${table('storage_stock')}
+            WHERE id = $1
+        `, [stock.id]);
+    }
+};
+
 const ensureCatalogSchema = async () => {
     await pool.query(`ALTER TABLE ${table('products')} ADD COLUMN IF NOT EXISTS sku VARCHAR(50)`);
     await pool.query(`ALTER TABLE ${table('products')} ADD COLUMN IF NOT EXISTS category VARCHAR(80) DEFAULT 'General'`);
     await pool.query(`ALTER TABLE ${table('products')} ADD COLUMN IF NOT EXISTS reorder_threshold INT DEFAULT 20 CHECK (reorder_threshold >= 0)`);
+    await pool.query(`ALTER TABLE ${table('warehouse_locations')} ADD COLUMN IF NOT EXISTS zone_group VARCHAR(80) DEFAULT 'General'`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS products_sku_unique_idx ON ${table('products')} (sku) WHERE sku IS NOT NULL`);
 
-    for (const locationCode of LOCATIONS) {
+    for (const location of LOCATIONS) {
         await pool.query(`
-            INSERT INTO ${table('warehouse_locations')} (location_code)
-            VALUES ($1)
+            INSERT INTO ${table('warehouse_locations')} (location_code, zone_group)
+            VALUES ($1, $2)
             ON CONFLICT (location_code) DO NOTHING
-        `, [locationCode]);
+        `, [location.code, location.group]);
+
+        await pool.query(`
+            UPDATE ${table('warehouse_locations')}
+            SET zone_group = $2
+            WHERE location_code = $1
+        `, [location.code, location.group]);
     }
 
     for (const product of PRODUCTS) {
@@ -95,6 +171,8 @@ const ensureCatalogSchema = async () => {
             product.quantity,
         ]);
     }
+
+    await reconcileProductLocations();
 };
 
 module.exports = {

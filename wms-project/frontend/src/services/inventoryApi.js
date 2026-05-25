@@ -30,13 +30,17 @@ const normalizeInventoryRows = (rows) => {
         const quantity = toNumber(row.quantity ?? row.stock);
         const existing = productsById.get(key);
         const locationCode = row.location_code || row.zone || 'UNASSIGNED';
+        const zoneGroup = row.zone_group || 'General';
         const locationId = row.location_id || null;
         const stockId = row.id || null;
 
         if (existing) {
             existing.stock += quantity;
             existing.locations.push(locationCode);
-            existing.stockEntries.push({ stockId, locationId, locationCode, quantity });
+            existing.stockEntries.push({ stockId, locationId, locationCode, zoneGroup, quantity });
+            if (!existing.zoneGroups.includes(zoneGroup)) {
+                existing.zoneGroups.push(zoneGroup);
+            }
             existing.status = resolveStatus(existing.stock, existing.reorderThreshold);
             return;
         }
@@ -54,11 +58,13 @@ const normalizeInventoryRows = (rows) => {
             reorderThreshold,
             zone: resolveZone(locationCode),
             locationCode,
+            zoneGroup,
             primaryLocationId: locationId,
             status: resolveStatus(stock, reorderThreshold),
             price: toNumber(row.price),
             locations: [locationCode],
-            stockEntries: [{ stockId, locationId, locationCode, quantity }],
+            stockEntries: [{ stockId, locationId, locationCode, zoneGroup, quantity }],
+            zoneGroups: [zoneGroup],
         });
     });
 
