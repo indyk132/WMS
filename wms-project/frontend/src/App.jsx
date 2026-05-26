@@ -22,11 +22,22 @@ const readStoredUser = () => {
     }
 };
 
+const readStoredInLobby = () => {
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem('wms-in-lobby');
+    return stored !== 'false';
+};
+
+const readStoredTab = () => {
+    if (typeof window === 'undefined') return 'overview';
+    return window.localStorage.getItem('wms-current-tab') || 'overview';
+};
+
 export default function App() {
     const [currentUser, setCurrentUser] = useState(() => readStoredUser());
 
-    const [inLobby, setInLobby] = useState(true);
-    const [currentTab, setCurrentTab] = useState('overview'); // overview, orders, products, zones, permissions
+    const [inLobby, setInLobby] = useState(() => readStoredInLobby());
+    const [currentTab, setCurrentTab] = useState(() => readStoredTab());
     const [searchQuery, setSearchQuery] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
@@ -163,13 +174,16 @@ export default function App() {
         setCurrentUser(userObj);
         window.localStorage.setItem('wms-current-user', JSON.stringify(userObj));
         setInLobby(true);
+        window.localStorage.setItem('wms-in-lobby', 'true');
         loadUsers();
     };
 
     const handleLogout = () => {
         setCurrentUser(null);
         window.localStorage.removeItem('wms-current-user');
-        setInLobby(false);
+        window.localStorage.removeItem('wms-in-lobby');
+        window.localStorage.removeItem('wms-current-tab');
+        setInLobby(true);
     };
 
     // State mutators for dashboard allocations and products
@@ -357,7 +371,15 @@ export default function App() {
     }
 
     if (inLobby) {
-        return <Home onEnterDashboard={() => setInLobby(false)} currentUser={currentUser} />;
+        return (
+            <Home
+                onEnterDashboard={() => {
+                    setInLobby(false);
+                    window.localStorage.setItem('wms-in-lobby', 'false');
+                }}
+                currentUser={currentUser}
+            />
+        );
     }
 
     // Sidebar navigation options
@@ -397,6 +419,7 @@ export default function App() {
                                 <button
                                     onClick={() => {
                                         setCurrentTab(item.id);
+                                        window.localStorage.setItem('wms-current-tab', item.id);
                                         setIsMobileMenuOpen(false);
                                     }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all font-sans text-xs font-bold ${
@@ -416,7 +439,10 @@ export default function App() {
                 {/* Footer info & Logout button */}
                 <div className="mt-auto px-4 pt-4 border-t border-white/10 space-y-3">
                     <button
-                        onClick={() => setInLobby(true)}
+                        onClick={() => {
+                            setInLobby(true);
+                            window.localStorage.setItem('wms-in-lobby', 'true');
+                        }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md text-xs font-bold transition-all"
                     >
                         <HomeIcon className="w-4 h-4 text-zinc-400" />

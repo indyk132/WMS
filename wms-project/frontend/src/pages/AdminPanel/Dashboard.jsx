@@ -15,7 +15,6 @@ export default function Dashboard({
     const [formType, setFormType] = useState('Inbound Receive');
     const [filterActiveOnly, setFilterActiveOnly] = useState(false);
 
-    // Stats calculation
     const totalSkusCount = products.length;
     const outOfStockCount = products.filter(p => p.status === 'Out of Stock').length;
     const lowStockCount = products.filter(p => p.status === 'Low Stock').length;

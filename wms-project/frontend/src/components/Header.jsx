@@ -11,7 +11,6 @@ export default function Header({
                                }) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
-    // Map tabs to beautiful names
     const getTabLabel = () => {
         switch (currentTab) {
             case 'overview':
