@@ -143,6 +143,19 @@ export default function Login({ onLoginSuccess }) {
                             </button>
                         </div>
                     </div>
+
+                    <div className="mt-4 pt-4 border-t border-zinc-200 text-center">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                window.location.hash = '#/terminal';
+                                window.location.reload();
+                            }}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer flex items-center justify-center gap-1.5 mx-auto"
+                        >
+                            Przełącz na Terminal Roboczy Pracownika 📲
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

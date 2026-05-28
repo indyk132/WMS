@@ -8,8 +8,9 @@ import Orders from './pages/AdminPanel/Orders';
 import Products from './pages/AdminPanel/Products';
 import Storage from './pages/AdminPanel/Storage';
 import UsersPermissions from './pages/AdminPanel/Users';
+import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
 import { adjustInventoryStock, fetchInventoryProducts } from './services/inventoryApi';
-import { createUser, fetchUsers } from './services/usersApi';
+import { createUser, fetchUsers, updateUser, deleteUser } from './services/usersApi';
 import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, HomeIcon } from 'lucide-react';
 
 const readStoredUser = () => {
@@ -366,6 +367,18 @@ export default function App() {
     };
 
     // Conditional Rendering
+    const isTerminalRoute = window.location.pathname === '/terminal' || window.location.hash === '#/terminal';
+
+    if (isTerminalRoute) {
+        return (
+            <WorkerTerminalStandAlone 
+                orders={orders} 
+                onUpdateOrder={handleUpdateOrder} 
+                staffList={staffList}
+            />
+        );
+    }
+
     if (!currentUser) {
         return <Login onLoginSuccess={handleLoginSuccess} />;
     }
@@ -438,6 +451,17 @@ export default function App() {
 
                 {/* Footer info & Logout button */}
                 <div className="mt-auto px-4 pt-4 border-t border-white/10 space-y-3">
+                    <button
+                        onClick={() => {
+                            window.location.hash = '#/terminal';
+                            window.location.reload();
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-purple-300 hover:text-white hover:bg-purple-500/10 border border-purple-500/30 rounded-md text-xs font-bold transition-all cursor-pointer bg-[#1b253b]/50"
+                    >
+                        <Boxes className="w-4 h-4 text-purple-400" />
+                        <span>Terminal Roboczy WMS 📲</span>
+                    </button>
+
                     <button
                         onClick={() => {
                             setInLobby(true);

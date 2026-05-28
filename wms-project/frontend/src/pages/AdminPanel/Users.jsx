@@ -127,13 +127,25 @@ export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff,
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">Uprawnienia Użytkowników</h2>
                     <p className="text-zinc-500 text-xs mt-1">Zarządzaj rolami personelu magazynu i dostępem do stref.</p>
                 </div>
-                <button
-                    onClick={handleAddClick}
-                    className="h-9 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Dodaj użytkownika
-                </button>
+                <div className="flex gap-2.5">
+                    <button
+                        onClick={() => {
+                            window.location.hash = '#/terminal';
+                            window.location.reload();
+                        }}
+                        className="h-9 px-4 rounded border border-purple-300 hover:bg-purple-50 text-purple-700 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer bg-white"
+                    >
+                        Terminal Roboczy WMS 📲
+                    </button>
+
+                    <button
+                        onClick={handleAddClick}
+                        className="h-9 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Dodaj użytkownika
+                    </button>
+                </div>
             </div>
 
             {usersSync?.isLoading && (
