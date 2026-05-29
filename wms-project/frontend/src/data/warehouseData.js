@@ -1,4 +1,4 @@
-// Warehouse static configuration datasets for worker login and catalog
+
 export const INITIAL_PRODUCTS = [
     { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, stockEntries: [{ locationCode: 'C-03-01-01', quantity: 50 }, { locationCode: 'C-03-02-02', quantity: 70 }] },
     { sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, stockEntries: [{ locationCode: 'A-01-01-02', quantity: 15 }] },
@@ -10,11 +10,11 @@ export const INITIAL_PRODUCTS = [
 
 export const WORKERS = {
     pickers: [
-        { id: 'EMP-1102', name: 'Terry Crews', shift: 'Zmiana A - Poranna' },
-        { id: 'EMP-9104', name: 'Marcus Reid', shift: 'Zmiana A - Poranna' }
+        { id: 'EMP-1102', name: 'Jan Kowalski', shift: 'Zmiana A - Poranna', password: 'picker' },
+        { id: 'EMP-9104', name: 'Wojtek Nowak', shift: 'Zmiana A - Poranna', password: 'manager' }
     ],
     packers: [
-        { id: 'EMP-9921', name: 'Sarah Jenkins', shift: 'Zmiana B - Popołudniowa' },
-        { id: 'EMP-8492', name: 'Alice Smith', shift: 'Zmiana B - Popołudniowa' }
+        { id: 'EMP-9921', name: 'Mariusz Pakosz', shift: 'Zmiana B - Popołudniowa', password: 'packer' },
+        { id: 'EMP-8492', name: 'System Admin', shift: 'Zmiana B - Popołudniowa', password: 'admin' }
     ]
 };

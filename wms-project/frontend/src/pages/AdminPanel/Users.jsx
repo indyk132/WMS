@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, ShieldCheck, UserCheck, UserX, Edit2, Trash2 } from 'lucide-react';
+import { Plus, ShieldCheck, UserCheck, UserX, Edit2, Trash2, Search } from 'lucide-react';
 
 export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff, onDeleteStaff, usersSync }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +41,23 @@ export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff,
     const [formError, setFormError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const [searchTerm, setSearchTerm] = useState('');
+    const [roleFilter, setRoleFilter] = useState('All');
+
+    const filteredStaff = staffList.filter((staff) => {
+        const fullName = `${staff.firstName} ${staff.lastName}`.toLowerCase();
+        const emailVal = (staff.email || '').toLowerCase();
+        const idVal = (staff.id || '').toLowerCase();
+
+        const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
+                              emailVal.includes(searchTerm.toLowerCase()) ||
+                              idVal.includes(searchTerm.toLowerCase());
+
+        const matchesRole = roleFilter === 'All' || staff.role === roleFilter;
+
+        return matchesSearch && matchesRole;
+    });
+
     const handleAddClick = () => {
         setEditingStaffId(null);
         setFirstName('');
@@ -62,7 +79,7 @@ export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff,
         setRole(staff.role || 'Picker');
         setZoneAssignment(staff.zoneAssignment || 'Aisle 1-3');
         setStatus(staff.status || 'Active');
-        setPassword(''); // Optional for edit
+        setPassword(''); 
         setFormError('');
         setIsModalOpen(true);
     };
@@ -122,25 +139,38 @@ export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff,
 
     return (
         <div className="space-y-6 font-sans text-sm text-[#0b1c30]">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">Uprawnienia Użytkowników</h2>
                     <p className="text-zinc-500 text-xs mt-1">Zarządzaj rolami personelu magazynu i dostępem do stref.</p>
                 </div>
-                <div className="flex gap-2.5">
-                    <button
-                        onClick={() => {
-                            window.location.hash = '#/terminal';
-                            window.location.reload();
-                        }}
-                        className="h-9 px-4 rounded border border-purple-300 hover:bg-purple-50 text-purple-700 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer bg-white"
+                <div className="flex gap-2.5 flex-wrap items-center">
+                    <div className="relative">
+                        <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+                        <input
+                            type="text"
+                            placeholder="Szukaj pracownika..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-9 pr-4 py-1.5 h-9 border border-zinc-300 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950 bg-white w-48 sm:w-56"
+                        />
+                    </div>
+
+                    <select
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="h-9 px-3 border border-zinc-300 rounded text-xs outline-none text-zinc-950 bg-white cursor-pointer select-none"
                     >
-                        Terminal Roboczy WMS 📲
-                    </button>
+                        <option value="All">Wszystkie role</option>
+                        <option value="Super Admin">Super Administrator</option>
+                        <option value="Warehouse Manager">Kierownik magazynu</option>
+                        <option value="Picker">Kompletujący (Picker)</option>
+                        <option value="Packer">Pakowacz (Packer)</option>
+                    </select>
 
                     <button
                         onClick={handleAddClick}
-                        className="h-9 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+                        className="h-9 px-4 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm shrink-0"
                     >
                         <Plus className="w-4 h-4" />
                         Dodaj użytkownika
@@ -196,7 +226,7 @@ export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff,
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-200 text-xs font-medium text-zinc-800">
-                        {staffList.map((staff) => {
+                        {filteredStaff.map((staff) => {
                             const isActive = staff.status === 'Active';
 
                             return (
@@ -224,17 +254,17 @@ export default function UsersPermissions({ staffList, onAddStaff, onUpdateStaff,
                                         </span>
                                     </td>
                                     <td className="py-3 px-4 text-center">
-                                        <div className="flex justify-center gap-2">
+                                        <div className="flex justify-center gap-3">
                                             <button
                                                 onClick={() => handleEditClick(staff)}
-                                                className="p-1.5 rounded hover:bg-blue-50 text-zinc-500 hover:text-blue-600 transition-colors cursor-pointer border border-zinc-200 bg-white"
+                                                className="p-1.5 rounded hover:bg-blue-50 text-zinc-500 hover:text-blue-600 border border-zinc-200 bg-white transition-all cursor-pointer shadow-sm"
                                                 title="Edytuj użytkownika"
                                             >
                                                 <Edit2 className="w-3.5 h-3.5" />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteClick(staff.id)}
-                                                className="p-1.5 rounded hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-colors cursor-pointer border border-zinc-200 bg-white"
+                                                className="p-1.5 rounded hover:bg-red-50 text-zinc-500 hover:text-red-650 hover:border-red-200 hover:bg-red-50 border border-zinc-200 bg-white transition-all cursor-pointer shadow-sm"
                                                 title="Usuń użytkownika"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />

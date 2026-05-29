@@ -13,6 +13,13 @@ import { adjustInventoryStock, fetchInventoryProducts } from './services/invento
 import { createUser, fetchUsers, updateUser, deleteUser } from './services/usersApi';
 import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, HomeIcon } from 'lucide-react';
 
+const getRelativeDateStr = (daysAgo, timeStr) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+    return `${d.getDate()} ${months[d.getMonth()]}, ${timeStr}`;
+};
+
 const readStoredUser = () => {
     if (typeof window === 'undefined') return null;
 
@@ -44,7 +51,6 @@ export default function App() {
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
     const [usersSync, setUsersSync] = useState({ isLoading: false, error: '' });
 
-    // Core reactive dataset
     const [products, setProducts] = useState([
         { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, stockEntries: [{ locationCode: 'C-03-01-01', quantity: 50 }, { locationCode: 'C-03-02-02', quantity: 70 }] },
         { sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, stockEntries: [{ locationCode: 'A-01-01-02', quantity: 15 }] },
@@ -59,28 +65,112 @@ export default function App() {
             id: 'ORD-89241',
             customer: 'Acme Corp Logistics',
             destination: 'Seattle, WA',
-            status: 'PROCESSING',
-            priority: 'High',
-            shipmentDate: 'Oct 24, 14:30',
-            items: [{ name: 'Reflektor LED H7 SuperVolt', qty: 15 }]
+            status: 'W realizacji',
+            priority: 'Wysoki',
+            shipmentDate: getRelativeDateStr(0, '14:30'),
+            items: [{ name: 'Kawa ziarnista Arabica 1kg', sku: 'FOOD-KAWA-001', qty: 15 }]
         },
         {
             id: 'ORD-89240',
             customer: 'Global Imports LLC',
             destination: 'Miami, FL',
-            status: 'SHIPPED',
-            priority: 'Normal',
-            shipmentDate: 'Oct 23, 09:15',
-            items: [{ name: 'Klocki hamulcowe CarbonPremium', qty: 50 }]
+            status: 'Wysłane',
+            priority: 'Normalny',
+            shipmentDate: getRelativeDateStr(1, '09:15'),
+            items: [{ name: 'Klocki hamulcowe przednie', sku: 'AUTO-KLOCKI-001', qty: 50 }]
         },
         {
             id: 'ORD-89239',
             customer: 'TechNova Dist.',
             destination: 'Austin, TX',
-            status: 'PENDING',
-            priority: 'Normal',
-            shipmentDate: 'Unscheduled',
-            items: [{ name: 'Akumulator VoltPro 74Ah', qty: 25 }]
+            status: 'Oczekujące',
+            priority: 'Normalny',
+            shipmentDate: 'Nieustalony',
+            items: [{ name: 'Akumulator 74Ah 12V', sku: 'AUTO-AKU-001', qty: 25 }]
+        },
+        {
+            id: 'ORD-89238',
+            customer: 'VeloSpeed Sp. z o.o.',
+            destination: 'Poznań, PL',
+            status: 'Oczekujące',
+            priority: 'Normalny',
+            shipmentDate: 'Nieustalony',
+            items: [
+                { name: 'Skaner kodów kreskowych USB', sku: 'ELEC-SKAN-001', qty: 5 },
+                { name: 'Bateria do skanera 2600mAh', sku: 'ELEC-BAT-001', qty: 20 }
+            ]
+        },
+        {
+            id: 'ORD-89237',
+            customer: 'ElectroWorld S.A.',
+            destination: 'Warszawa, PL',
+            status: 'W realizacji',
+            priority: 'Wysoki',
+            shipmentDate: getRelativeDateStr(0, '11:00'),
+            items: [
+                { name: 'Papier A4 500 arkuszy', sku: 'BIUR-PAP-001', qty: 30 },
+                { name: 'Etykiety logistyczne 100x150', sku: 'BIUR-ETY-001', qty: 15 }
+            ]
+        },
+        {
+            id: 'ORD-89236',
+            customer: 'Apex Logistics Europe',
+            destination: 'Gdańsk, PL',
+            status: 'Dostarczone',
+            priority: 'Normalny',
+            shipmentDate: 'Ukończono',
+            items: [
+                { name: 'Rękawice nitrylowe 100 szt', sku: 'CHEM-REK-001', qty: 10 },
+                { name: 'Płyn do dezynfekcji 5L', sku: 'CHEM-PLY-001', qty: 5 }
+            ]
+        },
+        {
+            id: 'ORD-89235',
+            customer: 'Krak-Tech Solutions',
+            destination: 'Kraków, PL',
+            status: 'Oczekujące',
+            priority: 'Normalny',
+            shipmentDate: 'Nieustalony',
+            items: [
+                { name: 'Tablet magazynowy 10 cali', sku: 'ELEC-TAB-001', qty: 2 },
+                { name: 'Drukarka etykiet termiczna', sku: 'ELEC-DRUK-001', qty: 3 }
+            ]
+        },
+        {
+            id: 'ORD-89234',
+            customer: 'Baltic Shipping',
+            destination: 'Gdynia, PL',
+            status: 'Wysłane',
+            priority: 'Normalny',
+            shipmentDate: getRelativeDateStr(3, '16:45'),
+            items: [
+                { name: 'Olej silnikowy 5W30 4L', sku: 'AUTO-OLEJ-001', qty: 8 },
+                { name: 'Płyn hamulcowy DOT-4 1L', sku: 'AUTO-HAM-001', qty: 12 }
+            ]
+        },
+        {
+            id: 'ORD-89233',
+            customer: 'Euro-Food Sp. z o.o.',
+            destination: 'Wrocław, PL',
+            status: 'Oczekujące',
+            priority: 'Normalny',
+            shipmentDate: 'Nieustalony',
+            items: [
+                { name: 'Mleko UHT 3.2% 1L', sku: 'FOOD-MLEKO-001', qty: 200 },
+                { name: 'Ryż basmati 1kg', sku: 'FOOD-RYZ-001', qty: 50 }
+            ]
+        },
+        {
+            id: 'ORD-89232',
+            customer: 'Bio-Chemia Polska',
+            destination: 'Katowice, PL',
+            status: 'Oczekujące',
+            priority: 'Normalny',
+            shipmentDate: 'Nieustalony',
+            items: [
+                { name: 'Płyn do dezynfekcji 5L', sku: 'CHEM-PLY-001', qty: 20 },
+                { name: 'Rękawice nitrylowe 100 szt', sku: 'CHEM-REK-001', qty: 100 }
+            ]
         }
     ]);
 
@@ -109,10 +199,10 @@ export default function App() {
     ]);
 
     const [staffList, setStaffList] = useState([
-        { id: 'EMP-8492', firstName: 'Alice', lastName: 'Smith', email: 'alice.s@logistics-os.com', role: 'Super Admin', zoneAssignment: 'Global Access', status: 'Active' },
-        { id: 'EMP-9104', firstName: 'Marcus', lastName: 'Reid', email: 'm.reid@logistics-os.com', role: 'Warehouse Manager', zoneAssignment: 'Zone A, Zone B', status: 'Active' },
-        { id: 'EMP-1102', firstName: 'Terry', lastName: 'Crews', email: 't.crews@logistics-os.com', role: 'Picker', zoneAssignment: 'Aisle 4-12', status: 'Active' },
-        { id: 'EMP-9921', firstName: 'Sarah', lastName: 'Jenkins', email: 's.jenkins@logistics-os.com', role: 'Packer', zoneAssignment: 'Station B', status: 'Suspended' }
+        { id: 'EMP-8492', firstName: 'System', lastName: 'Admin', email: 'admin@logistics-os.com', role: 'Admin', zoneAssignment: 'Global Access', status: 'Active' },
+        { id: 'EMP-9104', firstName: 'Wojtek', lastName: 'Nowak', email: 'manager@logistics-os.com', role: 'Warehouse Manager', zoneAssignment: 'Global Access', status: 'Active' },
+        { id: 'EMP-1102', firstName: 'Jan', lastName: 'Kowalski', email: 'j.kowalski@logistics-os.com', role: 'Picker', zoneAssignment: 'Aisle 4-12', status: 'Active' },
+        { id: 'EMP-9921', firstName: 'Mariusz', lastName: 'Pakosz', email: 'm.pakosz@logistics-os.com', role: 'Packer', zoneAssignment: 'Station B', status: 'Active' }
     ]);
 
     const [allocationsLog, setAllocationsLog] = useState([
@@ -170,7 +260,7 @@ export default function App() {
         loadUsers();
     }, []);
 
-    // Handle Login and Logout
+    
     const handleLoginSuccess = (userObj) => {
         setCurrentUser(userObj);
         window.localStorage.setItem('wms-current-user', JSON.stringify(userObj));
@@ -187,15 +277,15 @@ export default function App() {
         setInLobby(true);
     };
 
-    // State mutators for dashboard allocations and products
+    
     const handleAddAllocation = (newAlloc) => {
         setAllocationsLog([newAlloc, ...allocationsLog]);
 
-        // Dynamically adjust inventory stock levels and zone capacity
+        
         setProducts(prev => {
             return prev.map(p => {
                 if (p.sku === newAlloc.sku) {
-                    const updatedStock = p.stock + (newAlloc.qty * 10); // Standard multiply factor of pallets
+                    const updatedStock = p.stock + (newAlloc.qty * 10); 
                     let computedStatus = 'In Stock';
                     if (updatedStock === 0) computedStatus = 'Out of Stock';
                     else if (updatedStock < p.reorderThreshold) computedStatus = 'Low Stock';
@@ -209,7 +299,7 @@ export default function App() {
             });
         });
 
-        // Update zone pallet metrics
+        
         setZones(prev => {
             return prev.map(z => {
                 if (z.id === newAlloc.zone) {
@@ -226,7 +316,7 @@ export default function App() {
         });
     };
 
-    // Outbound order adding
+    
     const handleAddOrder = (newOrder) => {
         const enrichedOrder = {
             ...newOrder,
@@ -249,7 +339,7 @@ export default function App() {
         
         setOrders([enrichedOrder, ...orders]);
 
-        // Reduce corresponding items stock!
+        
         newOrder.items.forEach(orderItem => {
             setProducts(prev => {
                 return prev.map(p => {
@@ -270,17 +360,17 @@ export default function App() {
         });
     };
 
-    // Update order fields (e.g. customerName, internalNotes)
+    
     const handleUpdateOrder = (orderId, updatedFields) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedFields } : o));
     };
 
-    // Update order status
+    
     const handleUpdateOrderStatus = (orderId, status) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
     };
 
-    // Add order change log and history
+    
     const handleAddOrderChangeLog = (orderId, title, description) => {
         setOrders(prev => prev.map(o => {
             if (o.id === orderId) {
@@ -309,7 +399,7 @@ export default function App() {
         }));
     };
 
-    // Delete staff user
+    
     const handleDeleteStaff = async (staffId) => {
         try {
             await deleteUser(staffId);
@@ -319,7 +409,7 @@ export default function App() {
         setStaffList(prev => prev.filter(u => u.id !== staffId));
     };
 
-    // Update staff user
+    
     const handleUpdateStaff = async (staffId, updates) => {
         let updatedUser = { id: staffId, ...updates };
         try {
@@ -331,7 +421,7 @@ export default function App() {
         return updatedUser;
     };
 
-    // Modify SKU stock through backend and reload inventory.
+    
     const handleUpdateStock = async (product, delta) => {
         await adjustInventoryStock({
             productId: product.productId,
@@ -347,7 +437,7 @@ export default function App() {
         return handleUpdateStock(product, 100);
     };
 
-    // Toggle security locks on aisle
+    
     const handleToggleLockZone = (zoneId) => {
         setZones(prev => {
             return prev.map(z => {
@@ -359,14 +449,14 @@ export default function App() {
         });
     };
 
-    // Add staff user
+    
     const handleAddStaff = async (newStaff) => {
         const savedUser = await createUser(newStaff);
         setStaffList(prev => [...prev, savedUser]);
         return savedUser;
     };
 
-    // Conditional Rendering
+    
     const isTerminalRoute = window.location.pathname === '/terminal' || window.location.hash === '#/terminal';
 
     if (isTerminalRoute) {
@@ -395,7 +485,7 @@ export default function App() {
         );
     }
 
-    // Sidebar navigation options
+    
     const sideNavItems = [
         { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
         { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
@@ -407,11 +497,11 @@ export default function App() {
     return (
         <div className="bg-[#f8f9ff] text-[#0b1c30] min-h-screen font-sans shrink-0 antialiased flex">
 
-            {/* Sidebar Navigation */}
+            {}
             <nav className={`fixed left-0 top-0 h-full w-[260px] bg-[#131b2e] border-r border-[#1f2937] flex flex-col py-6 z-40 transition-transform duration-300 lg:translate-x-0 ${
                 isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
             }`}>
-                {/* Brand header elements */}
+                {}
                 <div className="px-6 mb-8 flex items-center gap-3">
                     <div className="w-9 h-9 rounded bg-[#2170e4] flex items-center justify-center text-white shadow-md">
                         <Boxes className="w-5 h-5" />
@@ -422,7 +512,7 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* Side panels menu list */}
+                {}
                 <ul className="flex flex-col gap-1 px-3 flex-grow">
                     {sideNavItems.map((item) => {
                         const Icon = item.icon;
@@ -449,7 +539,7 @@ export default function App() {
                     })}
                 </ul>
 
-                {/* Footer info & Logout button */}
+                {}
                 <div className="mt-auto px-4 pt-4 border-t border-white/10 space-y-3">
                     <button
                         onClick={() => {
@@ -483,10 +573,10 @@ export default function App() {
                 </div>
             </nav>
 
-            {/* Main Workspace Frame container */}
+            {}
             <div className="flex-1 lg:ml-[260px] flex flex-col min-h-screen">
 
-                {/* Core Header Viewport link */}
+                {}
                 <Header
                     currentTab={currentTab}
                     searchQuery={searchQuery}
@@ -496,12 +586,12 @@ export default function App() {
                     onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 />
 
-                {/* Mobile menu dim overlay */}
+                {}
                 {isMobileMenuOpen && (
                     <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
                 )}
 
-                {/* Dynamic Page switcher */}
+                {}
                 <main className="mt-14 p-6 flex-grow max-w-[1600px] w-full mx-auto flex flex-col gap-6">
                     {inventorySync.isLoading && (
                         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-xs font-semibold">
@@ -562,7 +652,7 @@ export default function App() {
                     )}
                 </main>
 
-                {/* Footer brand info */}
+                {}
                 <Footer />
             </div>
         </div>

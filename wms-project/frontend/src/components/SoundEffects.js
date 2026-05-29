@@ -1,4 +1,4 @@
-// Premium Web Audio API Sound Effects for Logistics OS Terminal
+
 class SoundEffects {
     constructor() {
         this.ctx = null;
@@ -18,7 +18,7 @@ class SoundEffects {
             this.init();
             if (!this.ctx) return;
 
-            // Resume context if suspended (browser security)
+            
             if (this.ctx.state === 'suspended') {
                 this.ctx.resume();
             }
@@ -43,17 +43,17 @@ class SoundEffects {
     }
 
     playBeep() {
-        this.playTone(880, 'sine', 0.15); // Clear, clean high-pitch beep
+        this.playTone(880, 'sine', 0.15); 
     }
 
     playSuccess() {
-        // Double ascending notification chime
-        this.playTone(523.25, 'triangle', 0.15, 0); // C5
-        this.playTone(659.25, 'triangle', 0.25, 0.08); // E5
+        
+        this.playTone(523.25, 'triangle', 0.15, 0); 
+        this.playTone(659.25, 'triangle', 0.25, 0.08); 
     }
 
     playError() {
-        // Deep buzzy alarm sound
+        
         this.playTone(180, 'sawtooth', 0.4);
     }
 }

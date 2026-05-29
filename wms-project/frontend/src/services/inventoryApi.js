@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
 const DEFAULT_REORDER_THRESHOLD = 20;
 
 const resolveStatus = (quantity, threshold = DEFAULT_REORDER_THRESHOLD) => {

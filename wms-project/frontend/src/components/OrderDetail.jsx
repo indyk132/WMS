@@ -34,18 +34,10 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
     const nextStatus = e.target.value;
     if (nextStatus) {
       onUpdateStatus(order.id, nextStatus);
-      const polishMap = {
-        PROCESSING: 'W trakcie przetwarzania',
-        SHIPPED: 'Wysłane',
-        PENDING: 'Oczekujące',
-        CANCELLED: 'Anulowane',
-        DELIVERED: 'Dostarczone',
-        NEW: 'Nowe',
-      };
       onAddChangeLog(
         order.id,
         'Zmiana Statusu',
-        `Zmieniono status zamówienia na: ${polishMap[nextStatus]}`,
+        `Zmieniono status zamówienia na: ${nextStatus}`,
       );
     }
   };
@@ -69,35 +61,20 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
   };
 
   const getPolishStatusLabel = (status) => {
-    switch (status) {
-      case 'PROCESSING':
-        return 'W trakcie przetwarzania';
-      case 'SHIPPED':
-        return 'Wysłane';
-      case 'PENDING':
-        return 'Oczekuje';
-      case 'DELIVERED':
-        return 'Dostarczone';
-      case 'CANCELLED':
-        return 'Anulowane';
-      case 'NEW':
-        return 'Nowe';
-      default:
-        return 'Nowe';
-    }
+    return status;
   };
 
   const getStatusColorDot = (status) => {
     switch (status) {
-      case 'PROCESSING':
+      case 'W realizacji':
         return 'bg-[#0058be]';
-      case 'SHIPPED':
+      case 'Wysłane':
         return 'bg-[#76777d]';
-      case 'PENDING':
+      case 'Oczekujące':
         return 'bg-amber-500';
-      case 'DELIVERED':
+      case 'Dostarczone':
         return 'bg-green-600';
-      case 'CANCELLED':
+      case 'Anulowane':
         return 'bg-[#ba1a1a]';
       default:
         return 'bg-purple-600';
@@ -118,7 +95,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-200" id="order-details-pane">
-      {/* Back breadcrumbs and Actions header */}
+      {}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -139,7 +116,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
               {getPolishStatusLabel(order.status)}
             </span>
 
-            {/* Change Status Dropdown */}
+            {}
             <div className="relative inline-block">
               <select
                 onChange={handleStatusChange}
@@ -149,11 +126,11 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                 <option value="" disabled>
                   Zmień status
                 </option>
-                <option value="NEW">Nowe</option>
-                <option value="PROCESSING">W trakcie przetwarzania</option>
-                <option value="SHIPPED">Wysłane</option>
-                <option value="DELIVERED">Dostarczone</option>
-                <option value="CANCELLED">Anulowane</option>
+                <option value="Nowe">Nowe</option>
+                <option value="W realizacji">W realizacji</option>
+                <option value="Wysłane">Wysłane</option>
+                <option value="Dostarczone">Dostarczone</option>
+                <option value="Anulowane">Anulowane</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#45464d]">
                 <span className="text-xs">&darr;</span>
@@ -162,7 +139,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
           </div>
         </div>
 
-        {/* Action Triggers */}
+        {}
         <div className="flex gap-2 w-full md:w-auto">
           <button
             onClick={handlePrintLabel}
@@ -196,13 +173,13 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
         </div>
       </div>
 
-      {/* Bento Grid Layout */}
+      {}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Details (2/3 width) */}
+        {}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          {/* Info cards row */}
+          {}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Customer Data */}
+            {}
             <div className="bg-white border border-[#c6c6cd] rounded-lg p-5 shadow-xs transition-shadow hover:shadow-sm">
               <h3 className="font-semibold text-sm text-[#0b1c30] mb-4 flex items-center gap-2 border-b border-[#c6c6cd] pb-2">
                 <User className="w-[18px] h-[18px] text-[#0058be]" /> Dane Klienta
@@ -229,7 +206,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
               </div>
             </div>
 
-            {/* Shipping Info */}
+            {}
             <div className="bg-white border border-[#c6c6cd] rounded-lg p-5 shadow-xs transition-shadow hover:shadow-sm">
               <h3 className="font-semibold text-sm text-[#0b1c30] mb-4 flex items-center gap-2 border-b border-[#c6c6cd] pb-2">
                 <Truck className="w-[18px] h-[18px] text-[#0058be]" /> Informacje o Wysyłce
@@ -261,7 +238,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
             </div>
           </div>
 
-          {/* Logistics positions table */}
+          {}
           <div className="bg-white border border-[#c6c6cd] rounded-lg shadow-xs overflow-hidden flex flex-col h-full">
             <div className="p-4 border-b border-[#c6c6cd] bg-[#eff4ff] flex justify-between items-center">
               <h3 className="font-semibold text-sm text-[#0b1c30] flex items-center gap-2">
@@ -323,9 +300,9 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
           </div>
         </div>
 
-        {/* Right Column: Logistics & Meta (1/3 width) */}
+        {}
         <div className="flex flex-col gap-6">
-          {/* Logistics PDFs and ratios */}
+          {}
           <div className="bg-white border border-[#c6c6cd] rounded-lg p-5 shadow-xs transition-shadow hover:shadow-sm">
             <h3 className="font-semibold text-sm text-[#0b1c30] mb-4 flex items-center gap-2 border-b border-[#c6c6cd] pb-2">
               <FileText className="w-[18px] h-[18px] text-[#0058be]" /> Logistyka i Dokumenty
@@ -389,7 +366,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
             </div>
           </div>
 
-          {/* Internal Notes box */}
+          {}
           <div className="bg-[#eff4ff] border border-[#c6c6cd] rounded-lg p-5">
             <h3 className="font-semibold text-sm text-[#0b1c30] mb-3 flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -430,7 +407,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
             </div>
           </div>
 
-          {/* Activity Timeline logs */}
+          {}
           <div className="bg-white border border-[#c6c6cd] rounded-lg p-5 shadow-xs transition-shadow hover:shadow-sm">
             <h3 className="font-semibold text-sm text-[#0b1c30] mb-4 flex items-center gap-2 border-b border-[#c6c6cd] pb-2">
               <History className="w-[18px] h-[18px] text-[#0058be]" /> Historia aktywności
@@ -470,7 +447,7 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
             </div>
           </div>
 
-          {/* Change Revision tracker logs */}
+          {}
           <div className="bg-white border border-[#c6c6cd] rounded-lg p-5 shadow-xs transition-shadow hover:shadow-sm">
             <h3 className="font-semibold text-sm text-[#0b1c30] mb-4 flex items-center gap-2 border-b border-[#c6c6cd] pb-2">
               <ScrollText className="w-[18px] h-[18px] text-[#0058be]" /> Logi zmian

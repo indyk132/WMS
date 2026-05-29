@@ -36,18 +36,18 @@ export default function Login({ onLoginSuccess }) {
     };
 
     return (
-        <div className="min-h-screen bg-[#0b1c30] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
+        <div className="min-h-screen bg-[#f4f6f9] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-blue-500/[0.04] blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-blue-600/[0.04] blur-3xl pointer-events-none" />
 
             <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10">
                 <div className="mx-auto h-12 w-12 rounded bg-blue-600 flex items-center justify-center text-white shadow-lg mb-4">
                     <Warehouse className="w-7 h-7" />
                 </div>
-                <h2 className="text-3xl font-extrabold text-white tracking-tight">
+                <h2 className="text-3xl font-black text-zinc-950 tracking-tight">
                     Logistics OS
                 </h2>
-                <p className="mt-1.5 text-zinc-400 font-medium tracking-wide">
+                <p className="mt-1.5 text-zinc-500 font-medium tracking-wide">
                     Portal Kontroli Magazynu
                 </p>
             </div>

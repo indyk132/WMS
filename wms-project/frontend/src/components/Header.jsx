@@ -31,7 +31,7 @@ export default function Header({
     return (
         <header className="fixed top-0 right-0 left-0 lg:left-[260px] h-14 bg-white border-b border-zinc-200 shadow-sm flex justify-between items-center px-6 z-30 transition-all">
             <div className="flex items-center gap-4">
-                {/* Mobile Menu Trigger */}
+                {}
                 <button
                     onClick={onMobileMenuToggle}
                     className="lg:hidden p-1.5 rounded hover:bg-zinc-100 text-zinc-650 transition-colors"
@@ -52,7 +52,7 @@ export default function Header({
             </div>
 
             <div className="flex items-center gap-4">
-                {/* Global Search */}
+                {}
                 <div className="relative hidden md:block group">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-blue-600 transition-colors" />
                     <input
@@ -68,7 +68,7 @@ export default function Header({
                     </div>
                 </div>
 
-                {/* System Action Icons */}
+                {}
                 <div className="flex gap-1 text-zinc-500">
                     <button className="p-1.5 relative hover:bg-zinc-100 rounded-full transition-colors" title="Powiadomienia">
                         <Bell className="w-4.5 h-4.5 text-zinc-650" />
@@ -82,7 +82,7 @@ export default function Header({
                     </button>
                 </div>
 
-                {/* User Card Avatar & Settings Trigger */}
+                {}
                 <div className="flex items-center gap-3 border-l border-zinc-200 pl-4 relative">
                     <div className="flex flex-col text-right hidden lg:flex">
             <span className="text-xs font-semibold text-zinc-900 leading-none">

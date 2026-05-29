@@ -2,6 +2,113 @@ import React, { useState } from 'react';
 import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, Home, CalendarRange } from 'lucide-react';
 import { OrderDetail } from '../../components/OrderDetail';
 
+const polishMonthMap = {
+    'Sty': 0, 'Lut': 1, 'Mar': 2, 'Kwi': 3, 'Maj': 4, 'Cze': 5,
+    'Lip': 6, 'Sie': 7, 'Wrz': 8, 'Paź': 9, 'Lis': 10, 'Gru': 11
+};
+
+const getTodayDateStr = () => {
+    const d = new Date();
+    const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+    return `${d.getDate()} ${months[d.getMonth()]}`;
+};
+
+const isDateWithinLastNDays = (dateStr, n) => {
+    if (!dateStr || dateStr === 'Nieustalony' || dateStr === 'Ukończono') return false;
+
+    const match = dateStr.match(/^(\d+)\s+([a-zA-ZáćęłńóśźżĄĆĘŁŃÓŚŹŻ]{3})/);
+    if (!match) return false;
+
+    const day = parseInt(match[1]);
+    const monthStr = match[2];
+    const month = polishMonthMap[monthStr];
+    if (month === undefined) return false;
+
+    const d = new Date();
+    const orderDate = new Date(d.getFullYear(), month, day);
+
+    const diffTime = Math.abs(d - orderDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays <= n;
+};
+
+const getStatusLabel = (status) => {
+    return status;
+};
+
+const getStatusBadgeStyles = (status) => {
+    switch (status) {
+        case 'W realizacji':
+            return {
+                badge: 'bg-blue-50 text-blue-750 border-blue-200',
+                dot: 'bg-blue-600'
+            };
+        case 'Wysłane':
+            return {
+                badge: 'bg-emerald-50 text-emerald-700 border-emerald-250',
+                dot: 'bg-emerald-600'
+            };
+        case 'Dostarczone':
+            return {
+                badge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                dot: 'bg-emerald-700'
+            };
+        case 'Oczekujące':
+        default:
+            return {
+                badge: 'bg-amber-50 text-amber-700 border-amber-250',
+                dot: 'bg-amber-500'
+            };
+    }
+};
+
+const renderItems = (items) => {
+    if (!items || items.length === 0) return <span className="text-zinc-400">Brak pozycji</span>;
+
+    if (items.length <= 2) {
+        return (
+            <div className="flex flex-col gap-1 items-start">
+                {items.map((item, idx) => (
+                    <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 whitespace-nowrap">
+                        {item.name} ({item.qty} PL)
+                    </span>
+                ))}
+            </div>
+        );
+    }
+
+    const visibleItems = items.slice(0, 2);
+    const extraCount = items.length - 2;
+
+    return (
+        <div className="flex flex-col gap-1 items-start">
+            {visibleItems.map((item, idx) => (
+                <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 whitespace-nowrap">
+                    {item.name} ({item.qty} PL)
+                </span>
+            ))}
+            <div className="relative group mt-0.5">
+                <span className="text-[10px] font-bold text-blue-600 hover:text-blue-800 cursor-help underline decoration-dotted transition-colors">
+                    + {extraCount} {extraCount === 1 ? 'inna pozycja' : extraCount < 5 ? 'inne pozycje' : 'innych pozycji'}
+                </span>
+                <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-40 bg-zinc-900 text-white text-[10px] rounded p-2 shadow-lg min-w-[200px] border border-zinc-800 transition-all pointer-events-none">
+                    <p className="font-bold border-b border-zinc-800 pb-1 mb-1 text-zinc-400 uppercase tracking-wider text-[9px]">Pełna zawartość:</p>
+                    <div className="space-y-1">
+                        {items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between gap-3 text-zinc-200 font-medium">
+                                <span className="truncate max-w-[140px]">{item.name}</span>
+                                <span className="font-mono text-blue-400 shrink-0">{item.qty} PL</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-zinc-900"></div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 function normalizeOrder(order) {
     if (!order) return null;
     
@@ -47,13 +154,14 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
     const [currentPage, setCurrentPage] = useState(1);
     const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [dateFilter, setDateFilter] = useState('week');
 
-    // Form states
+    
     const [clientName, setClientName] = useState('');
     const [clientDest, setClientDest] = useState('');
     const [selectedSku, setSelectedSku] = useState('');
     const [orderQty, setOrderQty] = useState(12);
-    const [orderPriority, setOrderPriority] = useState('Normal');
+    const [orderPriority, setOrderPriority] = useState('Normalny');
 
     const rowsPerPage = 5;
 
@@ -78,14 +186,19 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         if (!clientName || !clientDest || !selectedSku) return;
 
         const prod = products.find(p => p.sku === selectedSku);
+        const d = new Date();
+        const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+        const currentHour = String(d.getHours()).padStart(2, '0');
+        const currentMin = String(d.getMinutes()).padStart(2, '0');
+        const shipmentDate = `${d.getDate()} ${months[d.getMonth()]}, ${currentHour}:${currentMin}`;
 
         onAddOrder({
             id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
             customer: clientName,
             destination: clientDest,
-            status: 'PENDING',
+            status: 'Oczekujące',
             priority: orderPriority,
-            shipmentDate: 'Oct 25, 09:30',
+            shipmentDate: shipmentDate,
             items: [{ name: prod ? prod.name : 'Unknown SKU', qty: parseInt(orderQty) || 10 }]
         });
 
@@ -94,7 +207,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         setClientDest('');
         setSelectedSku('');
         setOrderQty(12);
-        setOrderPriority('Normal');
+        setOrderPriority('Normalny');
     };
 
     const triggerCsvExport = () => {
@@ -110,7 +223,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         document.body.removeChild(link);
     };
 
-    // Filter orders
+    
     const filteredOrders = orders.filter(order => {
         const matchesStatus = statusFilter ? order.status === statusFilter : true;
         const matchesPriority = priorityFilter ? order.priority === priorityFilter : true;
@@ -119,10 +232,19 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
             order.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
             order.destination.toLowerCase().includes(searchQuery.toLowerCase())
             : true;
-        return matchesStatus && matchesPriority && matchesSearch;
+
+        let matchesDate = true;
+        if (dateFilter === 'today') {
+            const todayStr = getTodayDateStr();
+            matchesDate = order.shipmentDate?.includes(todayStr);
+        } else if (dateFilter === 'week') {
+            matchesDate = isDateWithinLastNDays(order.shipmentDate, 7);
+        }
+
+        return matchesStatus && matchesPriority && matchesSearch && matchesDate;
     });
 
-    // Paginated listings
+    
     const totalPages = Math.ceil(filteredOrders.length / rowsPerPage) || 1;
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + rowsPerPage);
@@ -144,7 +266,6 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
 
     return (
         <div className="space-y-6 font-sans text-sm text-[#0b1c30]">
-            {/* Page Header */}
             <div className="flex justify-between items-end mb-2">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">Aktywne Zamówienia</h2>
@@ -167,9 +288,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                 </div>
             </div>
 
-            {/* Main Container */}
             <div className="bg-white rounded border border-[#c6c6cd] shadow-sm flex flex-col overflow-hidden">
-                {/* Toolbar Controls */}
                 <div className="px-5 py-3 border-b border-[#c6c6cd] flex flex-col md:flex-row gap-4 items-center bg-zinc-50">
                     <div className="flex items-center gap-2 shrink-0">
                         <Filter className="w-4 h-4 text-zinc-500" />
@@ -178,8 +297,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
 
                     <div className="h-4 w-px bg-zinc-250 hidden md:block"></div>
 
-                    {/* Quick inline search */}
-                    <div className="relative w-full md:w-64">
+                    <div className="relative w-full md:w-96">
                         <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                         <input
                             type="text"
@@ -197,10 +315,10 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                             className="h-8 pl-2 pr-6 rounded border border-zinc-300 bg-white text-xs text-zinc-800 outline-none cursor-pointer"
                         >
                             <option value="">Status: Wszystkie</option>
-                            <option value="PROCESSING">PROCESSING</option>
-                            <option value="SHIPPED">SHIPPED</option>
-                            <option value="PENDING">PENDING</option>
-                            <option value="DELIVERED">DELIVERED</option>
+                            <option value="W realizacji">W realizacji</option>
+                            <option value="Wysłane">Wysłane</option>
+                            <option value="Oczekujące">Oczekujące</option>
+                            <option value="Dostarczone">Dostarczone</option>
                         </select>
 
                         <select
@@ -209,22 +327,39 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                             className="h-8 pl-2 pr-6 rounded border border-zinc-300 bg-white text-xs text-zinc-800 outline-none cursor-pointer"
                         >
                             <option value="">Priorytet: Wszystkie</option>
-                            <option value="High">Wysoki (High)</option>
-                            <option value="Normal">Normalny (Normal)</option>
+                            <option value="Wysoki">Wysoki</option>
+                            <option value="Normalny">Normalny</option>
                         </select>
                     </div>
 
-                    {/* Mock timespan picker */}
                     <div className="ml-auto flex items-center border border-zinc-300 rounded bg-white overflow-hidden h-8 text-xs font-semibold">
-                        <button className="px-3 border-r border-zinc-200 hover:bg-zinc-50 text-zinc-700">Dziś</button>
-                        <button className="px-3 border-r border-zinc-200 bg-zinc-100 text-zinc-900 font-bold">Ten Tydzień</button>
-                        <button className="px-3 hover:bg-zinc-50 text-zinc-700 flex items-center gap-1.5">
+                        <button
+                            onClick={() => setDateFilter(dateFilter === 'today' ? 'all' : 'today')}
+                            className={`px-3 border-r border-zinc-200 transition-colors cursor-pointer ${
+                                dateFilter === 'today' ? 'bg-zinc-900 text-white font-bold' : 'hover:bg-zinc-50 text-zinc-700'
+                            }`}
+                        >
+                            Dziś
+                        </button>
+                        <button
+                            onClick={() => setDateFilter(dateFilter === 'week' ? 'all' : 'week')}
+                            className={`px-3 border-r border-zinc-200 transition-colors cursor-pointer ${
+                                dateFilter === 'week' ? 'bg-zinc-900 text-white font-bold' : 'hover:bg-zinc-50 text-zinc-700'
+                            }`}
+                        >
+                            Ten Tydzień
+                        </button>
+                        <button
+                            onClick={() => setDateFilter(dateFilter === 'custom' ? 'all' : 'custom')}
+                            className={`px-3 transition-colors cursor-pointer flex items-center gap-1.5 ${
+                                dateFilter === 'custom' ? 'bg-zinc-900 text-white font-bold' : 'hover:bg-zinc-50 text-zinc-700'
+                            }`}
+                        >
                             <CalendarRange className="w-3.5 h-3.5" /> Niestandardowy
                         </button>
                     </div>
                 </div>
 
-                {/* Dense Outbound Table */}
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -239,9 +374,9 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                 </button>
                             </th>
                             <th className="py-3 px-4">Order ID</th>
-                            <th className="py-3 px-4">Klient (Customer)</th>
+                            <th className="py-3 px-4">Klient</th>
                             <th className="py-3 px-4">Miejsce przeznaczenia</th>
-                            <th className="py-3 px-4">Zawartość (Towar)</th>
+                            <th className="py-3 px-4">Zawartość</th>
                             <th className="py-3 px-4">Status wysyłki</th>
                             <th className="py-3 px-4">Priorytet</th>
                             <th className="py-3 px-4 text-right">Planowany załadunek</th>
@@ -278,38 +413,23 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                         <td className="py-3 px-4 font-bold text-zinc-900">{order.customer}</td>
                                         <td className="py-3 px-4 text-zinc-600">{order.destination}</td>
                                         <td className="py-3 px-4 text-zinc-800">
-                                            {order.items?.map((item, idx) => (
-                                                <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 inline-block mr-1">
-                            {item.name} ({item.qty} PL)
-                          </span>
-                                            ))}
+                                            {renderItems(order.items)}
                                         </td>
                                         <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide border ${
-                            order.status === 'PROCESSING'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : order.status === 'SHIPPED'
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                    : order.status === 'DELIVERED'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        : 'bg-zinc-100 text-zinc-605 border-zinc-250'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                              order.status === 'PROCESSING'
-                                  ? 'bg-blue-600'
-                                  : order.status === 'SHIPPED'
-                                      ? 'bg-purple-600'
-                                      : order.status === 'DELIVERED'
-                                          ? 'bg-emerald-600'
-                                          : 'bg-zinc-500'
-                          }`}></span>
-                            {order.status}
-                        </span>
+                                            {(() => {
+                                                const styles = getStatusBadgeStyles(order.status);
+                                                return (
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide border ${styles.badge}`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${styles.dot}`}></span>
+                                                        {getStatusLabel(order.status)}
+                                                    </span>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="py-3 px-4">
-                        <span className={`font-bold inline-flex items-center gap-1 ${order.priority === 'High' ? 'text-red-600' : 'text-zinc-650'}`}>
-                          {order.priority === 'High' ? '⚠️ High' : 'Normal'}
-                        </span>
+                                            <span className={`font-bold inline-flex items-center gap-1 ${order.priority === 'Wysoki' ? 'text-red-600' : 'text-zinc-650'}`}>
+                                                {order.priority === 'Wysoki' ? '⚠️ Wysoki' : 'Normalny'}
+                                            </span>
                                         </td>
                                         <td className="py-3 px-4 text-right font-mono font-semibold text-zinc-600">{order.shipmentDate}</td>
                                         <td className="py-3 px-4 text-center">
@@ -325,11 +445,10 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                     </table>
                 </div>
 
-                {/* Table Pagination Footer bar */}
                 <div className="px-5 py-3 border-t border-[#c6c6cd] bg-zinc-50 flex items-center justify-between mt-auto">
-          <span className="text-zinc-500 text-xs font-semibold">
-            Wyświetlono {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredOrders.length)} z {filteredOrders.length} zamówień
-          </span>
+                    <span className="text-zinc-500 text-xs font-semibold">
+                        Wyświetlono {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredOrders.length)} z {filteredOrders.length} zamówień
+                    </span>
 
                     <div className="flex items-center gap-1.5">
                         <button
@@ -368,7 +487,6 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                 </div>
             </div>
 
-            {/* Outbound System Creator Modal */}
             {isNewOrderModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-lg border border-zinc-300 w-full max-w-md shadow-2xl overflow-hidden font-sans text-sm">
@@ -434,25 +552,25 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                             <div>
                                 <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">PRIORYTET WYSYŁKI</label>
                                 <div className="flex gap-6 mt-1.5">
-                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold">
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-zinc-700">
                                         <input
                                             type="radio"
                                             name="orderPriority"
-                                            checked={orderPriority === 'Normal'}
-                                            onChange={() => setOrderPriority('Normal')}
+                                            checked={orderPriority === 'Normalny'}
+                                            onChange={() => setOrderPriority('Normalny')}
                                             className="text-blue-600"
                                         />
-                                        Zwykły (Normal)
+                                        Normalny
                                     </label>
                                     <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-red-600">
                                         <input
                                             type="radio"
                                             name="orderPriority"
-                                            checked={orderPriority === 'High'}
-                                            onChange={() => setOrderPriority('High')}
+                                            checked={orderPriority === 'Wysoki'}
+                                            onChange={() => setOrderPriority('Wysoki')}
                                             className="text-red-600 focus:ring-red-500"
                                         />
-                                        Wysoki (High) ⚠️
+                                        Wysoki ⚠️
                                     </label>
                                 </div>
                             </div>
