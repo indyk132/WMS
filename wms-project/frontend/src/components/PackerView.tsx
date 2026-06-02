@@ -1,21 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Barcode, Play, CheckCircle2, AlertTriangle, Layers, 
-  Check, RefreshCw, Box, Printer, Scale, ClipboardList, Timer, Award, ShieldCheck,
-  User, Clock, RotateCcw, AlertCircle, HelpCircle, Boxes, Truck
+  Check, RefreshCw, Box, Printer, Scale, Timer, Award, 
+  User, Clock, RotateCcw, AlertCircle, Truck
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
 
-export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onBackToMenu }) {
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
+interface PackerViewProps {
+  orders: any[];
+  onUpdateOrder: (id: string, updates: any) => void;
+  workerName: string;
+  currentUser: any;
+  onBackToMenu: () => void;
+}
+
+export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onBackToMenu }: PackerViewProps) {
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cartonSize, setCartonSize] = useState('Carton-M'); 
   const [weightKg, setWeightKg] = useState(3.45);
   const [isWeightCalibrated, setIsWeightCalibrated] = useState(false);
   const [isCartonScanned, setIsCartonScanned] = useState(false);
   const [kpiStats, setKpiStats] = useState({ packedToday: 18, avgTimeSec: 42 });
   const [secondsElapsed, setSecondsElapsed] = useState(0);
-  const [packedItems, setPackedItems] = useState({}); 
-  const [processingOrderData, setProcessingOrderData] = useState(null);
+  const [packedItems, setPackedItems] = useState<Record<string, { qty: number; finalized: boolean }>>({}); 
+  const [processingOrderData, setProcessingOrderData] = useState<any | null>(null);
+
+  // Replacement for blocking alerts & prompts
+  const [localToast, setLocalToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [isSkuModalOpen, setIsSkuModalOpen] = useState(false);
+  const [skuModalInput, setSkuModalInput] = useState('');
+  const [isCartonModalOpen, setIsCartonModalOpen] = useState(false);
+  const [cartonModalInput, setCartonModalInput] = useState('');
+
+  const showLocalToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setLocalToast({ msg, type });
+    setTimeout(() => setLocalToast(null), 4500);
+  };
 
   const [currentTime, setCurrentTime] = useState(() => {
     const d = new Date();
@@ -43,9 +63,8 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     ))
   );
 
-  
   useEffect(() => {
-    let interval = null;
+    let interval: any = null;
     if (selectedOrderId) {
       interval = setInterval(() => {
         setSecondsElapsed(prev => prev + 1);
@@ -56,22 +75,19 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     return () => clearInterval(interval);
   }, [selectedOrderId]);
 
-  
-  
   const activeOrders = orders.filter(o => o.status === 'Wysłane' || o.status === 'W realizacji');
   const selectedOrder = orders.find(o => o.id === selectedOrderId);
 
-  
   const areAllItemsPacked = selectedOrder 
-    ? (selectedOrder.items || []).every(item => {
-        const status = packedItems[item.sku];
-        return status && status.finalized && status.qty === (item.quantity || item.qty);
+    ? (selectedOrder.items || []).every((item: any) => {
+        const pStatus = packedItems[item.sku];
+        return pStatus && pStatus.finalized && pStatus.qty === (item.quantity || item.qty);
       })
     : false;
 
-  const [focusedSku, setFocusedSku] = useState(null);
+  const [focusedSku, setFocusedSku] = useState<string | null>(null);
 
-  const handleStartPacking = (orderId) => {
+  const handleStartPacking = (orderId: string) => {
     sounds.playSuccess();
     setSelectedOrderId(orderId);
     setCartonSize('Carton-M');
@@ -83,14 +99,13 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     setFocusedSku(null); 
   };
 
-  const handleRowClick = (sku) => {
-    const item = (selectedOrder.items || []).find(i => i.sku === sku);
+  const handleRowClick = (sku: string) => {
+    const item = (selectedOrder?.items || []).find((i: any) => i.sku === sku);
     if (!item) return;
 
     const targetQty = item.quantity || item.qty || 0;
     const currentStatus = packedItems[sku] || { qty: 0, finalized: false };
 
-    
     if (currentStatus.qty === 0) {
       if (isUserAdminOrManager) {
         sounds.playSuccess();
@@ -109,12 +124,10 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
           setFocusedSku(sku);
         }
       } else {
-        
         sounds.playError();
-        alert(`BŁĄD: Towar o SKU "${sku}" nie został jeszcze zeskanowany czytnikiem!`);
+        showLocalToast(`BŁĄD: Towar o SKU "${sku}" nie został jeszcze zeskanowany czytnikiem!`, 'error');
       }
     } else {
-      
       if (focusedSku === sku) {
         sounds.playBeep();
         setFocusedSku(null); 
@@ -124,18 +137,17 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     }
   };
 
-  const handleProcessGlobalScan = (scannedSku) => {
+  const handleProcessGlobalScan = (scannedSku: string) => {
     sounds.playBeep();
     const cleanSku = scannedSku.toUpperCase().trim();
     
     if (!selectedOrder) return;
     
-    
-    const matchedItem = (selectedOrder.items || []).find(item => item.sku.toUpperCase().trim() === cleanSku);
+    const matchedItem = (selectedOrder.items || []).find((item: any) => item.sku.toUpperCase().trim() === cleanSku);
     
     if (!matchedItem) {
       sounds.playError();
-      alert(`BŁĄD SKANOWANIA! Towar o kodzie SKU "${scannedSku}" nie należy do tego zlecenia!`);
+      showLocalToast(`BŁĄD SKANOWANIA! Towar o kodzie SKU "${scannedSku}" nie należy do tego zlecenia!`, 'error');
       return;
     }
     
@@ -145,16 +157,15 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     
     if (currentStatus.finalized) {
       sounds.playError();
-      alert(`Towar SKU "${sku}" został już oznaczony jako spakowany!`);
+      showLocalToast(`Towar SKU "${sku}" został już oznaczony jako spakowany!`, 'error');
       return;
     }
 
     if (currentStatus.qty >= targetQty) {
       sounds.playError();
-      alert(`BŁĄD: Ilość dla SKU "${sku}" została już w pełni zweryfikowana!`);
+      showLocalToast(`BŁĄD: Ilość dla SKU "${sku}" została już w pełni zweryfikowana!`, 'error');
       return;
     }
-    
     
     sounds.playSuccess();
     const nextQty = currentStatus.qty + 1;
@@ -167,11 +178,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     }));
 
     if (nextQty === targetQty) {
-      if (focusedSku === sku) {
-        setTimeout(() => setFocusedSku(null), 300);
-      } else {
-        setFocusedSku(null);
-      }
+      setFocusedSku(null);
     } else {
       setFocusedSku(sku);
     }
@@ -179,15 +186,13 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
   const handleGlobalScanPrompt = () => {
     sounds.playBeep();
-    const userInput = prompt("ZESKANUJ SKU: wpisz kod kreskowy towaru (np. SKU-10492):", "SKU-");
-    if (userInput) {
-      handleProcessGlobalScan(userInput);
-    }
+    setSkuModalInput('SKU-');
+    setIsSkuModalOpen(true);
   };
 
-  const handleManualAdjustQty = (sku, delta) => {
+  const handleManualAdjustQty = (sku: string, delta: number) => {
     sounds.playBeep();
-    const targetItem = (selectedOrder.items || []).find(item => item.sku === sku);
+    const targetItem = (selectedOrder?.items || []).find((item: any) => item.sku === sku);
     if (!targetItem) return;
     const targetQty = targetItem.quantity || targetItem.qty || 0;
     
@@ -212,9 +217,9 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     }
   };
 
-  const handleFinalizePackItem = (sku) => {
+  const handleFinalizePackItem = (sku: string) => {
     sounds.playSuccess();
-    const targetItem = (selectedOrder.items || []).find(item => item.sku === sku);
+    const targetItem = (selectedOrder?.items || []).find((item: any) => item.sku === sku);
     if (!targetItem) return;
     const targetQty = targetItem.quantity || targetItem.qty || 0;
     
@@ -231,14 +236,12 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     }, 300);
   };
 
-  
   useEffect(() => {
     if (!selectedOrderId || !selectedOrder) return;
 
     let scannedBuffer = "";
-    const handleKeyPress = (e) => {
-      
-      if (e.target.tagName === 'INPUT') return;
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).tagName === 'INPUT') return;
 
       if (e.key === "Enter") {
         if (scannedBuffer.trim().length > 0) {
@@ -263,28 +266,26 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
   const handleScanCartonCode = () => {
     sounds.playBeep();
-    const cartonBarcode = prompt("Zeskanuj kod kreskowy kartonu wysyłkowego (np. BOX-39048):", `BOX-${Math.floor(10000 + Math.random() * 90000)}`);
-    if (cartonBarcode) {
-      sounds.playSuccess();
-      setIsCartonScanned(true);
-    }
+    setCartonModalInput(`BOX-${Math.floor(10000 + Math.random() * 90000)}`);
+    setIsCartonModalOpen(true);
   };
+
   const handleStartDispatchProcessing = () => {
     sounds.playSuccess();
     setProcessingOrderData({
       orderId: selectedOrderId,
-      clientName: selectedOrder.customer || selectedOrder.customerName || "Klient detaliczny",
+      clientName: selectedOrder?.customer || selectedOrder?.customerName || "Klient detaliczny",
       weight: weightKg,
       cartonSize: cartonSize === 'Carton-S' ? 'Koperta / Karton S' : cartonSize === 'Carton-L' ? 'Karton Duży L' : 'Karton Średni M',
       cartonCode: `BOX-${cartonSize.replace('Carton-', '')}-${selectedOrderId}`
     });
   };
 
-  const handleCompleteDispatch = (pData) => {
+  const handleCompleteDispatch = (pData: any) => {
     if (onUpdateOrder) {
       onUpdateOrder(pData.orderId, {
         status: 'Dostarczone',
-        internalNotes: `${selectedOrder.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę DPD.`,
+        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę DPD.`,
         internalNotesActor: workerName,
         waybillPdfDate: new Date().toLocaleDateString('pl-PL')
       });
@@ -318,8 +319,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   }
 
   return (
-    <div className="w-full flex-grow bg-[#f4f6f9] text-zinc-800 flex flex-col font-sans" onClick={() => setFocusedSku(null)}>
-      
+    <div className="w-full flex-grow bg-[#f5f7fa] text-zinc-800 flex flex-col font-sans" onClick={() => setFocusedSku(null)}>
       <header className="bg-white border-b border-zinc-200 px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-3">
           <button 
@@ -332,7 +332,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
           <div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-900">Stacja Pakowania i Weryfikacji</h2>
+              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-900 animate-fadeIn">Stacja Pakowania</h2>
             </div>
             <p className="text-[10px] font-mono text-zinc-500 uppercase flex items-center gap-1.5 mt-0.5">
               <User className="w-3 h-3 text-zinc-400" />
@@ -352,9 +352,9 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
             <span className="text-xs font-black font-mono text-purple-650 leading-none mt-0.5 block">{kpiStats.avgTimeSec}s / paczka</span>
           </div>
           
-          <div className="hidden md:block">
-            <span className="text-[8px] font-mono text-zinc-500 uppercase block tracking-wider font-bold font-sans">Dokładność</span>
-            <span className="text-xs font-black font-mono text-emerald-600 leading-none mt-0.5 block">99.4%</span>
+          <div className="hidden md:block text-right">
+            <span className="text-[8px] font-mono text-zinc-400 uppercase block font-bold">Dokładność</span>
+            <span className="text-xs font-bold font-mono text-emerald-600">99.4%</span>
           </div>
           
           {selectedOrderId ? (
@@ -373,37 +373,30 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
       <div className="flex-grow overflow-hidden flex flex-col p-4 md:p-6 gap-6">
         {!selectedOrderId ? (
-          
           <div className="flex-grow flex flex-col gap-6 overflow-hidden select-none">
-            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
-              
               <div className="lg:col-span-2 bg-white border border-zinc-200 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between shadow-sm min-h-[170px]">
-                <div className="absolute right-6 bottom-3 text-zinc-100 pointer-events-none">
-                  <ClipboardList className="w-36 h-36 stroke-[0.4]" />
-                </div>
-                
                 <div className="relative z-10 space-y-3">
                   <div>
-                    <span className="text-[10px] font-black text-zinc-400 uppercase font-mono block" style={{ letterSpacing: '0.15em' }}>
+                    <span className="text-[10px] font-black text-zinc-400 uppercase font-mono block">
                       KONSOLA OPERATORA WMS
                     </span>
                     <h3 className="text-xl md:text-2xl font-black text-zinc-950 mt-1">
-                      Witaj ponownie, <span className="text-[#0052CC]">{workerName || "WMS-Robotnik #39"}!</span>
+                      Witaj ponownie, <span className="text-[#0052CC]">{workerName || "WMS-Robotnik"}!</span>
                     </h3>
                   </div>
                   
-                  <p className="text-xs text-zinc-650 leading-relaxed max-w-xl">
+                  <p className="text-xs text-zinc-600 leading-relaxed max-w-xl">
                     Przed Tobą zestawienie zamówień gotowych do weryfikacji i zabezpieczenia.
                     Wybierz zlecenie z kolejki poniżej, aby otworzyć terminal pakowacza.
                   </p>
                 </div>
                 
                 <div className="relative z-10 flex flex-wrap gap-2.5 mt-5">
-                  <span className="px-3 py-1 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-600 font-mono text-[9px] font-bold uppercase tracking-wider">
+                  <span className="px-3 py-1 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-650 font-mono text-[9px] font-bold uppercase tracking-wider">
                     Hala Logistyczna: Sektor C
                   </span>
-                  <span className="px-3 py-1 bg-emerald-50/50 border border-emerald-200 rounded-lg text-emerald-700 font-mono text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="px-3 py-1 bg-emerald-50/50 border border-emerald-250 rounded-lg text-emerald-700 font-mono text-[9px] font-bold uppercase tracking-wider flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Waga Pre-Kalibrowana: OK
                   </span>
@@ -414,10 +407,10 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 <div className="space-y-4">
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="text-[10px] font-black text-zinc-400 uppercase font-mono block" style={{ letterSpacing: '0.15em' }}>
+                      <span className="text-[10px] font-black text-zinc-400 uppercase font-mono block">
                         WYDAJNOŚĆ ZMIANY
                       </span>
-                      <h3 className="text-base font-black text-zinc-950 mt-1">
+                      <h3 className="text-base font-black text-zinc-950 mt-1 font-display">
                         Raport dzienny
                       </h3>
                     </div>
@@ -436,8 +429,8 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       <div 
                         className={`h-full bg-gradient-to-r ${
                           (kpiStats.packedToday / 30) * 100 < 85
-                            ? "from-amber-500 to-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.2)]"
-                            : "from-emerald-500 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                            ? "from-amber-500 to-orange-500"
+                            : "from-emerald-500 to-teal-500"
                         } rounded-full transition-all duration-500`}
                         style={{ width: `${Math.min(100, (kpiStats.packedToday / 30) * 100)}%` }}
                       />
@@ -445,8 +438,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                   </div>
                 </div>
 
-                <div className={`text-[10px] font-bold ${(kpiStats.packedToday / 30) * 100 < 85 ? 'text-amber-600' : 'text-emerald-700'} flex items-center gap-1 mt-4`}>
-                  <span className="text-xs font-sans">📈</span>
+                <div className={`text-[10px] font-bold ${(kpiStats.packedToday / 30) * 100 < 85 ? 'text-amber-600' : 'text-emerald-700'} flex items-center gap-1 mt-4 animate-bounce`}>
                   Cel dzienny zmiany wyrobiony w {Math.min(100, Math.round((kpiStats.packedToday / 30) * 100))}%
                 </div>
               </div>
@@ -454,27 +446,23 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
             <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
               <div className="flex items-center gap-2">
-                <ClipboardList className="w-4.5 h-4.5 text-[#0052CC]" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-900">
+                <Layers className="w-4.5 h-4.5 text-[#0052CC]" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Kolejka zleceń do pakowania ({activeOrders.length})
                 </h3>
               </div>
-              <span className="px-2.5 py-1 rounded border border-zinc-200 bg-white text-zinc-500 font-mono text-[9px] font-bold uppercase tracking-wider">
-                Stan bufora: dopuszczalny
-              </span>
             </div>
 
             <div className="flex-grow overflow-y-auto pr-1">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {activeOrders.length === 0 ? (
                   <div className="col-span-3 bg-white border border-dashed border-zinc-250 rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4">
-                    <ClipboardList className="w-16 h-16 text-zinc-300" />
-                    <p className="text-sm font-bold text-zinc-500">Brak zleceń oczekujących na spakowanie.</p>
-                    <span className="text-xs text-zinc-400">Wszystkie skompletowane zlecenia zostały już wysłane.</span>
+                    <Box className="w-16 h-16 text-zinc-300" />
+                    <p className="text-sm font-bold text-zinc-500">Brak zleceń do spakowania.</p>
                   </div>
                 ) : (
-                  activeOrders.map(order => {
-                     const itemsCount = (order.items || []).reduce((sum, i) => sum + (i.quantity || i.qty || 0), 0);
+                  activeOrders.map((order: any) => {
+                     const itemsCount = (order.items || []).reduce((sum: number, i: any) => sum + (i.quantity || i.qty || 0), 0);
                      return (
                       <div 
                         key={order.id} 
@@ -485,7 +473,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                             <span className="px-2.5 py-1 rounded border border-blue-200 bg-blue-50/50 text-[#0052CC] font-mono text-[10px] font-extrabold uppercase tracking-wide">
                               {order.id}
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-600 font-mono text-[8px] font-extrabold uppercase tracking-widest animate-pulse">
+                            <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-600 font-mono text-[8px] font-extrabold uppercase tracking-widest">
                               Skompletowane
                             </span>
                           </div>
@@ -499,7 +487,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                               Artykuły ({itemsCount} szt.):
                             </span>
                             <ul className="space-y-1.5 text-xs text-zinc-650">
-                              {(order.items || []).map((item, idx) => (
+                              {(order.items || []).map((item: any, idx: number) => (
                                 <li key={idx} className="flex items-baseline gap-2 font-sans font-semibold text-xs">
                                   <span className="font-mono text-[#0052CC] font-extrabold text-sm shrink-0">
                                     {item.quantity || item.qty}x
@@ -515,7 +503,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
                         <button
                           onClick={() => handleStartPacking(order.id)}
-                          className="w-full h-11 bg-[#0052CC] hover:bg-[#0041a3] active:scale-[0.98] text-white text-xs font-display font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow transition-all shrink-0"
+                          className="w-full h-11 bg-[#0052CC] hover:bg-[#0041a3] active:scale-[0.98] text-white text-xs font-display font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow transition-all shrink-0 border-none"
                         >
                           <Play className="w-3.5 h-3.5 fill-white text-white" />
                           ROZPOCZNIJ PAKOWANIE
@@ -528,19 +516,16 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
             </div>
           </div>
         ) : (
-          
           <div className="flex-grow flex flex-col lg:flex-row gap-6 overflow-hidden">
-            
             <div className="flex-grow flex flex-col gap-6 overflow-y-auto pr-1">
-              
-              <div className="bg-white p-4 border border-zinc-200 rounded-xl flex justify-between items-center shrink-0 shadow-sm">
+              <div className="bg-white p-4 border border-zinc-200 rounded-xl flex justify-between items-center shrink-0 shadow-sm animate-fadeIn">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-zinc-400 font-mono uppercase">Pakowanie Zlecenia</span>
-                    <span className="font-mono text-sm font-black text-zinc-900">{selectedOrder.id}</span>
+                    <span className="font-mono text-sm font-black text-zinc-900">{selectedOrder?.id}</span>
                   </div>
                   <p className="text-[11px] text-zinc-500">
-                    Klient: <span className="text-zinc-800 font-semibold">{selectedOrder.customer || selectedOrder.customerName}</span>
+                    Klient: <span className="text-zinc-800 font-semibold">{selectedOrder?.customer || selectedOrder?.customerName}</span>
                   </p>
                 </div>
                 <button
@@ -551,7 +536,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 </button>
               </div>
 
-              <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 shadow-sm">
+              <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 shadow-sm animate-fadeIn">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-purple-50 border border-purple-200 text-purple-650 rounded-lg flex items-center justify-center animate-pulse">
                     <Barcode className="w-5 h-5" />
@@ -570,7 +555,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button
                       onClick={handleGlobalScanPrompt}
-                      className="flex-1 sm:flex-none h-10 px-4 bg-purple-50/50 border border-purple-200 hover:bg-purple-50 text-purple-700 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+                      className="flex-1 sm:flex-none h-10 px-4 bg-purple-50/50 border border-purple-200 hover:bg-purple-50 text-purple-700 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all border-none"
                     >
                       <Barcode className="w-4 h-4" />
                       Wpisz kod SKU (Test)
@@ -579,11 +564,11 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 )}
               </div>
 
-              <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm animate-fadeIn">
                 <div className="p-3 bg-zinc-50 border-b border-zinc-200 flex justify-between items-center">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 font-display">Pozycje do weryfikacji i pakowania</h4>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-950 font-display">Pozycje do weryfikacji i pakowania</h4>
                   <span className="text-[10px] bg-white border border-zinc-200 px-2 py-0.5 rounded font-mono text-zinc-500">
-                    Wszystkie sztuki: {(selectedOrder.items || []).reduce((s, i) => s + (i.quantity || i.qty || 0), 0)}
+                    Wszystkie sztuki: {(selectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || i.qty || 0), 0)}
                   </span>
                 </div>
                 
@@ -596,8 +581,8 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       <th className="px-4 py-2.5 text-center">Stan / Weryfikacja</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-150 font-mono text-zinc-800">
-                    {(selectedOrder.items || []).map((item, idx) => {
+                  <tbody className="divide-y divide-zinc-200 font-mono text-zinc-800">
+                    {(selectedOrder?.items || []).map((item: any, idx: number) => {
                       const itemStatus = packedItems[item.sku] || { qty: 0, finalized: false };
                       const targetQty = item.quantity || item.qty || 0;
                       const isFocused = focusedSku === item.sku;
@@ -643,7 +628,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                     <button
                                       type="button"
                                       onClick={() => handleManualAdjustQty(item.sku, 1)}
-                                      className="w-8 h-8 rounded-full bg-emerald-550 border border-emerald-250 hover:bg-emerald-100 text-emerald-700 font-black flex items-center justify-center transition-all cursor-pointer text-lg active:scale-90"
+                                      className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-250 hover:bg-emerald-100 text-emerald-700 font-black flex items-center justify-center transition-all cursor-pointer text-lg active:scale-90"
                                       title="Zwiększ o 1 szt."
                                     >
                                       +
@@ -651,7 +636,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                   ) : (
                                     <div 
                                       className="w-8 h-8 opacity-20 border border-zinc-200 rounded-full flex items-center justify-center text-zinc-400 font-bold text-lg select-none cursor-not-allowed"
-                                      title="Osiągnięto limit (Możesz tylko usunąć)"
+                                      title="Osiągnięto limit"
                                     >
                                       +
                                     </div>
@@ -667,7 +652,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                 ? "text-emerald-600 font-black text-sm" 
                                 : itemStatus.qty > 0 
                                   ? "text-purple-650 text-sm" 
-                                  : "text-zinc-400"
+                                  : "text-zinc-450"
                             }>
                               {itemStatus.qty}
                             </span>
@@ -681,7 +666,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                               </div>
                             ) : !itemStatus.finalized ? (
                               <div className="flex items-center justify-center gap-2.5">
-                                <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 rounded text-[9px] uppercase font-extrabold tracking-widest animate-pulse select-none">
+                                <span className="px-1.5 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 rounded text-[9px] uppercase font-extrabold tracking-widest animate-pulse select-none">
                                   Weryfikacja...
                                 </span>
                                 <button
@@ -690,14 +675,14 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                     e.stopPropagation();
                                     handleFinalizePackItem(item.sku);
                                   }}
-                                  className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white text-[9px] font-black uppercase rounded cursor-pointer transition-all active:scale-95"
+                                  className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white text-[9px] font-black uppercase rounded cursor-pointer transition-all active:scale-95 border-none"
                                 >
                                   Spakuj
                                 </button>
                               </div>
                             ) : (
                               <div className="flex items-center justify-center gap-2 select-none">
-                                <span className="px-2 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded text-[9px] uppercase font-extrabold tracking-widest inline-flex items-center gap-1 shadow-sm">
+                                <span className="px-2 py-1 bg-emerald-50 border border-emerald-250 text-emerald-700 rounded text-[9px] uppercase font-extrabold tracking-widest inline-flex items-center gap-1 shadow-sm">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> SPAKOWANE (OK)
                                 </span>
                               </div>
@@ -710,14 +695,14 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 </table>
               </div>
 
-              <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4">
+              <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
                 <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 font-display">Krok 1: Wybór opakowania kartonowego</h4>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {[
-                    { id: 'Carton-S', name: 'Koperta / Karton S', desc: 'Artykuły małe / dokumenty (do 1 kg)', icon: Box },
-                    { id: 'Carton-M', name: 'Karton Średni M', desc: 'Optymalny dla większości SKU (do 10 kg)', icon: Box },
-                    { id: 'Carton-L', name: 'Karton Duży L', desc: 'Duże gabaryty / ciężkie (do 30 kg)', icon: Box }
+                    { id: 'Carton-S', name: 'Koperta / Karton S', desc: 'Artykuły małe / dokumenty (do 1 kg)' },
+                    { id: 'Carton-M', name: 'Karton Średni M', desc: 'Optymalny dla większości SKU (do 10 kg)' },
+                    { id: 'Carton-L', name: 'Karton Duży L', desc: 'Duże gabaryty / ciężkie (do 30 kg)' }
                   ].map(box => {
                     const isSelected = cartonSize === box.id;
                     return (
@@ -731,7 +716,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                         }`}
                       >
                         <div className="flex justify-between items-center w-full">
-                          <box.icon className={`w-6 h-6 ${isSelected ? 'text-purple-650' : 'text-zinc-400'}`} />
+                          <Box className={`w-5 h-5 ${isSelected ? 'text-purple-650' : 'text-zinc-400'}`} />
                           {isSelected && (
                             <span className="w-4 h-4 bg-purple-600 rounded-full flex items-center justify-center text-white text-[8px] font-bold">✓</span>
                           )}
@@ -747,8 +732,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
               </div>
             </div>
 
-            <div className="w-full lg:w-80 shrink-0 flex flex-col gap-6">
-              
+            <div className="w-full lg:w-80 shrink-0 flex flex-col gap-6 animate-fadeIn">
               <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 font-display">Krok 2: Odczyt wagi paczki</h4>
                 
@@ -769,7 +753,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 {!isWeightCalibrated ? (
                   <button
                     onClick={handleReadScaleWeight}
-                    className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-display font-black text-xs uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow active:scale-[0.98] transition-all"
+                    className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-display font-black text-xs uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow active:scale-[0.98] transition-all border-none"
                   >
                     <Scale className="w-4 h-4" />
                     ZATWIERDŹ WAGĘ PACZKI
@@ -790,13 +774,13 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                     {!isCartonScanned ? (
                       <button
                         onClick={handleScanCartonCode}
-                        className="w-full h-11 bg-zinc-550 hover:bg-zinc-100 border border-zinc-250 text-zinc-800 text-xs font-display font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
+                        className="w-full h-11 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-display font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
                       >
                         <Barcode className="w-4 h-4 text-purple-650" />
                         SKANUJ KOD KARTONU
                       </button>
                     ) : (
-                      <div className="h-11 bg-emerald-50 border border-emerald-250 rounded-lg flex items-center justify-center text-emerald-700 text-xs font-bold gap-1.5">
+                      <div className="h-11 bg-emerald-50 border border-emerald-250 rounded-lg flex items-center justify-center text-emerald-700 text-xs font-bold gap-1.5 font-sans">
                         <Check className="w-4 h-4" />
                         Karton zweryfikowany (OK)
                       </div>
@@ -811,10 +795,10 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       <button
                         onClick={handleStartDispatchProcessing}
                         disabled={!isAllComplete}
-                        className={`w-full h-13 rounded-xl font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all ${
+                        className={`w-full h-13 rounded-xl font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all border-none ${
                           isAllComplete 
                             ? 'bg-[#0052CC] hover:bg-[#0041a3] text-white shadow-lg cursor-pointer active:scale-[0.98]' 
-                            : 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                            : 'bg-zinc-100 text-zinc-405 cursor-not-allowed border border-zinc-200'
                         }`}
                       >
                         <Printer className="w-4.5 h-4.5" />
@@ -824,53 +808,178 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                   })()}
                 </div>
               </div>
-
             </div>
           </div>
         )}
       </div>
       
-      <footer className="bg-zinc-100 border-t border-zinc-200 px-6 py-3 flex flex-col sm:flex-row items-center justify-between text-[10px] font-mono text-zinc-500 shrink-0 mt-auto select-none gap-2">
+      <footer className="bg-zinc-100 border-t border-zinc-250 px-6 py-3 flex flex-col sm:flex-row items-center justify-between text-[10px] font-mono text-zinc-500 shrink-0 mt-auto select-none gap-2">
         <div>
           © 2026 STACJA PAKOWANIA I WERYFIKACJI v4.5.3 – CENTRALNY INTERFEJS LOGISTYCZNY DPD
         </div>
         <div className="flex items-center gap-1.5 text-emerald-600 font-bold">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Wydajne szyfrowanie terminala SSL secured
+          Bezpieczne połączenie SSL secured
         </div>
       </footer>
+
+      {/* LOCAL ALERTS TOAST CARRIER */}
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-50 p-4 rounded-xl border flex items-center gap-3 shadow-2xl ${
+          localToast.type === 'error' 
+            ? 'bg-red-50 border-red-200 text-red-800' 
+            : 'bg-emerald-50 border-emerald-250 text-emerald-800'
+        }`}>
+          {localToast.type === 'error' ? <AlertCircle className="w-5 h-5 text-red-500" /> : <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+          <span className="text-xs font-bold leading-tight font-sans">{localToast.msg}</span>
+        </div>
+      )}
+
+      {/* CUSTOM SKU SCANNER MODAL */}
+      {isSkuModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-300 rounded-xl w-full max-w-sm shadow-2xl p-5 font-sans" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 text-zinc-900 border-b border-zinc-100 pb-3 mb-4 select-none">
+              <Barcode className="w-5 h-5 text-purple-600" />
+              <h4 className="font-extrabold text-sm tracking-tight text-zinc-900">Ręczna Symulacja SKU (Weryfikacja)</h4>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (skuModalInput.trim()) {
+                handleProcessGlobalScan(skuModalInput.trim());
+                setSkuModalInput('');
+                setIsSkuModalOpen(false);
+              }
+            }} className="space-y-4 text-xs text-zinc-700">
+              <p className="leading-relaxed font-semibold">
+                Zastąpienie skanera radiowego. Wprowadź kod kreskowy SKU towaru, aby zaliczyć pakowanie sztuki:
+              </p>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-650 uppercase tracking-widest mb-1.5">KOD KRESKOWY SKU</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="np. SKU-10492"
+                  value={skuModalInput}
+                  onChange={(e) => setSkuModalInput(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-zinc-300 rounded-xl text-zinc-950 font-mono text-sm uppercase outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2 select-none">
+                <button
+                  type="button"
+                  onClick={() => setIsSkuModalOpen(false)}
+                  className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-bold rounded-lg text-xs cursor-pointer bg-white"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  className="px-4.5 py-2 bg-purple-650 hover:bg-[#8553da] text-white font-bold rounded-lg text-xs cursor-pointer shadow border-none"
+                >
+                  Określ SKU
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM CARTON SCANNER MODAL */}
+      {isCartonModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-300 rounded-xl w-full max-w-sm shadow-2xl p-5 font-sans" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 text-zinc-900 border-b border-zinc-100 pb-3 mb-4 select-none">
+              <Box className="w-5 h-5 text-blue-600" />
+              <h4 className="font-extrabold text-sm tracking-tight text-zinc-900">Zaczytaj Kod Kartonu Wysyłkowego</h4>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (cartonModalInput.trim()) {
+                sounds.playSuccess();
+                setIsCartonScanned(true);
+                setIsCartonModalOpen(false);
+                showLocalToast(`Karton zweryfikowany: ${cartonModalInput.trim()}`, 'success');
+              }
+            }} className="space-y-4 text-xs text-zinc-700">
+              <p className="leading-relaxed font-semibold">
+                Zeskanuj etykietę kartonu transportowego, aby powiązać go ze zleceniem wydań i nadać gabaryt:
+              </p>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-650 uppercase tracking-widest mb-1.5">BARCODE KARTONU (BOX-xxxxx)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="np. BOX-39048"
+                  value={cartonModalInput}
+                  onChange={(e) => setCartonModalInput(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-zinc-300 rounded-xl text-zinc-950 font-mono text-sm uppercase outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2 select-none">
+                <button
+                  type="button"
+                  onClick={() => setIsCartonModalOpen(false)}
+                  className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-bold rounded-lg text-xs cursor-pointer bg-white"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  className="px-4.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs cursor-pointer shadow border-none"
+                >
+                  Zatwierdź Karton
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-
-
+interface ProcessingOrderScreenProps {
+  orderId: string;
+  clientName: string;
+  weight: number;
+  cartonSize: string;
+  cartonCode: string;
+  workerName: string;
+  currentUser: any;
+  kpiStats: any;
+  onBack: () => void;
+  onComplete: (data: any) => void;
+}
 
 export function ProcessingOrderScreen({ 
-  orderId = "ORD-2023-8891A",
-  clientName = "Apex Logistics Europe",
-  weight = 12.40,
-  cartonSize = "Karton Średni M",
-  cartonCode = "BOX-M-ORD-2023-8891A",
-  workerName = "SYSTEM ADMIN",
-  currentUser = null,
-  kpiStats = { packedToday: 18, avgTimeSec: 42 },
-  onBack = () => console.log("Powrót"),
-  onComplete = () => console.log("Zakończono")
-}) {
-  
-  const [processState, setProcessState] = useState('processing'); 
+  orderId,
+  clientName,
+  weight,
+  cartonSize,
+  cartonCode,
+  workerName,
+  currentUser,
+  kpiStats,
+  onBack,
+  onComplete
+}: ProcessingOrderScreenProps) {
+  const [processState, setProcessState] = useState<'processing' | 'error' | 'success'>('processing'); 
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [toast, setToast] = useState(null);
+  const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   
-  
-  const [stepStates, setStepStates] = useState({
+  const [stepStates, setStepStates] = useState<Record<string, 'pending' | 'active' | 'complete' | 'failed'>>({
     inventory: 'active',      
     orderStatus: 'pending',    
     courierLabel: 'pending'    
   });
 
-  
   const [currentTime, setCurrentTime] = useState(() => {
     const d = new Date();
     return d.toTimeString().split(' ')[0];
@@ -884,9 +993,8 @@ export function ProcessingOrderScreen({
     return () => clearInterval(timer);
   }, []);
 
-  
   useEffect(() => {
-    let timer;
+    let timer: any;
     if (processState === 'processing') {
       timer = setInterval(() => {
         setElapsedTime(prev => prev + 1);
@@ -895,11 +1003,9 @@ export function ProcessingOrderScreen({
     return () => clearInterval(timer);
   }, [processState]);
 
-  
   useEffect(() => {
     if (processState !== 'processing') return;
 
-    
     const t1 = setTimeout(() => {
       setStepStates(prev => ({ 
         ...prev, 
@@ -908,7 +1014,6 @@ export function ProcessingOrderScreen({
       }));
       showToast("Aktualizacja stanów ERP: Zakończono pomyślnie", "success");
 
-      
       const t2 = setTimeout(() => {
         setStepStates(prev => ({ 
           ...prev, 
@@ -917,7 +1022,6 @@ export function ProcessingOrderScreen({
         }));
         showToast("Zmieniono status zlecenia na 'Zatwierdzone'", "success");
 
-        
         const t3 = setTimeout(() => {
           setStepStates(prev => ({ 
             ...prev, 
@@ -937,7 +1041,7 @@ export function ProcessingOrderScreen({
     return () => clearTimeout(t1);
   }, [processState]);
 
-  const showToast = (msg, type = 'success') => {
+  const showToast = (msg: string, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
@@ -977,7 +1081,7 @@ export function ProcessingOrderScreen({
 
   const handleLocalPrintLabel = () => {
     sounds.playSuccess();
-    alert(`Zlecono wydruk etykiety Zebra dla zlecenia ${orderId}. Waga: ${weight.toFixed(2)} kg.`);
+    showToast(`Zlecono wydruk etykiety Zebra dla zlecenia ${orderId}. Waga: ${weight.toFixed(2)} kg.`, "success");
   };
 
   const handleFinalizeAndCompleteOrder = () => {
@@ -992,10 +1096,9 @@ export function ProcessingOrderScreen({
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#f4f6f9] text-zinc-800 flex flex-col font-sans select-none">
-      
+    <div className="w-full min-h-screen bg-[#f5f7fa] text-zinc-800 flex flex-col font-sans select-none">
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg border shadow-2xl flex items-center gap-2.5 max-w-sm ${
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg border shadow-2xl flex items-center gap-2.5 max-w-sm animate-fadeIn ${
           toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
           toast.type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' :
           'bg-emerald-50 border-emerald-250 text-emerald-800'
@@ -1013,7 +1116,7 @@ export function ProcessingOrderScreen({
         <div className="flex items-center gap-3">
           <button 
             onClick={onBack}
-            className="p-1.5 hover:bg-zinc-50 text-purple-650 hover:text-purple-800 rounded-full transition-all cursor-pointer border border-purple-200"
+            className="p-1.5 hover:bg-zinc-50 text-purple-650 hover:text-purple-850 rounded-full transition-all cursor-pointer border border-purple-200 bg-white"
             title="Anuluj i wróć do sesji pakowania"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -1021,7 +1124,7 @@ export function ProcessingOrderScreen({
           <div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-900">Stacja Pakowania i Weryfikacji</h2>
+              <h2 className="text-sm font-black uppercase tracking-wider text-zinc-900">Stacja Pakowania</h2>
             </div>
             <p className="text-[10px] font-mono text-zinc-500 uppercase flex items-center gap-1.5 mt-0.5">
               <User className="w-3 h-3 text-zinc-400" />
@@ -1036,14 +1139,9 @@ export function ProcessingOrderScreen({
             <span className="text-xs font-black font-mono text-[#0052CC] leading-none mt-0.5 block">{kpiStats.packedToday} paczek</span>
           </div>
           
-          <div className="hidden md:block">
-            <span className="text-[8px] font-mono text-zinc-500 uppercase block tracking-wider font-bold">Śr. Czas Pakowania</span>
-            <span className="text-xs font-black font-mono text-purple-655 leading-none mt-0.5 block">{kpiStats.avgTimeSec}s / paczka</span>
-          </div>
-          
-          <div className="hidden md:block">
-            <span className="text-[8px] font-mono text-zinc-500 uppercase block tracking-wider font-bold">Dokładność</span>
-            <span className="text-xs font-black font-mono text-emerald-600 leading-none mt-0.5 block">99.4%</span>
+          <div className="hidden md:block text-right">
+            <span className="text-[8px] font-mono text-zinc-400 block font-bold">Śr. Czas</span>
+            <span className="text-xs font-bold font-mono text-purple-650">{kpiStats.avgTimeSec}s</span>
           </div>
           
           <div className="bg-zinc-50 border border-zinc-250 text-blue-650 px-3 py-1.5 rounded-lg flex items-center gap-2 font-mono text-xs font-black shadow-inner">
@@ -1054,19 +1152,18 @@ export function ProcessingOrderScreen({
       </header>
 
       <div className="flex-grow flex flex-col p-4 md:p-6 gap-6 items-center justify-start max-w-6xl mx-auto w-full">
-        
         <div className="w-full max-w-4xl mt-2 mb-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <span className="text-[9px] font-black tracking-widest text-[#0052CC] uppercase font-mono block">
               FINALIZACJA ETYKIETY WYSYŁKOWEJ DPD
             </span>
-            <h2 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight mt-1">Przetwarzanie Zlecenia / Processing Order</h2>
+            <h2 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight mt-1 animate-fadeIn">Przetwarzanie Zlecenia</h2>
             <p className="font-mono text-zinc-500 text-xs mt-1">
               Numer identyfikacyjny ERP: <span className="text-[#0052CC] font-bold tracking-wide">{orderId}</span>
             </p>
           </div>
 
-          <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="flex items-center gap-3 self-start sm:self-auto select-none">
             <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono">Stan Przetwarzania: </span>
             <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
               processState === 'error' ? 'bg-red-50 text-red-750 border-red-200' :
@@ -1078,15 +1175,13 @@ export function ProcessingOrderScreen({
           </div>
         </div>
 
-        <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row min-h-[460px]">
-          
+        <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row min-h-[460px] animate-fadeIn">
           <div className="w-full lg:w-[45%] p-6 sm:p-8 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-center items-center">
-            
             {processState === 'processing' && (
               <div className="flex flex-col items-center justify-center text-center space-y-5 animate-fadeIn">
                 <div className="relative w-24 h-24 flex items-center justify-center">
                   <svg className="absolute w-full h-full text-purple-600 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.1"></circle>
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="1"></circle>
                     <path d="M12 2a10 10 0 0 1 10 10" className="stroke-[3] text-purple-500"></path>
                   </svg>
                   <div className="w-16 h-16 rounded-full bg-white border border-zinc-200 flex items-center justify-center shadow-inner">
@@ -1125,7 +1220,7 @@ export function ProcessingOrderScreen({
                 </div>
                 
                 <p className="text-xs text-zinc-500 leading-relaxed max-w-[240px]">
-                  Serwer integracyjny DPD nie zgłosił pomyślnego zwrotu dla przesyłki o kodzie referencyjnym {orderId} z powodu przekroczenia limitu czasu (Wymagany protokół SSL).
+                  Serwer integracyjny DPD nie zgłosił pomyślnego zwrotu dla przesyłki o kodzie referencyjnym {orderId} z powodu przekroczenia limitu czasu.
                 </p>
               </div>
             )}
@@ -1138,7 +1233,6 @@ export function ProcessingOrderScreen({
                 </span>
                 
                 <div className="w-full max-w-[280px] bg-white text-slate-900 p-4 rounded-xl border border-slate-300 shadow-2xl flex flex-col gap-3 font-sans leading-none relative select-none">
-                  
                   <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2.5">
                     <div>
                       <p className="text-base font-black text-slate-950 tracking-tight">DPD POLSKA</p>
@@ -1153,9 +1247,9 @@ export function ProcessingOrderScreen({
                   <div className="space-y-1.5 text-[9px] text-slate-800">
                     <p className="font-semibold text-slate-500 uppercase tracking-wider">ODBIORCA / RECIPIENT:</p>
                     <p className="font-bold text-slate-950 text-[10px]">{clientName}</p>
-                    <div className="pt-1.5 border-t border-dashed border-slate-350 space-y-1">
-                      <p><span className="font-semibold text-slate-550">OPAKOWANIE:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
-                      <p><span className="font-semibold text-slate-550">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
+                    <div className="pt-1.5 border-t border-dashed border-slate-300 space-y-1">
+                      <p><span className="font-semibold text-slate-400">OPAKOWANIE:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
+                      <p><span className="font-semibold text-slate-400">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
                     </div>
                   </div>
 
@@ -1172,7 +1266,7 @@ export function ProcessingOrderScreen({
 
                   <button
                     onClick={handleLocalPrintLabel}
-                    className="w-full py-2 bg-slate-950 hover:bg-slate-850 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow"
+                    className="w-full py-2 bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow border-none"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     Drukuj etykietę (Zebra)
@@ -1183,7 +1277,6 @@ export function ProcessingOrderScreen({
           </div>
 
           <div className="w-full lg:w-[55%] p-6 sm:p-8 flex flex-col justify-between gap-6">
-            
             <div className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
                 <h4 className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono">
@@ -1192,9 +1285,9 @@ export function ProcessingOrderScreen({
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={handleResetSimulation}
-                    className="text-[9px] font-bold text-purple-750 hover:text-purple-900 flex items-center gap-1 cursor-pointer transition-all bg-purple-50 border border-purple-200 px-2 py-0.5 rounded"
+                    className="text-[9px] font-bold text-purple-750 hover:text-purple-900 flex items-center gap-1 cursor-pointer transition-all bg-purple-50 border border-purple-250 px-2 py-0.5 rounded"
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <RotateCcw className="w-3 h-3 animate-pulse" />
                     Resetuj Symulację
                   </button>
                 </div>
@@ -1203,7 +1296,7 @@ export function ProcessingOrderScreen({
               <div className="space-y-5">
                 <div className="flex items-start gap-4">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
-                    stepStates.inventory === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' : 'bg-zinc-50 border-zinc-200 text-zinc-405'
+                    stepStates.inventory === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm animate-zoomIn' : 'bg-zinc-50 border-zinc-200 text-zinc-400'
                   }`}>
                     {stepStates.inventory === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <span>1</span>}
                   </div>
@@ -1219,7 +1312,7 @@ export function ProcessingOrderScreen({
                 <div className="flex items-start gap-4">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
                     stepStates.orderStatus === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' :
-                    stepStates.orderStatus === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-405'
+                    stepStates.orderStatus === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-400'
                   }`}>
                     {stepStates.orderStatus === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <span>2</span>}
                   </div>
@@ -1228,7 +1321,7 @@ export function ProcessingOrderScreen({
                       <h5 className="font-bold text-xs text-zinc-900">Weryfikacja kompletacji i zmiana statusu paczki</h5>
                       <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
                         stepStates.orderStatus === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                        stepStates.orderStatus === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-400 border-transparent'
+                        stepStates.orderStatus === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
                       }`}>{stepStates.orderStatus === 'complete' ? "Ukończono" : stepStates.orderStatus === 'active' ? "W toku" : "Oczekuje"}</span>
                     </div>
                     <p className="text-[11px] text-zinc-500">Autoryzacja i zatwierdzenie statusu zamówienia w bazie systemowej.</p>
@@ -1238,23 +1331,23 @@ export function ProcessingOrderScreen({
                 <div className="flex items-start gap-4">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
                     stepStates.courierLabel === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' :
-                    stepStates.courierLabel === 'failed' ? 'bg-red-50 border-red-200 text-red-655' :
+                    stepStates.courierLabel === 'failed' ? 'bg-red-50 border-red-250 text-red-655' :
                     stepStates.courierLabel === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-405'
                   }`}>
                     {stepStates.courierLabel === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> :
-                     stepStates.courierLabel === 'failed' ? <AlertCircle className="w-3.5 h-3.5 text-red-500" /> : <span>3</span>}
+                     stepStates.courierLabel === 'failed' ? <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-bounce" /> : <span>3</span>}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-0.5">
                       <h5 className="font-bold text-xs text-zinc-900">Generowanie etykiety kurierskiej kuriera DPD</h5>
                       <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
                         stepStates.courierLabel === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        stepStates.courierLabel === 'failed' ? 'bg-red-50 text-red-750 border-red-200' :
-                        stepStates.courierLabel === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-400 border-transparent'
+                        stepStates.courierLabel === 'failed' ? 'bg-red-50 text-red-750 border-red-200 animate-pulse' :
+                        stepStates.courierLabel === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
                       }`}>{stepStates.courierLabel === 'complete' ? "Wygenerowano" : stepStates.courierLabel === 'failed' ? "BŁĄD API" : stepStates.courierLabel === 'active' ? "Wysyłanie" : "Oczekuje"}</span>
                     </div>
                     {stepStates.courierLabel === 'failed' ? (
-                      <p className="text-[11px] text-red-655 font-semibold font-mono">Courier API Connection Timeout. Serwer 'DPD-PROD-PL-01' nie odpowiedział w oczekiwanym oknie 30000ms.</p>
+                      <p className="text-[11px] text-red-655 font-semibold font-mono">Courier API Connection Timeout. Serwer 'DPD-PROD-PL-01' nie odpowiedział.</p>
                     ) : (
                       <p className="text-[11px] text-zinc-500">Łączenie z serwerem zewnętrznym kuriera DPD w celu wygenerowania listu przewozowego.</p>
                     )}
@@ -1264,45 +1357,44 @@ export function ProcessingOrderScreen({
             </div>
 
             <div className="pt-4 border-t border-zinc-200">
-              
               {processState === 'error' && (
                 <div className="p-4 border border-red-200 rounded-xl bg-red-50/50 flex flex-col gap-4 animate-slideIn">
                   <div>
-                    <h6 className="font-bold text-xs text-red-750 uppercase tracking-wider">Generowanie listu przewozowego skończyło się błędem</h6>
-                    <p className="text-[11px] text-zinc-500 mt-1">
-                      Połączenie z serwerem DPD wygasło. Spróbuj ponownie autoryzować SSL lub skorzystaj z infolinii wsparcia technicznego.
+                    <h6 className="font-bold text-xs text-red-750 uppercase tracking-wider animate-pulse">Generowanie listu kończyło się błędem Connection Timeout</h6>
+                    <p className="text-[11px] text-zinc-500 mt-1 font-medium leading-relaxed">
+                      Połączenie z serwerem DPD wygasło. Możesz kliknąć poniżej aby podjąć ponowną próbę autoryzacji sesji SSL.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       onClick={handleRetry}
-                      className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-550 hover:from-red-550 hover:to-red-400 text-white text-xs font-black uppercase tracking-wider rounded-lg flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+                      className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-550 hover:from-red-550 hover:to-red-400 text-white text-xs font-black uppercase tracking-wider rounded-lg flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all border-none"
                     >
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       Spróbuj Ponownie (Retry)
                     </button>
                     <button
-                      onClick={() => alert("Telefon wsparcia WMS-IT: +48 22 555 18 18 (Czynny 24/7)")}
+                      onClick={() => showToast("Telefon wsparcia WMS-IT: +48 22 555 18 18", "info")}
                       className="px-4 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-250 text-zinc-700 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-all"
                     >
-                      Skontaktuj się z Pomocą
+                      Wsparcie IT
                     </button>
                   </div>
                 </div>
               )}
 
               {processState === 'success' && (
-                <div className="p-4 border border-emerald-200 rounded-xl bg-emerald-50/30 flex flex-col gap-4 animate-slideIn">
+                <div className="p-4 border border-emerald-250 rounded-xl bg-emerald-50/30 flex flex-col gap-4 animate-slideIn">
                   <div>
                     <h6 className="font-bold text-xs text-emerald-800 uppercase tracking-wider">Proces zakończony sukcesem</h6>
-                    <p className="text-[11px] text-zinc-500 mt-1">
-                      List przewozowy DPD został poprawnie wygenerowany i wysłany do bufora Zebra. Zatwierdź paczkę, aby przenieść zlecenie do statusu 'WYSŁANE'.
+                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                      List przewozowy DPD został poprawnie wygenerowany. Zatwierdź paczkę, aby przenieść zlecenie do statusu 'Dostarczone'.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       onClick={handleFinalizeAndCompleteOrder}
-                      className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-550 hover:from-emerald-550 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-widest rounded-xl flex items-center gap-2.5 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.98] transition-all"
+                      className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-550 hover:from-emerald-550 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-widest rounded-xl flex items-center gap-2.5 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.98] transition-all border-none"
                     >
                       <Check className="w-4 h-4 stroke-[3]" />
                       ZATWIERDŹ I ZAMKNIJ ZLECENIE
@@ -1322,13 +1414,9 @@ export function ProcessingOrderScreen({
                 </div>
               )}
             </div>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

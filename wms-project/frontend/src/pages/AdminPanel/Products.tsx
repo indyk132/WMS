@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { Package, Search, PlusCircle, AlertTriangle, PlayCircle, Info, RefreshCw, Layers, Plus, Minus, Check } from 'lucide-react';
+import { Search, RefreshCw, Minus, Plus, Check } from 'lucide-react';
+import { Product } from '../../services/inventoryApi';
 
-const polishStatusMap = {
+const polishStatusMap: Record<string, string> = {
     'In Stock': 'Dostępny',
     'Low Stock': 'Niski stan',
     'Out of Stock': 'Brak na stanie',
 };
 
-const getCategoryLabel = (category) => {
+const getCategoryLabel = (category: string) => {
     if (category === 'Zywnosc') return 'Żywność';
     return category;
 };
 
-const getStockQtyStyle = (stock, threshold) => {
+const getStockQtyStyle = (stock: number, threshold: number) => {
     if (stock === 0) {
         return 'text-red-655 font-black';
     }
@@ -25,25 +26,32 @@ const getStockQtyStyle = (stock, threshold) => {
     return 'text-zinc-850 font-medium';
 };
 
-export default function Products({ products, onUpdateStock, onRestockItem }) {
+interface ProductsProps {
+    products: Product[];
+    onUpdateStock: (product: Product, delta: number) => Promise<void>;
+    onRestockItem: (product: Product) => Promise<void>;
+}
+
+export default function Products({ products, onUpdateStock, onRestockItem }: ProductsProps) {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
-    const [draftStocks, setDraftStocks] = useState({});
+    const [draftStocks, setDraftStocks] = useState<Record<string, number>>({});
     const [pendingSku, setPendingSku] = useState('');
     const [stockError, setStockError] = useState('');
+    
     const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))).sort();
 
     const filteredProducts = products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-            p.sku.toLowerCase().includes(search.toLowerCase()) ||
-            p.zone.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (p.sku || '').toLowerCase().includes(search.toLowerCase()) ||
+            (p.zone || '').toLowerCase().includes(search.toLowerCase());
         const matchesCat = categoryFilter ? p.category === categoryFilter : true;
         const matchesStatus = statusFilter ? p.status === statusFilter : true;
         return matchesSearch && matchesCat && matchesStatus;
     });
 
-    const saveStockUpdate = async (product) => {
+    const saveStockUpdate = async (product: Product) => {
         const draft = draftStocks[product.sku];
         if (draft === undefined) return;
 
@@ -60,7 +68,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                 delete copy[product.sku];
                 return copy;
             });
-        } catch (error) {
+        } catch (error: any) {
             setStockError(error.message || 'Nie udało się zaktualizować stanu.');
         } finally {
             setPendingSku('');
@@ -68,8 +76,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
     };
 
     return (
-        <div className="space-y-6 font-sans text-sm text-[#0b1c30]">
-            {}
+        <div className="space-y-6 font-sans text-sm text-[#0b1c30] animate-fadeIn">
             <div className="flex justify-between items-end mb-2">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight border-none">Katalog Zapasów SKU</h2>
@@ -85,24 +92,23 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                     await onRestockItem(product);
                                 }
                             }
-                        } catch (error) {
-                            setStockError(error.message || 'Nie udalo sie uzupelnic brakow.');
+                        } catch (error: any) {
+                            setStockError(error.message || 'Nie udało się uzupełnić braków.');
                         }
                     }}
-                    className="h-9 px-4 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+                    className="h-9 px-4 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm border-none"
                 >
                     <RefreshCw className="w-4 h-4" /> Automatyczne uzupełnienie braków
                 </button>
             </div>
 
             {stockError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-xs font-semibold">
+                <div className="bg-red-50 border border-red-200 text-red-750 px-4 py-3 rounded text-xs font-semibold">
                     {stockError}
                 </div>
             )}
 
-            {}
-            <div className="bg-white rounded border border-[#c6c6cd] shadow-sm p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded border border-[#e5e7eb] shadow-sm p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">Szukaj asortymentu</label>
                     <div className="relative">
@@ -112,7 +118,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                             placeholder="Wpisz SKU lub nazwę towaru..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 border border-zinc-350 rounded focus:ring-1 focus:ring-blue-500 bg-white text-xs outline-none"
+                            className="w-full pl-8 pr-3 py-1.5 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 bg-white text-xs outline-none text-zinc-900"
                         />
                     </div>
                 </div>
@@ -122,7 +128,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                     <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
-                        className="w-full p-2 border border-zinc-355 rounded bg-white text-xs text-zinc-800 outline-none"
+                        className="w-full p-2 border border-zinc-300 rounded bg-white text-xs text-zinc-800 outline-none cursor-pointer"
                     >
                         <option value="">Wszystkie kategorie</option>
                         {categories.map(category => (
@@ -136,7 +142,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full p-2 border border-zinc-355 rounded bg-white text-xs text-zinc-800 outline-none"
+                        className="w-full p-2 border border-zinc-300 rounded bg-white text-xs text-zinc-800 outline-none cursor-pointer"
                     >
                         <option value="">Wszystkie statusy</option>
                         <option value="In Stock">Dostępny</option>
@@ -146,17 +152,17 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                 </div>
             </div>
 
-            <div className="bg-white rounded border border-[#c6c6cd] shadow-sm overflow-hidden">
+            <div className="bg-white rounded border border-[#e5e7eb] shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                        <tr className="bg-zinc-50 font-bold text-zinc-650 text-xs border-b border-[#c6c6cd]">
+                        <tr className="bg-zinc-50 font-bold text-zinc-650 text-xs border-b border-[#e5e7eb]">
                             <th className="py-2.5 px-4 font-bold">Kod SKU</th>
                             <th className="py-2.5 px-4 font-bold">Nazwa towaru podzespołu</th>
                             <th className="py-2.5 px-4 font-bold">Kategoria</th>
                             <th className="py-2.5 px-4 font-bold">Położenie</th>
                             <th className="py-2.5 px-4 text-right font-bold">Próg ostrzeżenia (szt.)</th>
-                            <th className="py-2.5 px-4 text-right font-bold">Cena jednostkowa (PLN)</th>
+                            <th className="py-2.5 px-4 text-right font-bold font-sans">Cena jednostkowa (PLN)</th>
                             <th className="py-2.5 px-4 text-center font-bold">Status</th>
                             <th className="py-2.5 px-4 text-right font-bold w-12">Ilość (szt.)</th>
                             <th className="py-2.5 px-4 text-right font-bold w-48">Akcje stanu</th>
@@ -165,7 +171,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                         <tbody className="divide-y divide-zinc-200 text-xs font-medium text-zinc-850">
                         {filteredProducts.length === 0 ? (
                             <tr>
-                                <td colSpan="9" className="py-10 text-center text-zinc-400 font-bold bg-white">Brak pozycji SKU pasujących do podanych filtrów.</td>
+                                <td colSpan={9} className="py-10 text-center text-zinc-400 font-bold bg-white">Brak pozycji SKU pasujących do podanych filtrów.</td>
                             </tr>
                         ) : (
                             filteredProducts.map(p => {
@@ -174,13 +180,13 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
 
                                 return (
                                     <tr key={p.sku} className="hover:bg-zinc-50/70 transition-colors">
-                                        <td className="py-3 px-4 font-mono font-bold text-blue-600">{p.sku}</td>
+                                        <td className="py-3 px-4 font-mono font-bold text-[#0052CC]">{p.sku}</td>
                                         <td className="py-3 px-4 font-normal text-zinc-700">{p.name}</td>
                                         <td className="py-3 px-4 text-zinc-500">{getCategoryLabel(p.category)}</td>
                                         <td className="py-3 px-4 font-mono font-bold text-zinc-650">{p.locationCode || `Korytarz ${p.zone}`}</td>
                                         <td className="py-3 px-4 text-right font-mono text-zinc-500">{p.reorderThreshold}</td>
                                         <td className="py-3 px-4 text-right font-mono text-zinc-650">{(p.price || 199.99).toFixed(2)}</td>
-                                        <td className="py-3 px-4 text-center">
+                                        <td className="py-3 px-4 text-center select-none">
                                             {(() => {
                                                 const calculatedStatus = p.stock === 0 ? 'Out of Stock' : p.stock <= p.reorderThreshold ? 'Low Stock' : 'In Stock';
                                                 const label = polishStatusMap[calculatedStatus];
@@ -197,9 +203,9 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                             })()}
                                         </td>
                                         <td className={`py-3 px-4 text-right font-mono ${getStockQtyStyle(p.stock, p.reorderThreshold)}`}>{p.stock}</td>
-                                        <td className="py-3 px-4 text-right">
+                                        <td className="py-3 px-4 text-right select-none">
                                             <div className="flex justify-end items-center gap-1.5 flex-nowrap">
-                                                <div className="flex items-center border border-zinc-350 rounded overflow-hidden h-7 bg-white">
+                                                <div className="flex items-center border border-zinc-250 rounded overflow-hidden h-7 bg-white">
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -208,7 +214,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                                             }
                                                         }}
                                                         disabled={pendingSku === p.sku}
-                                                        className="w-7 h-full flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 border-r border-zinc-200 transition-colors text-zinc-650 cursor-pointer disabled:opacity-40"
+                                                        className="w-7 h-full flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 border-r border-zinc-200 transition-colors text-zinc-650 cursor-pointer disabled:opacity-40 border-none"
                                                     >
                                                         <Minus className="w-3.5 h-3.5" />
                                                     </button>
@@ -229,7 +235,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                                             setDraftStocks(prev => ({ ...prev, [p.sku]: draftVal + 1 }));
                                                         }}
                                                         disabled={pendingSku === p.sku}
-                                                        className="w-7 h-full flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 border-l border-zinc-200 transition-colors text-zinc-650 cursor-pointer disabled:opacity-40"
+                                                        className="w-7 h-full flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 border-l border-zinc-200 transition-colors text-zinc-650 cursor-pointer disabled:opacity-40 border-none"
                                                     >
                                                         <Plus className="w-3.5 h-3.5" />
                                                     </button>
@@ -238,7 +244,7 @@ export default function Products({ products, onUpdateStock, onRestockItem }) {
                                                     <button
                                                         onClick={() => saveStockUpdate(p)}
                                                         disabled={pendingSku === p.sku}
-                                                        className="h-7 w-7 rounded bg-blue-600 hover:bg-blue-750 text-white flex items-center justify-center transition-colors cursor-pointer shadow-sm shrink-0"
+                                                        className="h-7 w-7 rounded bg-blue-600 hover:bg-blue-750 text-white flex items-center justify-center transition-colors cursor-pointer shadow-sm shrink-0 border-none"
                                                         title="Zatwierdź i zapisz zmianę stanu"
                                                     >
                                                         <Check className="w-4 h-4" />

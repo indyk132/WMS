@@ -1,24 +1,20 @@
-
 class SoundEffects {
-    constructor() {
-        this.ctx = null;
-    }
+    private ctx: AudioContext | null = null;
 
     init() {
         if (!this.ctx) {
-            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
             if (AudioContextClass) {
                 this.ctx = new AudioContextClass();
             }
         }
     }
 
-    playTone(freq, type, duration, delay = 0) {
+    playTone(freq: number, type: OscillatorType, duration: number, delay = 0) {
         try {
             this.init();
             if (!this.ctx) return;
 
-            
             if (this.ctx.state === 'suspended') {
                 this.ctx.resume();
             }
@@ -47,15 +43,14 @@ class SoundEffects {
     }
 
     playSuccess() {
-        
         this.playTone(523.25, 'triangle', 0.15, 0); 
         this.playTone(659.25, 'triangle', 0.25, 0.08); 
     }
 
     playError() {
-        
         this.playTone(180, 'sawtooth', 0.4);
     }
 }
 
 export const sounds = new SoundEffects();
+export default sounds;

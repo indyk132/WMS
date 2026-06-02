@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { Lock, Mail, ArrowRight, ShieldCheck, Warehouse } from 'lucide-react';
 import { loginUser } from '../services/usersApi';
 
-export default function Login({ onLoginSuccess }) {
+interface LoginProps {
+    onLoginSuccess: (user: any) => void;
+}
+
+export default function Login({ onLoginSuccess }: LoginProps) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = async (event) => {
+    const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         setError('');
         setIsSubmitting(true);
@@ -16,8 +20,8 @@ export default function Login({ onLoginSuccess }) {
         try {
             const user = await loginUser({ email, password });
             onLoginSuccess(user);
-        } catch (err) {
-            setError(err.message || 'Bledny email lub haslo.');
+        } catch (err: any) {
+            setError(err.message || 'Błędny email lub hasło.');
         } finally {
             setIsSubmitting(false);
         }
@@ -36,18 +40,18 @@ export default function Login({ onLoginSuccess }) {
     };
 
     return (
-        <div className="min-h-screen bg-[#f4f6f9] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden">
+        <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden animate-fadeIn">
             <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-blue-500/[0.04] blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-blue-600/[0.04] blur-3xl pointer-events-none" />
 
-            <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10">
+            <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10 select-none">
                 <div className="mx-auto h-12 w-12 rounded bg-blue-600 flex items-center justify-center text-white shadow-lg mb-4">
-                    <Warehouse className="w-7 h-7" />
+                    <Warehouse className="w-7 h-7 animate-bounce" />
                 </div>
                 <h2 className="text-3xl font-black text-zinc-950 tracking-tight">
                     Logistics OS
                 </h2>
-                <p className="mt-1.5 text-zinc-500 font-medium tracking-wide">
+                <p className="mt-1.5 text-zinc-400 font-medium tracking-wide font-mono uppercase">
                     Portal Kontroli Magazynu
                 </p>
             </div>
@@ -56,7 +60,7 @@ export default function Login({ onLoginSuccess }) {
                 <div className="bg-white py-8 px-4 shadow-2xl rounded-lg sm:px-10 border border-zinc-200">
                     <form className="space-y-5" onSubmit={handleSubmit}>
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded text-xs font-semibold leading-relaxed">
+                            <div className="bg-red-50 border border-red-200 text-red-750 p-3 rounded text-xs font-semibold leading-relaxed">
                                 {error}
                             </div>
                         )}
@@ -74,7 +78,7 @@ export default function Login({ onLoginSuccess }) {
                                     required
                                     value={email}
                                     onChange={(event) => setEmail(event.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-zinc-50 outline-none text-zinc-850"
+                                    className="w-full pl-9 pr-3 py-2 border border-zinc-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-zinc-50 outline-none text-zinc-900"
                                     placeholder="twoj-email@logistics-os.com"
                                 />
                             </div>
@@ -82,7 +86,7 @@ export default function Login({ onLoginSuccess }) {
 
                         <div>
                             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
-                                Haslo dostepu
+                                Hasło dostępu
                             </label>
                             <div className="relative">
                                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
@@ -93,7 +97,7 @@ export default function Login({ onLoginSuccess }) {
                                     required
                                     value={password}
                                     onChange={(event) => setPassword(event.target.value)}
-                                    className="w-full pl-9 pr-3 py-2 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-zinc-50 outline-none text-zinc-850"
+                                    className="w-full pl-9 pr-3 py-2 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-zinc-50 outline-none text-zinc-900"
                                     placeholder="********"
                                 />
                             </div>
@@ -102,9 +106,9 @@ export default function Login({ onLoginSuccess }) {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full h-10 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md"
+                            className="w-full h-10 bg-[#0052CC] hover:bg-[#0041a3] disabled:opacity-60 text-white font-bold rounded-md flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md border-none"
                         >
-                            {isSubmitting ? 'Sprawdzanie...' : 'Autoryzuj wejscie'}
+                            {isSubmitting ? 'Sprawdzanie...' : 'Zaloguj się'}
                             <ArrowRight className="w-4 h-4" />
                         </button>
                     </form>
@@ -119,12 +123,12 @@ export default function Login({ onLoginSuccess }) {
                                 onClick={fillQuickAdmin}
                                 className="p-2.5 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 rounded text-left transition-colors cursor-pointer"
                             >
-                                <div className="font-bold text-zinc-800 text-[11px] flex items-center gap-1">
+                                <div className="font-bold text-zinc-805 text-[11px] flex items-center gap-1">
                                     <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                                    Administrator Systemu
+                                    Admin
                                 </div>
                                 <div className="text-[10px] text-zinc-500 mt-1">
-                                    Haslo: <span className="font-mono font-semibold">admin</span>
+                                    Hasło: <span className="font-mono font-semibold">admin</span>
                                 </div>
                             </button>
 
@@ -133,12 +137,12 @@ export default function Login({ onLoginSuccess }) {
                                 onClick={fillQuickManager}
                                 className="p-2.5 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 rounded text-left transition-colors cursor-pointer"
                             >
-                                <div className="font-bold text-zinc-800 text-[11px] flex items-center gap-1">
+                                <div className="font-bold text-zinc-850 text-[11px] flex items-center gap-1">
                                     <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-                                    Kierownik Magazynu
+                                    Kierownik
                                 </div>
                                 <div className="text-[10px] text-zinc-500 mt-1">
-                                    Haslo: <span className="font-mono font-semibold">manager</span>
+                                    Hasło: <span className="font-mono font-semibold">manager</span>
                                 </div>
                             </button>
                         </div>
@@ -151,7 +155,7 @@ export default function Login({ onLoginSuccess }) {
                                 window.location.hash = '#/terminal';
                                 window.location.reload();
                             }}
-                            className="text-xs text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer flex items-center justify-center gap-1.5 mx-auto"
+                            className="text-xs text-blue-650 hover:text-blue-800 font-bold hover:underline cursor-pointer flex items-center justify-center gap-1.5 mx-auto bg-transparent border-none"
                         >
                             Przełącz na Terminal Roboczy Pracownika 📲
                         </button>

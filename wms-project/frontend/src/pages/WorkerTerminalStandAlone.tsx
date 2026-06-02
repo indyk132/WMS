@@ -1,28 +1,25 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { 
-  User, ShieldAlert, BadgeInfo, Key, Hammer, LogIn, Warehouse, HelpCircle, Eye, EyeOff,
-  Barcode, Clock, AlertCircle, Play, CheckCircle, ChevronRight, 
-  MapPin, Check, RefreshCw, Box, Printer, CheckSquare, Square, 
-  ArrowLeft, Scale, ShoppingCart, Layers, UserCheck, Timer, Award, LogOut, ArrowRight,
-  Wifi
+  LogIn, Warehouse, Eye, EyeOff, Barcode, Clock, Timer, Award, LogOut, ArrowRight, Wifi, UserCheck, Layers, Box
 } from "lucide-react";
-
-
 import { sounds } from "../components/SoundEffects";
+import { WORKERS } from "../data/warehouseData";
+import { PickerView } from "../components/PickerView";
+import { PackerView } from "../components/PackerView";
 
+interface WorkerLoginProps {
+  workersList: any;
+  staffList: any[];
+  onLoginSelected: (credentials: any) => void;
+}
 
-import { INITIAL_PRODUCTS, WORKERS } from "../data/warehouseData";
-
-
-
-
-export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
+export function WorkerLogin({ workersList, staffList, onLoginSelected }: WorkerLoginProps) {
   const [empId, setEmpId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState("picker"); 
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     sounds.playSuccess();
     
@@ -32,8 +29,8 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
     let isStaffAdmin = false;
     let staffRole = "Worker";
 
-    const foundPicker = workersList.pickers.find(p => p.id === cleanId);
-    const foundPacker = workersList.packers.find(p => p.id === cleanId);
+    const foundPicker = workersList.pickers.find((p: any) => p.id === cleanId);
+    const foundPacker = workersList.packers.find((p: any) => p.id === cleanId);
     const foundStaff = (staffList || []).find(s => s.id === cleanId || s.employeeId === cleanId);
 
     if (foundPicker) {
@@ -73,7 +70,7 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
     });
   };
 
-  const handleQuickLogin = (worker, role) => {
+  const handleQuickLogin = (worker: any, role: string) => {
     sounds.playBeep();
     setEmpId(worker.id);
     setPassword(worker.password || "");
@@ -81,15 +78,15 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
   };
 
   return (
-    <div className="flex-grow max-w-md mx-auto w-full px-4 pt-12 pb-24 flex flex-col justify-center items-center">
-      <header className="flex flex-col items-center text-center gap-2 mb-8">
+    <div className="flex-grow max-w-md mx-auto w-full px-4 pt-12 pb-24 flex flex-col justify-center items-center font-sans h-screen">
+      <header className="flex flex-col items-center text-center gap-2 mb-8 select-none">
         <div className="flex items-center gap-3">
           <Warehouse className="w-9 h-9 text-[#0052CC]" />
           <h1 className="font-display text-2xl font-black text-zinc-900 tracking-wider uppercase">
             Logistics OS
           </h1>
         </div>
-        <p className="text-xs text-zinc-500 font-mono tracking-widest uppercase">
+        <p className="text-xs text-zinc-500 font-mono tracking-widest uppercase mt-1.5 font-bold">
           Magazynowy Terminal Roboczy
         </p>
       </header>
@@ -131,7 +128,7 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-650 focus:outline-none cursor-pointer"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-650 focus:outline-none cursor-pointer bg-transparent border-none"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -140,7 +137,7 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
 
           <button 
             type="submit"
-            className="w-full h-14 bg-[#0052CC] hover:bg-[#0041a3] text-white font-display font-black text-xs uppercase tracking-widest rounded-lg shadow hover:shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer"
+            className="w-full h-14 bg-[#0052CC] hover:bg-[#0041a3] text-white font-display font-black text-xs uppercase tracking-widest rounded-lg shadow hover:shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer border-none"
           >
             <LogIn className="w-4 h-4" />
             ZALOGUJ DO TERMINALU
@@ -151,14 +148,14 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center block">
             Szybkie logowanie demo
           </span>
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-2 gap-3.5 select-none">
             <div>
               <span className="text-[8.5px] text-zinc-500 font-bold uppercase text-center block mb-1.5 tracking-wide">Operatorzy WMS</span>
               <div className="flex flex-col gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleQuickLogin({ id: 'EMP-1102', password: 'picker' }, "picker")}
-                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-700 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
+                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-750 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
                 >
                   <span className="font-bold text-zinc-800">Jan Kowalski</span>
                   <span className="text-[8px] text-zinc-400 font-sans mt-0.5">Kompletujący (EMP-1102)</span>
@@ -166,7 +163,7 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
                 <button
                   type="button"
                   onClick={() => handleQuickLogin({ id: 'EMP-9921', password: 'packer' }, "packer")}
-                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-700 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
+                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-750 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
                 >
                   <span className="font-bold text-zinc-800">Mariusz Pakosz</span>
                   <span className="text-[8px] text-zinc-400 font-sans mt-0.5">Pakowacz (EMP-9921)</span>
@@ -180,18 +177,18 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
                 <button
                   type="button"
                   onClick={() => handleQuickLogin({ id: 'EMP-9104', password: 'manager' }, "picker")}
-                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-700 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
+                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-750 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
                 >
                   <span className="font-bold text-zinc-800">Wojtek Nowak</span>
-                  <span className="text-[8px] text-zinc-400 font-sans mt-0.5">Kierownik magazynu (EMP-9104)</span>
+                  <span className="text-[8px] text-zinc-400 font-sans mt-0.5">Kierownik (EMP-9104)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleQuickLogin({ id: 'EMP-8492', password: 'admin' }, "packer")}
-                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-700 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
+                  className="py-2 px-2.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-750 hover:text-zinc-950 text-[10px] font-mono rounded truncate text-left cursor-pointer transition-all flex flex-col"
                 >
                   <span className="font-bold text-zinc-800">System Admin</span>
-                  <span className="text-[8px] text-zinc-400 font-sans mt-0.5">Administrator (EMP-8492)</span>
+                  <span className="text-[8px] text-zinc-400 font-sans mt-0.5">Admin (EMP-8492)</span>
                 </button>
               </div>
             </div>
@@ -205,7 +202,7 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
               window.location.hash = '';
               window.location.reload();
             }}
-            className="text-[11px] font-bold text-[#0052CC] hover:text-[#0041a3] hover:underline cursor-pointer"
+            className="text-[11px] font-bold text-[#0052CC] hover:text-[#0041a3] hover:underline cursor-pointer bg-transparent border-none"
           >
             ← Powrót do Portalu Administratora
           </button>
@@ -215,16 +212,19 @@ export function WorkerLogin({ workersList, staffList, onLoginSelected }) {
   );
 }
 
+interface WorkerHomeProps {
+  currentUser: any;
+  onLogout: () => void;
+  onLaunchTerminal: (role: string) => void;
+}
 
-
-
-export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
+export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }: WorkerHomeProps) {
   return (
-    <div className="flex-grow max-w-4xl mx-auto w-full px-4 py-8 flex flex-col justify-center">
-      <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden p-6 md:p-10 flex flex-col gap-8">
+    <div className="flex-grow max-w-4xl mx-auto w-full px-4 py-8 flex flex-col justify-center h-screen font-sans">
+      <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden p-6 md:p-10 flex flex-col gap-8 animate-fadeIn">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-zinc-200">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-zinc-50 border border-zinc-250 flex items-center justify-center text-[#0052CC]">
+            <div className="w-14 h-14 rounded-full bg-zinc-50 border border-zinc-300 flex items-center justify-center text-[#0052CC]">
               <UserCheck className="w-8 h-8" />
             </div>
             <div>
@@ -244,16 +244,16 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
 
           <button
             onClick={onLogout}
-            className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-655 rounded-lg text-xs font-display font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 shrink-0"
+            className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-655 rounded-lg text-xs font-display font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 shrink-0 bg-white"
           >
             <LogOut className="w-4 h-4" />
             Wyloguj się
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 select-none">
           <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-xl flex items-center gap-3">
-            <Timer className="w-8 h-8 text-[#0052CC] shrink-0" />
+            <Timer className="w-8 h-8 text-[#0052CC] shrink-0 animate-pulse" />
             <div>
               <span className="text-[10px] text-zinc-500 uppercase block font-mono">Norma Kompletacji</span>
               <span className="text-sm font-bold text-zinc-900 font-mono leading-tight">Maks. 180s / produkt</span>
@@ -269,10 +269,10 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
           </div>
 
           <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-xl flex items-center gap-3">
-            <Wifi className="w-8 h-8 text-emerald-500 shrink-0" />
+            <Wifi className="w-8 h-8 text-emerald-500 shrink-0 animate-pulse" />
             <div>
               <span className="text-[10px] text-zinc-500 uppercase block font-mono">ZASIĘG WMS</span>
-              <span className="text-sm font-bold text-emerald-600 font-mono leading-tight flex items-center gap-1.5">
+              <span className="text-sm font-bold text-emerald-600 font-mono leading-tight flex items-center gap-1.5 font-sans">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Stabilne Połączenie
               </span>
             </div>
@@ -295,7 +295,7 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
                   <div className={`p-2.5 rounded-lg border ${
                     currentUser.role === "picker"
                       ? "bg-white border-[#0052CC]/30 text-[#0052CC]"
-                      : "bg-zinc-50 border-zinc-250 text-zinc-400"
+                      : "bg-zinc-50 border-zinc-250 text-zinc-405"
                   }`}>
                     <Layers className="w-6 h-6" />
                   </div>
@@ -313,7 +313,7 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
 
               <button
                 onClick={() => { sounds.playSuccess(); onLaunchTerminal("picker"); }}
-                className="w-full py-3 px-4 rounded-lg font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer bg-[#0052CC] hover:bg-[#0041a3] text-white shadow-md active:scale-[0.98]"
+                className="w-full py-3 px-4 rounded-lg font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer bg-[#0052CC] hover:bg-[#0041a3] text-white shadow-md active:scale-[0.98] border-none"
               >
                 URUCHOM TERMINAL KOLEKTORA
                 <ArrowRight className="w-4 h-4" />
@@ -330,7 +330,7 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
                   <div className={`p-2.5 rounded-lg border ${
                     currentUser.role === "packer"
                       ? "bg-white border-purple-500/30 text-purple-650"
-                      : "bg-zinc-50 border-zinc-250 text-zinc-400"
+                      : "bg-zinc-50 border-zinc-255 text-zinc-400"
                   }`}>
                     <Box className="w-6 h-6" />
                   </div>
@@ -348,7 +348,7 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
 
               <button
                 onClick={() => { sounds.playSuccess(); onLaunchTerminal("packer"); }}
-                className="w-full py-3 px-4 rounded-lg font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer bg-purple-600 hover:bg-purple-700 text-white shadow-md active:scale-[0.98]"
+                className="w-full py-3 px-4 rounded-lg font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer bg-purple-600 hover:bg-purple-700 text-white shadow-md active:scale-[0.98] border-none"
               >
                 URUCHOM STACJĘ WERYFIKACJI
                 <ArrowRight className="w-4 h-4" />
@@ -360,19 +360,6 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }) {
     </div>
   );
 }
-
-
-
-
-import { PickerView } from "../components/PickerView";
-
-
-
-
-import { PackerView } from "../components/PackerView";
-
-
-
 
 const readStoredAdminForTerminal = () => {
   if (typeof window === 'undefined') return { user: null, tab: 'login' };
@@ -397,20 +384,24 @@ const readStoredAdminForTerminal = () => {
   return { user: null, tab: 'login' };
 };
 
+interface WorkerTerminalStandAloneProps {
+  orders: any[];
+  onUpdateOrder: (id: string, updates: any) => void;
+  staffList: any[];
+}
 
-export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffList }) {
+export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffList }: WorkerTerminalStandAloneProps) {
   const [initialData] = useState(() => readStoredAdminForTerminal());
   const [currentUser, setCurrentUser] = useState(initialData.user);
   const [activeTab, setActiveTab] = useState(initialData.tab);
 
-  const handleLogin = (userCredentials) => {
+  const handleLogin = (userCredentials: any) => {
     setCurrentUser(userCredentials);
     setActiveTab("worker_terminal");
   };
 
   const handleLogout = () => {
     sounds.playBeep();
-    
     window.localStorage.removeItem('wms-current-user');
     window.localStorage.removeItem('wms-in-lobby');
     window.localStorage.removeItem('wms-current-tab');
@@ -419,7 +410,7 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-[#f4f6f9] transition-colors duration-300">
+    <div className="min-h-screen w-full flex flex-col bg-[#f5f7fa] transition-colors duration-305">
       {activeTab === "login" && (
         <WorkerLogin workersList={WORKERS} staffList={staffList} onLoginSelected={handleLogin} />
       )}
@@ -441,7 +432,6 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
             orders={orders} 
             onUpdateOrder={onUpdateOrder} 
             workerName={currentUser.name}
-            currentUser={currentUser}
             onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
           />
         ) : (

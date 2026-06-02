@@ -1,13 +1,40 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const DEFAULT_REORDER_THRESHOLD = 20;
 
-const resolveStatus = (quantity, threshold = DEFAULT_REORDER_THRESHOLD) => {
+export interface StockEntry {
+    stockId: number | null;
+    locationId: number | null;
+    locationCode: string;
+    zoneGroup: string;
+    quantity: number;
+}
+
+export interface Product {
+    productId: any;
+    sku: string;
+    barcode: string;
+    name: string;
+    category: string;
+    stock: number;
+    reorderThreshold: number;
+    zone: string;
+    locationCode: string;
+    zoneGroup: string;
+    primaryLocationId: number | null;
+    status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+    price: number;
+    locations: string[];
+    stockEntries: StockEntry[];
+    zoneGroups: string[];
+}
+
+const resolveStatus = (quantity: number, threshold: number = DEFAULT_REORDER_THRESHOLD): 'In Stock' | 'Low Stock' | 'Out of Stock' => {
     if (quantity <= 0) return 'Out of Stock';
     if (quantity < threshold) return 'Low Stock';
     return 'In Stock';
 };
 
-const resolveZone = (locationCode) => {
+const resolveZone = (locationCode: string): string => {
     if (!locationCode) return 'UNASSIGNED';
 
     const match = String(locationCode).match(/^([A-Z]+)-0?(\d+)/i);
@@ -16,13 +43,13 @@ const resolveZone = (locationCode) => {
     return `${match[1].toUpperCase()}${Number(match[2])}`;
 };
 
-const toNumber = (value, fallback = 0) => {
+const toNumber = (value: any, fallback = 0): number => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const normalizeInventoryRows = (rows) => {
-    const productsById = new Map();
+const normalizeInventoryRows = (rows: any[]): Product[] => {
+    const productsById = new Map<string, Product>();
 
     rows.forEach((row) => {
         const productId = row.products_id ?? row.product_id ?? row.id ?? row.barcode ?? row.product_name;
@@ -71,7 +98,7 @@ const normalizeInventoryRows = (rows) => {
     return Array.from(productsById.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
-export const fetchInventoryProducts = async () => {
+export const fetchInventoryProducts = async (): Promise<Product[]> => {
     const response = await fetch(`${API_BASE_URL}/api/inventory`);
 
     if (!response.ok) {
@@ -84,7 +111,7 @@ export const fetchInventoryProducts = async () => {
     return normalizeInventoryRows(rows);
 };
 
-export const adjustInventoryStock = async ({ productId, sku, delta, locationId }) => {
+export const adjustInventoryStock = async ({ productId, sku, delta, locationId }: { productId: any; sku: string; delta: number; locationId?: number | null }) => {
     const response = await fetch(`${API_BASE_URL}/api/inventory/adjust`, {
         method: 'POST',
         headers: {

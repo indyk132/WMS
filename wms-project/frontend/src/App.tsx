@@ -8,12 +8,13 @@ import Orders from './pages/AdminPanel/Orders';
 import Products from './pages/AdminPanel/Products';
 import Storage from './pages/AdminPanel/Storage';
 import UsersPermissions from './pages/AdminPanel/Users';
+import Statistics from './pages/AdminPanel/Statistics';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
-import { adjustInventoryStock, fetchInventoryProducts } from './services/inventoryApi';
-import { createUser, fetchUsers, updateUser, deleteUser } from './services/usersApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, HomeIcon } from 'lucide-react';
+import { adjustInventoryStock, fetchInventoryProducts, Product } from './services/inventoryApi';
+import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3 } from 'lucide-react';
 
-const getRelativeDateStr = (daysAgo, timeStr) => {
+const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
     d.setDate(d.getDate() - daysAgo);
     const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
@@ -24,7 +25,8 @@ const readStoredUser = () => {
     if (typeof window === 'undefined') return null;
 
     try {
-        return JSON.parse(window.localStorage.getItem('wms-current-user'));
+        const item = window.localStorage.getItem('wms-current-user');
+        return item ? JSON.parse(item) : null;
     } catch {
         return null;
     }
@@ -42,7 +44,7 @@ const readStoredTab = () => {
 };
 
 export default function App() {
-    const [currentUser, setCurrentUser] = useState(() => readStoredUser());
+    const [currentUser, setCurrentUser] = useState<User | null>(() => readStoredUser());
 
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
@@ -51,16 +53,16 @@ export default function App() {
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
     const [usersSync, setUsersSync] = useState({ isLoading: false, error: '' });
 
-    const [products, setProducts] = useState([
-        { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, stockEntries: [{ locationCode: 'C-03-01-01', quantity: 50 }, { locationCode: 'C-03-02-02', quantity: 70 }] },
-        { sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, stockEntries: [{ locationCode: 'A-01-01-02', quantity: 15 }] },
-        { sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99, stockEntries: [] },
-        { sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Artykuły chemiczne', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99, stockEntries: [{ locationCode: 'C-02-03-01', quantity: 8 }] },
-        { sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99, stockEntries: [{ locationCode: 'A-03-01-01', quantity: 120 }, { locationCode: 'A-03-02-04', quantity: 125 }] },
-        { sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, stockEntries: [{ locationCode: 'B-02-01-03', quantity: 45 }, { locationCode: 'B-02-03-02', quantity: 40 }] }
+    const [products, setProducts] = useState<Product[]>([
+        { productId: 1, sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, locationCode: 'C-03-01-01', zoneGroup: 'General', primaryLocationId: 1, locations: ['C-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 1, locationId: 1, locationCode: 'C-03-01-01', zoneGroup: 'General', quantity: 120 }] },
+        { productId: 2, sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, locationCode: 'A-01-01-02', zoneGroup: 'General', primaryLocationId: 2, locations: ['A-01-01-02'], zoneGroups: ['General'], stockEntries: [{ stockId: 2, locationId: 2, locationCode: 'A-01-01-02', zoneGroup: 'General', quantity: 15 }] },
+        { productId: 3, sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99, locationCode: 'A-02-01-01', zoneGroup: 'General', primaryLocationId: 3, locations: [], zoneGroups: ['General'], stockEntries: [] },
+        { productId: 4, sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Artykuły chemiczne', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99, locationCode: 'C-02-03-01', zoneGroup: 'General', primaryLocationId: 4, locations: ['C-02-03-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 4, locationId: 4, locationCode: 'C-02-03-01', zoneGroup: 'General', quantity: 8 }] },
+        { productId: 5, sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99, locationCode: 'A-03-01-01', zoneGroup: 'General', primaryLocationId: 5, locations: ['A-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 5, locationId: 5, locationCode: 'A-03-01-01', zoneGroup: 'General', quantity: 245 }] },
+        { productId: 6, sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, locationCode: 'B-02-01-03', zoneGroup: 'General', primaryLocationId: 6, locations: ['B-02-01-03'], zoneGroups: ['General'], stockEntries: [{ stockId: 6, locationId: 6, locationCode: 'B-02-01-03', zoneGroup: 'General', quantity: 85 }] }
     ]);
 
-    const [orders, setOrders] = useState([
+    const [orders, setOrders] = useState<any[]>([
         {
             id: 'ORD-89241',
             customer: 'Acme Corp Logistics',
@@ -174,7 +176,7 @@ export default function App() {
         }
     ]);
 
-    const [zones, setZones] = useState([
+    const [zones, setZones] = useState<any[]>([
         { id: 'A1', block: 'AMBIENT', capacityPercent: 94, activeSKUs: 3, totalPallets: 32, maxPallets: 34, temp: 'Ambient (18°C)', hazmatStatus: 'None', lastAuditDaysAgo: 1, isLocked: false },
         { id: 'A2', block: 'AMBIENT', capacityPercent: 91, activeSKUs: 4, totalPallets: 31, maxPallets: 34, temp: 'Ambient (19°C)', hazmatStatus: 'None', lastAuditDaysAgo: 2, isLocked: false },
         { id: 'A3', block: 'AMBIENT', capacityPercent: 55, activeSKUs: 2, totalPallets: 19, maxPallets: 34, temp: 'Ambient (18°C)', hazmatStatus: 'None', lastAuditDaysAgo: 3, isLocked: false },
@@ -198,16 +200,16 @@ export default function App() {
         { id: 'C5', block: 'HAZMAT', capacityPercent: 90, activeSKUs: 4, totalPallets: 18, maxPallets: 20, temp: 'Ventilated (21°C)', hazmatStatus: 'Class 8 Corrosive', lastAuditDaysAgo: 2, isLocked: false }
     ]);
 
-    const [staffList, setStaffList] = useState([
-        { id: 'EMP-8492', firstName: 'System', lastName: 'Admin', email: 'admin@logistics-os.com', role: 'Admin', zoneAssignment: 'Global Access', status: 'Active' },
-        { id: 'EMP-9104', firstName: 'Wojtek', lastName: 'Nowak', email: 'manager@logistics-os.com', role: 'Warehouse Manager', zoneAssignment: 'Global Access', status: 'Active' },
-        { id: 'EMP-1102', firstName: 'Jan', lastName: 'Kowalski', email: 'j.kowalski@logistics-os.com', role: 'Picker', zoneAssignment: 'Aisle 4-12', status: 'Active' },
-        { id: 'EMP-9921', firstName: 'Mariusz', lastName: 'Pakosz', email: 'm.pakosz@logistics-os.com', role: 'Packer', zoneAssignment: 'Station B', status: 'Active' }
+    const [staffList, setStaffList] = useState<User[]>([
+        { id: 'EMP-8492', employeeId: 'EMP-8492', userId: '8492', firstName: 'System', lastName: 'Admin', email: 'admin@logistics-os.com', role: 'Admin', zoneAssignment: 'Global Access', status: 'Active', avatarUrl: null },
+        { id: 'EMP-9104', employeeId: 'EMP-9104', userId: '9104', firstName: 'Wojtek', lastName: 'Nowak', email: 'manager@logistics-os.com', role: 'Warehouse Manager', zoneAssignment: 'Global Access', status: 'Active', avatarUrl: null },
+        { id: 'EMP-1102', employeeId: 'EMP-1102', userId: '1102', firstName: 'Jan', lastName: 'Kowalski', email: 'j.kowalski@logistics-os.com', role: 'Picker', zoneAssignment: 'Aisle 4-12', status: 'Active', avatarUrl: null },
+        { id: 'EMP-9921', employeeId: 'EMP-9921', userId: '9921', firstName: 'Mariusz', lastName: 'Pakosz', email: 'm.pakosz@logistics-os.com', role: 'Packer', zoneAssignment: 'Station B', status: 'Active', avatarUrl: null }
     ]);
 
-    const [allocationsLog, setAllocationsLog] = useState([
-        { timestamp: '09:35', sku: 'SKU-10492', productName: 'Płyn hamulcowy DOT-4', zone: 'C3', qty: 12, type: 'Inbound Receive', user: 'Terry Crews (EMP-1102)' },
-        { timestamp: '09:12', sku: 'SKU-20391', productName: 'Reflektor LED H7 SuperVolt', zone: 'A1', qty: 5, type: 'Internal Relocation', user: 'Marcus Reid (EMP-9104)' }
+    const [allocationsLog, setAllocationsLog] = useState<any[]>([
+        { timestamp: '09:35', sku: 'SKU-10492', productName: 'Płyn hamulcowy DOT-4', zone: 'C3', qty: 12, type: 'Przyjęcie towaru', user: 'Jan Kowalski (EMP-1102)' },
+        { timestamp: '09:12', sku: 'SKU-20391', productName: 'Reflektor LED H7 SuperVolt', zone: 'A1', qty: 5, type: 'Relokacja wewnętrzna', user: 'Wojtek Nowak (EMP-9104)' }
     ]);
 
     const loadUsers = async () => {
@@ -221,7 +223,7 @@ export default function App() {
             console.error('Users backend unavailable:', error);
             setUsersSync({
                 isLoading: false,
-                error: 'Backend users niedostepny - uzywam danych lokalnych.',
+                error: 'Backend users niedostępny - używam danych lokalnych.',
             });
         }
     };
@@ -241,7 +243,7 @@ export default function App() {
             console.error('Inventory backend unavailable:', error);
             setInventorySync({
                 isLoading: false,
-                error: 'Backend inventory niedostepny - uzywam danych lokalnych.',
+                error: 'Backend inventory niedostępny - używam danych lokalnych.',
             });
         }
     };
@@ -260,8 +262,7 @@ export default function App() {
         loadUsers();
     }, []);
 
-    
-    const handleLoginSuccess = (userObj) => {
+    const handleLoginSuccess = (userObj: User) => {
         setCurrentUser(userObj);
         window.localStorage.setItem('wms-current-user', JSON.stringify(userObj));
         setInLobby(true);
@@ -277,16 +278,14 @@ export default function App() {
         setInLobby(true);
     };
 
-    
-    const handleAddAllocation = (newAlloc) => {
+    const handleAddAllocation = (newAlloc: any) => {
         setAllocationsLog([newAlloc, ...allocationsLog]);
 
-        
         setProducts(prev => {
             return prev.map(p => {
                 if (p.sku === newAlloc.sku) {
                     const updatedStock = p.stock + (newAlloc.qty * 10); 
-                    let computedStatus = 'In Stock';
+                    let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'In Stock';
                     if (updatedStock === 0) computedStatus = 'Out of Stock';
                     else if (updatedStock < p.reorderThreshold) computedStatus = 'Low Stock';
                     return {
@@ -299,7 +298,6 @@ export default function App() {
             });
         });
 
-        
         setZones(prev => {
             return prev.map(z => {
                 if (z.id === newAlloc.zone) {
@@ -316,8 +314,7 @@ export default function App() {
         });
     };
 
-    
-    const handleAddOrder = (newOrder) => {
+    const handleAddOrder = (newOrder: any) => {
         const enrichedOrder = {
             ...newOrder,
             internalNotesActor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System',
@@ -339,13 +336,12 @@ export default function App() {
         
         setOrders([enrichedOrder, ...orders]);
 
-        
-        newOrder.items.forEach(orderItem => {
+        newOrder.items.forEach((orderItem: any) => {
             setProducts(prev => {
                 return prev.map(p => {
                     if (p.name.includes(orderItem.name) || orderItem.name.includes(p.name)) {
                         const updatedStock = Math.max(0, p.stock - orderItem.qty);
-                        let computedStatus = 'In Stock';
+                        let computedStatus: 'In Stock' | 'Low Stock' | 'Out of Stock' = 'In Stock';
                         if (updatedStock === 0) computedStatus = 'Out of Stock';
                         else if (updatedStock < p.reorderThreshold) computedStatus = 'Low Stock';
                         return {
@@ -360,18 +356,15 @@ export default function App() {
         });
     };
 
-    
-    const handleUpdateOrder = (orderId, updatedFields) => {
+    const handleUpdateOrder = (orderId: string, updatedFields: any) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedFields } : o));
     };
 
-    
-    const handleUpdateOrderStatus = (orderId, status) => {
+    const handleUpdateOrderStatus = (orderId: string, status: string) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
     };
 
-    
-    const handleAddOrderChangeLog = (orderId, title, description) => {
+    const handleAddOrderChangeLog = (orderId: string, title: string, description: string) => {
         setOrders(prev => prev.map(o => {
             if (o.id === orderId) {
                 const logs = o.changeLogs || [];
@@ -399,30 +392,28 @@ export default function App() {
         }));
     };
 
-    
-    const handleDeleteStaff = async (staffId) => {
+    const handleDeleteStaff = async (staffId: string) => {
         try {
             await deleteUser(staffId);
         } catch (error) {
             console.error('Delete user backend failed, doing local deletion:', error);
         }
-        setStaffList(prev => prev.filter(u => u.id !== staffId));
+        setStaffList(prev => prev.filter(u => (u.employeeId || u.id) !== staffId));
     };
 
-    
-    const handleUpdateStaff = async (staffId, updates) => {
+    const handleUpdateStaff = async (staffId: string, updates: any) => {
         let updatedUser = { id: staffId, ...updates };
         try {
-            updatedUser = await updateUser(staffId, updates);
+            const apiRes = await updateUser(staffId, updates);
+            updatedUser = apiRes;
         } catch (error) {
             console.error('Update user backend failed, doing local update:', error);
         }
-        setStaffList(prev => prev.map(u => u.id === staffId ? { ...u, ...updatedUser } : u));
+        setStaffList(prev => prev.map(u => (u.employeeId || u.id) === staffId ? { ...u, ...updatedUser } : u));
         return updatedUser;
     };
 
-    
-    const handleUpdateStock = async (product, delta) => {
+    const handleUpdateStock = async (product: Product, delta: number) => {
         await adjustInventoryStock({
             productId: product.productId,
             sku: product.sku,
@@ -433,12 +424,11 @@ export default function App() {
         await loadInventory();
     };
 
-    const handleRestockItem = (product) => {
+    const handleRestockItem = (product: Product) => {
         return handleUpdateStock(product, 100);
     };
 
-    
-    const handleToggleLockZone = (zoneId) => {
+    const handleToggleLockZone = (zoneId: string) => {
         setZones(prev => {
             return prev.map(z => {
                 if (z.id === zoneId) {
@@ -449,14 +439,12 @@ export default function App() {
         });
     };
 
-    
-    const handleAddStaff = async (newStaff) => {
+    const handleAddStaff = async (newStaff: any) => {
         const savedUser = await createUser(newStaff);
         setStaffList(prev => [...prev, savedUser]);
         return savedUser;
     };
 
-    
     const isTerminalRoute = window.location.pathname === '/terminal' || window.location.hash === '#/terminal';
 
     if (isTerminalRoute) {
@@ -485,9 +473,9 @@ export default function App() {
         );
     }
 
-    
     const sideNavItems = [
         { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+        { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
         { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
         { id: 'products', label: 'Stany Zapasów SKU', icon: Package },
         { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
@@ -495,15 +483,12 @@ export default function App() {
     ];
 
     return (
-        <div className="bg-[#f8f9ff] text-[#0b1c30] min-h-screen font-sans shrink-0 antialiased flex">
-
-            {}
+        <div className="bg-[#f5f7fa] text-[#0b1c30] min-h-screen font-sans shrink-0 antialiased flex">
             <nav className={`fixed left-0 top-0 h-full w-[260px] bg-[#131b2e] border-r border-[#1f2937] flex flex-col py-6 z-40 transition-transform duration-300 lg:translate-x-0 ${
                 isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
             }`}>
-                {}
-                <div className="px-6 mb-8 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded bg-[#2170e4] flex items-center justify-center text-white shadow-md">
+                <div className="px-6 mb-8 flex items-center gap-3 select-none">
+                    <div className="w-9 h-9 rounded bg-[#2170e4] flex items-center justify-center text-white shadow-md animate-pulse">
                         <Boxes className="w-5 h-5" />
                     </div>
                     <div>
@@ -512,8 +497,7 @@ export default function App() {
                     </div>
                 </div>
 
-                {}
-                <ul className="flex flex-col gap-1 px-3 flex-grow">
+                <ul className="flex flex-col gap-1 px-3 flex-grow select-none">
                     {sideNavItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = currentTab === item.id;
@@ -525,13 +509,13 @@ export default function App() {
                                         window.localStorage.setItem('wms-current-tab', item.id);
                                         setIsMobileMenuOpen(false);
                                     }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all font-sans text-xs font-bold ${
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all font-sans text-xs font-bold cursor-pointer border-none bg-transparent text-left outline-none ${
                                         isActive
                                             ? 'bg-white/5 border-l-4 border-[#2170e4] text-[#d8e2ff] font-extrabold pl-3 scale-[1.02]'
                                             : 'text-zinc-400 hover:text-white hover:bg-white/5'
                                     }`}
                                 >
-                                    <Icon className="w-4.5 h-4.5 text-zinc-400 group-hover:text-white" />
+                                    <Icon className="w-4.5 h-4.5 text-zinc-400" />
                                     <span>{item.label}</span>
                                 </button>
                             </li>
@@ -539,8 +523,7 @@ export default function App() {
                     })}
                 </ul>
 
-                {}
-                <div className="mt-auto px-4 pt-4 border-t border-white/10 space-y-3">
+                <div className="mt-auto px-4 pt-4 border-t border-white/10 space-y-3 select-none">
                     <button
                         onClick={() => {
                             window.location.hash = '#/terminal';
@@ -557,7 +540,7 @@ export default function App() {
                             setInLobby(true);
                             window.localStorage.setItem('wms-in-lobby', 'true');
                         }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md text-xs font-bold transition-all"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md text-xs font-bold transition-all cursor-pointer border-none bg-transparent text-left outline-none"
                     >
                         <HomeIcon className="w-4 h-4 text-zinc-400" />
                         <span>Powrót do lobby</span>
@@ -565,7 +548,7 @@ export default function App() {
 
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-md text-xs font-bold transition-all"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-md text-xs font-bold transition-all cursor-pointer border-none bg-transparent text-left outline-none"
                     >
                         <LogOut className="w-4 h-4 text-zinc-400" />
                         <span>Wyloguj się</span>
@@ -573,10 +556,7 @@ export default function App() {
                 </div>
             </nav>
 
-            {}
             <div className="flex-1 lg:ml-[260px] flex flex-col min-h-screen">
-
-                {}
                 <Header
                     currentTab={currentTab}
                     searchQuery={searchQuery}
@@ -586,22 +566,14 @@ export default function App() {
                     onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 />
 
-                {}
                 {isMobileMenuOpen && (
                     <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
                 )}
 
-                {}
                 <main className="mt-14 p-6 flex-grow max-w-[1600px] w-full mx-auto flex flex-col gap-6">
                     {inventorySync.isLoading && (
-                        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-xs font-semibold">
-                            Łączenie z backendem inventory...
-                        </div>
-                    )}
-
-                    {inventorySync.error && (
-                        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded text-xs font-semibold">
-                            {inventorySync.error}
+                        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-xs font-semibold animate-pulse select-none">
+                            Łączenie z backendem..."
                         </div>
                     )}
 
@@ -611,6 +583,15 @@ export default function App() {
                             zones={zones}
                             allocationsLog={allocationsLog}
                             onAddAllocation={handleAddAllocation}
+                        />
+                    )}
+
+                    {currentTab === 'statistics' && (
+                        <Statistics
+                            orders={orders}
+                            products={products}
+                            zones={zones}
+                            staffList={staffList}
                         />
                     )}
 
@@ -652,7 +633,6 @@ export default function App() {
                     )}
                 </main>
 
-                {}
                 <Footer />
             </div>
         </div>

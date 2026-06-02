@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, Home, CalendarRange } from 'lucide-react';
+import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange } from 'lucide-react';
 import { OrderDetail } from '../../components/OrderDetail';
+import { Product } from '../../services/inventoryApi';
 
-const polishMonthMap = {
+const polishMonthMap: Record<string, number> = {
     'Sty': 0, 'Lut': 1, 'Mar': 2, 'Kwi': 3, 'Maj': 4, 'Cze': 5,
     'Lip': 6, 'Sie': 7, 'Wrz': 8, 'Paź': 9, 'Lis': 10, 'Gru': 11
 };
@@ -13,7 +14,7 @@ const getTodayDateStr = () => {
     return `${d.getDate()} ${months[d.getMonth()]}`;
 };
 
-const isDateWithinLastNDays = (dateStr, n) => {
+const isDateWithinLastNDays = (dateStr: string, n: number) => {
     if (!dateStr || dateStr === 'Nieustalony' || dateStr === 'Ukończono') return false;
 
     const match = dateStr.match(/^(\d+)\s+([a-zA-ZáćęłńóśźżĄĆĘŁŃÓŚŹŻ]{3})/);
@@ -27,17 +28,17 @@ const isDateWithinLastNDays = (dateStr, n) => {
     const d = new Date();
     const orderDate = new Date(d.getFullYear(), month, day);
 
-    const diffTime = Math.abs(d - orderDate);
+    const diffTime = Math.abs(d.getTime() - orderDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     return diffDays <= n;
 };
 
-const getStatusLabel = (status) => {
+const getStatusLabel = (status: string) => {
     return status;
 };
 
-const getStatusBadgeStyles = (status) => {
+const getStatusBadgeStyles = (status: string) => {
     switch (status) {
         case 'W realizacji':
             return {
@@ -51,7 +52,7 @@ const getStatusBadgeStyles = (status) => {
             };
         case 'Dostarczone':
             return {
-                badge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                badge: 'bg-emerald-100 text-emerald-850 border-emerald-300',
                 dot: 'bg-emerald-700'
             };
         case 'Oczekujące':
@@ -63,92 +64,25 @@ const getStatusBadgeStyles = (status) => {
     }
 };
 
-const renderItems = (items) => {
-    if (!items || items.length === 0) return <span className="text-zinc-400">Brak pozycji</span>;
-
-    if (items.length <= 2) {
-        return (
-            <div className="flex flex-col gap-1 items-start">
-                {items.map((item, idx) => (
-                    <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 whitespace-nowrap">
-                        {item.name} ({item.qty} PL)
-                    </span>
-                ))}
-            </div>
-        );
-    }
-
-    const visibleItems = items.slice(0, 2);
-    const extraCount = items.length - 2;
-
-    return (
-        <div className="flex flex-col gap-1 items-start">
-            {visibleItems.map((item, idx) => (
-                <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 whitespace-nowrap">
-                    {item.name} ({item.qty} PL)
-                </span>
-            ))}
-            <div className="relative group mt-0.5">
-                <span className="text-[10px] font-bold text-blue-600 hover:text-blue-800 cursor-help underline decoration-dotted transition-colors">
-                    + {extraCount} {extraCount === 1 ? 'inna pozycja' : extraCount < 5 ? 'inne pozycje' : 'innych pozycji'}
-                </span>
-                <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-40 bg-zinc-900 text-white text-[10px] rounded p-2 shadow-lg min-w-[200px] border border-zinc-800 transition-all pointer-events-none">
-                    <p className="font-bold border-b border-zinc-800 pb-1 mb-1 text-zinc-400 uppercase tracking-wider text-[9px]">Pełna zawartość:</p>
-                    <div className="space-y-1">
-                        {items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between gap-3 text-zinc-200 font-medium">
-                                <span className="truncate max-w-[140px]">{item.name}</span>
-                                <span className="font-mono text-blue-400 shrink-0">{item.qty} PL</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-zinc-900"></div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-function normalizeOrder(order) {
-    if (!order) return null;
-    
-    const normalizedItems = (order.items || []).map((item, index) => {
-        return {
-            lp: item.lp || (index + 1),
-            sku: item.sku || 'SKU-UNKNOWN',
-            product: item.product || item.name || 'Nieznany produkt',
-            quantity: item.quantity || item.qty || 0,
-            zone: item.zone || 'A1',
-            status: item.status || 'Skompletowano'
-        };
-    });
-
-    return {
-        ...order,
-        customerName: order.customerName || order.customer || 'Nieznany Klient',
-        email: order.email || 'kontakt@wms-logistics.pl',
-        phone: order.phone || '+48 500 600 700',
-        shippingAddress: order.shippingAddress || order.destination || 'Brak adresu dostawy',
-        shippingMethod: order.shippingMethod || 'DPD Standard',
-        estimatedDelivery: order.estimatedDelivery || order.shipmentDate || 'Nieustalony',
-        internalNotes: order.internalNotes || '',
-        internalNotesActor: order.internalNotesActor || 'System',
-        waybillNumber: order.waybillNumber || `DPD${order.id?.replace('ORD-', '') || '000000'}PL`,
-        waybillPdfDate: order.waybillPdfDate || new Date().toLocaleDateString('pl-PL'),
-        pickingZones: order.pickingZones || [
-            { name: 'Strefa A', percentage: 100 }
-        ],
-        activityHistory: order.activityHistory || [
-            { id: 'act-1', title: 'Utworzono zlecenie wyjazdu', actor: 'System', date: order.shipmentDate || 'Nieustalony' }
-        ],
-        changeLogs: order.changeLogs || [],
-        items: normalizedItems
-    };
+interface OrdersProps {
+    orders: any[];
+    products: Product[];
+    onAddOrder: (newOrder: any) => void;
+    onUpdateOrder: (id: string, fields: any) => void;
+    onUpdateOrderStatus: (id: string, status: string) => void;
+    onAddOrderChangeLog: (id: string, title: string, description: string) => void;
 }
 
-export default function Orders({ orders, products, onAddOrder, onUpdateOrder, onUpdateOrderStatus, onAddOrderChangeLog }) {
-    const [selectedOrders, setSelectedOrders] = useState([]);
-    const [selectedOrderId, setSelectedOrderId] = useState(null);
+export default function Orders({
+    orders,
+    products,
+    onAddOrder,
+    onUpdateOrder,
+    onUpdateOrderStatus,
+    onAddOrderChangeLog
+}: OrdersProps) {
+    const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+    const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -156,7 +90,6 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
     const [searchQuery, setSearchQuery] = useState('');
     const [dateFilter, setDateFilter] = useState('week');
 
-    
     const [clientName, setClientName] = useState('');
     const [clientDest, setClientDest] = useState('');
     const [selectedSku, setSelectedSku] = useState('');
@@ -173,7 +106,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         }
     };
 
-    const handleSelectRow = (id) => {
+    const handleSelectRow = (id: string) => {
         if (selectedOrders.includes(id)) {
             setSelectedOrders(selectedOrders.filter(o => o !== id));
         } else {
@@ -181,7 +114,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         }
     };
 
-    const createOrder = (e) => {
+    const createOrder = (e: React.FormEvent) => {
         e.preventDefault();
         if (!clientName || !clientDest || !selectedSku) return;
 
@@ -199,7 +132,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
             status: 'Oczekujące',
             priority: orderPriority,
             shipmentDate: shipmentDate,
-            items: [{ name: prod ? prod.name : 'Unknown SKU', qty: parseInt(orderQty) || 10 }]
+            items: [{ name: prod ? prod.name : 'Unknown SKU', qty: parseInt(orderQty as any) || 10, sku: selectedSku }]
         });
 
         setIsNewOrderModalOpen(false);
@@ -223,7 +156,6 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         document.body.removeChild(link);
     };
 
-    
     const filteredOrders = orders.filter(order => {
         const matchesStatus = statusFilter ? order.status === statusFilter : true;
         const matchesPriority = priorityFilter ? order.priority === priorityFilter : true;
@@ -244,15 +176,92 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
         return matchesStatus && matchesPriority && matchesSearch && matchesDate;
     });
 
-    
     const totalPages = Math.ceil(filteredOrders.length / rowsPerPage) || 1;
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + rowsPerPage);
 
+    const renderItems = (items: any[]) => {
+        if (!items || items.length === 0) return <span className="text-zinc-400">Brak pozycji</span>;
+
+        if (items.length <= 2) {
+            return (
+                <div className="flex flex-col gap-1 items-start">
+                    {items.map((item, idx) => (
+                        <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 whitespace-nowrap">
+                            {item.name || item.product} ({item.quantity ?? item.qty} PL)
+                        </span>
+                    ))}
+                </div>
+            );
+        }
+
+        const visibleItems = items.slice(0, 2);
+        const extraCount = items.length - 2;
+
+        return (
+            <div className="flex flex-col gap-1 items-start select-none">
+                {visibleItems.map((item, idx) => (
+                    <span key={idx} className="bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-semibold text-zinc-700 whitespace-nowrap">
+                        {item.name || item.product} ({item.quantity ?? item.qty} PL)
+                    </span>
+                ))}
+                <div className="relative group mt-0.5">
+                    <span className="text-[10px] font-bold text-blue-600 hover:text-blue-800 cursor-help underline decoration-dotted transition-colors">
+                        + {extraCount} {extraCount === 1 ? 'inna pozycja' : extraCount < 5 ? 'inne pozycje' : 'innych pozycji'}
+                    </span>
+                    <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-40 bg-zinc-900 text-white text-[10px] rounded p-2 shadow-lg min-w-[200px] border border-zinc-800 transition-all pointer-events-none">
+                        <p className="font-bold border-b border-zinc-800 pb-1 mb-1 text-zinc-400 uppercase tracking-wider text-[9px]">Pełna zawartość:</p>
+                        <div className="space-y-1">
+                            {items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between gap-3 text-zinc-200 font-medium">
+                                    <span className="truncate max-w-[140px]">{item.name || item.product}</span>
+                                    <span className="font-mono text-blue-400 shrink-0">{item.quantity ?? item.qty} PL</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const currentSelectedOrder = orders.find(o => o.id === selectedOrderId);
 
     if (selectedOrderId && currentSelectedOrder) {
-        const normalized = normalizeOrder(currentSelectedOrder);
+        
+        const normalizedItems = (currentSelectedOrder.items || []).map((item: any, index: number) => {
+            return {
+                lp: item.lp || (index + 1),
+                sku: item.sku || 'SKU-UNKNOWN',
+                product: item.product || item.name || 'Nieznany produkt',
+                quantity: item.quantity || item.qty || 0,
+                zone: item.zone || 'A1',
+                status: item.status || 'Skompletowano'
+            };
+        });
+
+        const normalized = {
+            ...currentSelectedOrder,
+            customerName: currentSelectedOrder.customerName || currentSelectedOrder.customer || 'Nieznany Klient',
+            email: currentSelectedOrder.email || 'kontakt@wms-logistics.pl',
+            phone: currentSelectedOrder.phone || '+48 500 600 700',
+            shippingAddress: currentSelectedOrder.shippingAddress || currentSelectedOrder.destination || 'Brak adresu dostawy',
+            shippingMethod: currentSelectedOrder.shippingMethod || 'DPD Standard',
+            estimatedDelivery: currentSelectedOrder.estimatedDelivery || currentSelectedOrder.shipmentDate || 'Nieustalony',
+            internalNotes: currentSelectedOrder.internalNotes || '',
+            internalNotesActor: currentSelectedOrder.internalNotesActor || 'System',
+            waybillNumber: currentSelectedOrder.waybillNumber || `DPD${currentSelectedOrder.id?.replace('ORD-', '') || '000000'}PL`,
+            waybillPdfDate: currentSelectedOrder.waybillPdfDate || new Date().toLocaleDateString('pl-PL'),
+            pickingZones: currentSelectedOrder.pickingZones || [
+                { name: 'Strefa A', percentage: 100 }
+            ],
+            activityHistory: currentSelectedOrder.activityHistory || [
+                { id: 'act-1', title: 'Utworzono zlecenie wyjazdu', actor: 'System', date: currentSelectedOrder.shipmentDate || 'Nieustalony' }
+            ],
+            changeLogs: currentSelectedOrder.changeLogs || [],
+            items: normalizedItems
+        };
+
         return (
             <OrderDetail
                 order={normalized}
@@ -265,37 +274,37 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
     }
 
     return (
-        <div className="space-y-6 font-sans text-sm text-[#0b1c30]">
-            <div className="flex justify-between items-end mb-2">
+        <div className="space-y-6 font-sans text-sm text-[#0b1c30] animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight">Aktywne Zamówienia</h2>
-                    <p className="text-zinc-500 text-xs mt-1">Zarządzaj, filtruj i śledź wysyłki wyjazdowe.</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900 leading-tight">Zarządzanie Zamówieniami (Outbound)</h2>
+                    <p className="text-slate-500 text-xs mt-1 border-none">Dyspozycja wysyłek kurierskich oraz kontrola kompletacji i pakowania.</p>
                 </div>
                 <div className="flex gap-3">
                     <button
                         onClick={triggerCsvExport}
-                        className="h-9 px-4 rounded border border-[#c6c6cd] text-zinc-700 font-semibold text-xs flex items-center gap-2 hover:bg-zinc-50 transition-colors shadow-sm bg-white cursor-pointer"
+                        className="h-10 px-4 rounded-lg border border-slate-300 text-slate-700 font-bold text-xs flex items-center gap-2 hover:bg-slate-50 transition-all shadow-3xs bg-white cursor-pointer"
                     >
-                        <Download className="w-4 h-4 text-zinc-500" /> Eksportuj CSV
+                        <Download className="w-4 h-4 text-slate-500" /> Eksportuj CSV
                     </button>
 
                     <button
                         onClick={() => setIsNewOrderModalOpen(true)}
-                        className="h-9 px-4 rounded bg-[#0058be] hover:bg-blue-750 text-white font-bold text-xs flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
+                        className="h-10 px-4 rounded-lg bg-[#2563eb] hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border-none shadow-md"
                     >
                         <Plus className="w-4 h-4" /> Nowe Zamówienie
                     </button>
                 </div>
             </div>
 
-            <div className="bg-white rounded border border-[#c6c6cd] shadow-sm flex flex-col overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#c6c6cd] flex flex-col md:flex-row gap-4 items-center bg-zinc-50">
-                    <div className="flex items-center gap-2 shrink-0">
+            <div className="bg-white rounded border border-[#e5e7eb] shadow-sm flex flex-col overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#e5e7eb] flex flex-col md:flex-row gap-4 items-center bg-zinc-50">
+                    <div className="flex items-center gap-2 shrink-0 select-none">
                         <Filter className="w-4 h-4 text-zinc-500" />
                         <span className="font-bold text-zinc-850 text-xs uppercase tracking-wider">Filtry kryteriów</span>
                     </div>
 
-                    <div className="h-4 w-px bg-zinc-250 hidden md:block"></div>
+                    <div className="h-4 w-px bg-zinc-200 hidden md:block"></div>
 
                     <div className="relative w-full md:w-96">
                         <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -304,7 +313,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                             placeholder="Filtruj wg klienta, zamówienia..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 border border-zinc-300 rounded text-xs bg-white outline-none focus:border-blue-500"
+                            className="w-full pl-8 pr-3 py-1.5 border border-zinc-300 rounded text-xs bg-white outline-none focus:border-blue-500 text-zinc-900"
                         />
                     </div>
 
@@ -332,7 +341,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                         </select>
                     </div>
 
-                    <div className="ml-auto flex items-center border border-zinc-300 rounded bg-white overflow-hidden h-8 text-xs font-semibold">
+                    <div className="ml-auto flex items-center border border-zinc-305 rounded bg-white overflow-hidden h-8 text-xs font-semibold select-none">
                         <button
                             onClick={() => setDateFilter(dateFilter === 'today' ? 'all' : 'today')}
                             className={`px-3 border-r border-zinc-200 transition-colors cursor-pointer ${
@@ -361,11 +370,11 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left order-collapse">
                         <thead>
-                        <tr className="border-b border-[#c6c6cd] bg-zinc-50 text-zinc-600 font-bold text-xs sticky top-0">
+                        <tr className="border-b border-[#e5e7eb] bg-zinc-50 text-zinc-600 font-bold text-xs sticky top-0">
                             <th className="py-3 px-4 w-12 text-center">
-                                <button onClick={handleSelectAll} className="p-1 rounded hover:bg-zinc-200 inline-block">
+                                <button onClick={handleSelectAll} className="p-1 rounded hover:bg-zinc-200 inline-block bg-transparent border-none cursor-pointer">
                                     {selectedOrders.length === orders.length ? (
                                         <CheckSquare className="w-4 h-4 text-blue-600" />
                                     ) : (
@@ -373,20 +382,20 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                     )}
                                 </button>
                             </th>
-                            <th className="py-3 px-4">Order ID</th>
-                            <th className="py-3 px-4">Klient</th>
-                            <th className="py-3 px-4">Miejsce przeznaczenia</th>
-                            <th className="py-3 px-4">Zawartość</th>
-                            <th className="py-3 px-4">Status wysyłki</th>
-                            <th className="py-3 px-4">Priorytet</th>
-                            <th className="py-3 px-4 text-right">Planowany załadunek</th>
+                            <th className="py-3 px-4 font-bold">Order ID</th>
+                            <th className="py-3 px-4 font-bold">Klient</th>
+                            <th className="py-3 px-4 font-bold">Miejsce przeznaczenia</th>
+                            <th className="py-3 px-4 font-bold">Zawartość</th>
+                            <th className="py-3 px-4 font-bold">Status wysyłki</th>
+                            <th className="py-3 px-4 font-bold">Priorytet</th>
+                            <th className="py-3 px-4 text-right font-bold">Planowany załadunek</th>
                             <th className="py-3 px-4 w-12 text-center"></th>
                         </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-200 text-xs font-medium text-zinc-800">
+                        <tbody className="divide-y divide-zinc-200 text-xs font-semibold text-zinc-800">
                         {paginatedOrders.length === 0 ? (
                             <tr>
-                                <td colSpan="9" className="py-8 text-center text-zinc-500 font-bold bg-white">Brak zamówień odpowiadających kryteriom filtrowania.</td>
+                                <td colSpan={9} className="py-8 text-center text-zinc-505 font-bold bg-white">Brak zamówień odpowiadających kryteriom filtrowania.</td>
                             </tr>
                         ) : (
                             paginatedOrders.map(order => {
@@ -394,7 +403,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                 return (
                                     <tr key={order.id} className={`hover:bg-zinc-50/70 transition-colors ${isChecked ? 'bg-blue-50/20' : ''}`}>
                                         <td className="py-3 px-4 text-center">
-                                            <button onClick={() => handleSelectRow(order.id)} className="p-1 text-zinc-500">
+                                            <button onClick={() => handleSelectRow(order.id)} className="p-1 text-zinc-500 bg-transparent border-none cursor-pointer">
                                                 {isChecked ? (
                                                     <CheckSquare className="w-4 h-4 text-blue-600" />
                                                 ) : (
@@ -405,13 +414,13 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                         <td className="py-3 px-4">
                                             <button
                                                 onClick={() => setSelectedOrderId(order.id)}
-                                                className="font-mono font-bold text-blue-650 hover:underline text-left cursor-pointer outline-none"
+                                                className="font-mono font-bold text-[#0058be] hover:underline text-left cursor-pointer outline-none bg-transparent border-none"
                                             >
                                                 {order.id}
                                             </button>
                                         </td>
                                         <td className="py-3 px-4 font-bold text-zinc-900">{order.customer}</td>
-                                        <td className="py-3 px-4 text-zinc-600">{order.destination}</td>
+                                        <td className="py-3 px-4 text-zinc-650">{order.destination}</td>
                                         <td className="py-3 px-4 text-zinc-800">
                                             {renderItems(order.items)}
                                         </td>
@@ -427,13 +436,13 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                             })()}
                                         </td>
                                         <td className="py-3 px-4">
-                                            <span className={`font-bold inline-flex items-center gap-1 ${order.priority === 'Wysoki' ? 'text-red-600' : 'text-zinc-650'}`}>
+                                            <span className={`font-bold inline-flex items-center gap-1 ${order.priority === 'Wysoki' ? 'text-red-655' : 'text-zinc-650'}`}>
                                                 {order.priority === 'Wysoki' ? '⚠️ Wysoki' : 'Normalny'}
                                             </span>
                                         </td>
                                         <td className="py-3 px-4 text-right font-mono font-semibold text-zinc-600">{order.shipmentDate}</td>
                                         <td className="py-3 px-4 text-center">
-                                            <button className="p-1 hover:bg-zinc-150 rounded text-zinc-400 hover:text-zinc-800 transition-colors cursor-pointer">
+                                            <button className="p-1 hover:bg-zinc-150 rounded text-zinc-400 hover:text-zinc-850 transition-colors cursor-pointer bg-transparent border-none">
                                                 <MoreVertical className="w-4 h-4" />
                                             </button>
                                         </td>
@@ -445,7 +454,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                     </table>
                 </div>
 
-                <div className="px-5 py-3 border-t border-[#c6c6cd] bg-zinc-50 flex items-center justify-between mt-auto">
+                <div className="px-5 py-3 border-t border-[#e5e7eb] bg-zinc-50 flex items-center justify-between mt-auto">
                     <span className="text-zinc-500 text-xs font-semibold">
                         Wyświetlono {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredOrders.length)} z {filteredOrders.length} zamówień
                     </span>
@@ -467,8 +476,8 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                     onClick={() => setCurrentPage(p)}
                                     className={`w-7.5 h-7.5 rounded text-xs font-bold leading-none ${
                                         currentPage === p
-                                            ? 'bg-blue-600 text-white shadow-sm'
-                                            : 'border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-700 cursor-pointer'
+                                            ? 'bg-blue-600 text-white shadow-sm font-black'
+                                            : 'border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-750 cursor-pointer'
                                     }`}
                                 >
                                     {p}
@@ -489,10 +498,10 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
 
             {isNewOrderModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg border border-zinc-300 w-full max-w-md shadow-2xl overflow-hidden font-sans text-sm">
-                        <div className="px-5 py-4 bg-[#0b1c30] text-white flex justify-between items-center">
-                            <h3 className="font-bold tracking-tight">Kreator nowego zlecenia wyjazdu (Outbound Order)</h3>
-                            <button onClick={() => setIsNewOrderModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer font-bold text-lg">×</button>
+                    <div className="bg-white rounded-lg border border-zinc-300 w-full max-w-md shadow-2xl overflow-hidden font-sans text-sm pb-1">
+                        <div className="px-5 py-4 bg-[#0f172a] text-white flex justify-between items-center select-none border-b border-slate-800">
+                            <h3 className="font-extrabold text-sm tracking-tight">Kreator nowego zlecenia wyjazdu (Outbound)</h3>
+                            <button onClick={() => setIsNewOrderModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer font-bold text-lg bg-transparent border-none">×</button>
                         </div>
 
                         <form onSubmit={createOrder} className="p-5 space-y-4">
@@ -504,7 +513,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                     placeholder="np. Acme Logistics Sp. z o.o."
                                     value={clientName}
                                     onChange={(e) => setClientName(e.target.value)}
-                                    className="w-full p-2 border border-zinc-300 rounded outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950"
+                                    className="w-full p-2 border border-zinc-300 rounded outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950 bg-white"
                                 />
                             </div>
 
@@ -516,7 +525,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                     placeholder="np. Poznań, PL lub Berlin, DE"
                                     value={clientDest}
                                     onChange={(e) => setClientDest(e.target.value)}
-                                    className="w-full p-2 border border-zinc-300 rounded outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950"
+                                    className="w-full p-2 border border-zinc-300 rounded outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950 bg-white"
                                 />
                             </div>
 
@@ -527,7 +536,7 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                         value={selectedSku}
                                         onChange={(e) => setSelectedSku(e.target.value)}
                                         required
-                                        className="w-full p-2 border border-zinc-300 rounded outline-none text-zinc-950 bg-white"
+                                        className="w-full p-2 border border-zinc-305 rounded outline-none text-zinc-950 bg-white"
                                     >
                                         <option value="">Wybierz...</option>
                                         {products.map(p => (
@@ -543,8 +552,8 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                         min="1"
                                         max="1000"
                                         value={orderQty}
-                                        onChange={(e) => setOrderQty(e.target.value)}
-                                        className="w-full p-2 border border-zinc-300 rounded outline-none text-zinc-950"
+                                        onChange={(e) => setOrderQty(e.target.value as any)}
+                                        className="w-full p-2 border border-zinc-300 rounded outline-none text-zinc-950 bg-white"
                                     />
                                 </div>
                             </div>
@@ -568,24 +577,24 @@ export default function Orders({ orders, products, onAddOrder, onUpdateOrder, on
                                             name="orderPriority"
                                             checked={orderPriority === 'Wysoki'}
                                             onChange={() => setOrderPriority('Wysoki')}
-                                            className="text-red-600 focus:ring-red-500"
+                                            className="text-red-655 focus:ring-red-500"
                                         />
                                         Wysoki ⚠️
                                     </label>
                                 </div>
                             </div>
 
-                            <div className="pt-4 border-t border-zinc-200 mt-6 flex justify-end gap-3">
+                            <div className="pt-4 border-t border-zinc-200 mt-6 flex justify-end gap-3 flex-wrap">
                                 <button
                                     type="button"
                                     onClick={() => setIsNewOrderModalOpen(false)}
-                                    className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold rounded text-xs cursor-pointer"
+                                    className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold rounded text-xs cursor-pointer bg-white"
                                 >
                                     Anuluj
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs cursor-pointer shadow"
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs cursor-pointer shadow border-none"
                                 >
                                     Utwórz zlecenia wyjazdu
                                 </button>

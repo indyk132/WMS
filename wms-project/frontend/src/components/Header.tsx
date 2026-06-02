@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
-import { Search, Bell, Settings, HelpCircle, Menu, Home, User, LogOut } from 'lucide-react';
+import { Search, Bell, Settings, HelpCircle, Menu, Home, LogOut } from 'lucide-react';
+
+interface HeaderProps {
+    currentTab: string;
+    onSearchChange: (val: string) => void;
+    searchQuery: string;
+    currentUser: any;
+    onLogout: () => void;
+    onMobileMenuToggle: () => void;
+}
 
 export default function Header({
-                                   currentTab,
-                                   onSearchChange,
-                                   searchQuery,
-                                   currentUser,
-                                   onLogout,
-                                   onMobileMenuToggle,
-                               }) {
+    currentTab,
+    onSearchChange,
+    searchQuery,
+    currentUser,
+    onLogout,
+    onMobileMenuToggle,
+}: HeaderProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
     const getTabLabel = () => {
@@ -31,10 +40,9 @@ export default function Header({
     return (
         <header className="fixed top-0 right-0 left-0 lg:left-[260px] h-14 bg-white border-b border-zinc-200 shadow-sm flex justify-between items-center px-6 z-30 transition-all">
             <div className="flex items-center gap-4">
-                {}
                 <button
                     onClick={onMobileMenuToggle}
-                    className="lg:hidden p-1.5 rounded hover:bg-zinc-100 text-zinc-650 transition-colors"
+                    className="lg:hidden p-1.5 rounded hover:bg-zinc-100 text-zinc-600 transition-colors cursor-pointer"
                     title="Otwórz menu"
                 >
                     <Menu className="w-5 h-5" />
@@ -45,14 +53,13 @@ export default function Header({
                 </h2>
                 <div className="h-4 w-px bg-zinc-200 hidden sm:block"></div>
                 <span className="font-sans text-[11px] text-zinc-500 font-medium flex items-center gap-1.5">
-          <Home className="w-3.5 h-3.5 text-zinc-400" />
-          <span className="text-zinc-400">/</span>
-          <span className="text-zinc-700">{getTabLabel()}</span>
-        </span>
+                    <Home className="w-3.5 h-3.5 text-zinc-400" />
+                    <span className="text-zinc-400">/</span>
+                    <span className="text-zinc-700">{getTabLabel()}</span>
+                </span>
             </div>
 
             <div className="flex items-center gap-4">
-                {}
                 <div className="relative hidden md:block group">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-blue-600 transition-colors" />
                     <input
@@ -68,29 +75,27 @@ export default function Header({
                     </div>
                 </div>
 
-                {}
                 <div className="flex gap-1 text-zinc-500">
-                    <button className="p-1.5 relative hover:bg-zinc-100 rounded-full transition-colors" title="Powiadomienia">
-                        <Bell className="w-4.5 h-4.5 text-zinc-650" />
+                    <button className="p-1.5 relative hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" title="Powiadomienia">
+                        <Bell className="w-4.5 h-4.5 text-zinc-600" />
                         <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white"></span>
                     </button>
-                    <button className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors" title="Ustawienia systemowe">
+                    <button className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" title="Ustawienia systemowe">
                         <Settings className="w-4.5 h-4.5 text-zinc-650" />
                     </button>
-                    <button className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors" title="Centrum Pomocy">
+                    <button className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" title="Centrum Pomocy">
                         <HelpCircle className="w-4.5 h-4.5 text-zinc-650" />
                     </button>
                 </div>
 
-                {}
                 <div className="flex items-center gap-3 border-l border-zinc-200 pl-4 relative">
                     <div className="flex flex-col text-right hidden lg:flex">
-            <span className="text-xs font-semibold text-zinc-900 leading-none">
-              {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System Admin'}
-            </span>
+                        <span className="text-xs font-semibold text-zinc-900 leading-none">
+                            {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System Admin'}
+                        </span>
                         <span className="text-[10px] text-zinc-400 font-mono mt-1 tracking-wider uppercase">
-              {currentUser ? currentUser.role : 'WMS LOGO'}
-            </span>
+                            {currentUser ? currentUser.role : 'WMS LOGO'}
+                        </span>
                     </div>
 
                     <div className="relative">
@@ -108,7 +113,7 @@ export default function Header({
                         {dropdownOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                                <div className="absolute right-0 mt-2 w-48 bg-white border border-zinc-250 rounded shadow-md z-50 text-xs font-sans">
+                                <div className="absolute right-0 mt-2 w-48 bg-white border border-zinc-200 rounded shadow-md z-50 text-xs font-sans">
                                     <div className="p-3 border-b border-zinc-100">
                                         <p className="font-bold text-zinc-800">{currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System Admin'}</p>
                                         <p className="text-[10px] text-zinc-400 truncate">{currentUser ? currentUser.email : 'admin@logistics-os.com'}</p>
@@ -118,7 +123,7 @@ export default function Header({
                                             setDropdownOpen(false);
                                             onLogout();
                                         }}
-                                        className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-semibold"
+                                        className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-semibold cursor-pointer"
                                     >
                                         <LogOut className="w-3.5 h-3.5" />
                                         Wyloguj się
