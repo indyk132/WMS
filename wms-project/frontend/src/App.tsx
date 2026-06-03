@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import ProfileModal from './components/ProfileModal';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Dashboard from './pages/AdminPanel/Dashboard';
@@ -9,10 +10,11 @@ import Products from './pages/AdminPanel/Products';
 import Storage from './pages/AdminPanel/Storage';
 import UsersPermissions from './pages/AdminPanel/Users';
 import Statistics from './pages/AdminPanel/Statistics';
+import Settings from './pages/AdminPanel/Settings';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
 import { adjustInventoryStock, fetchInventoryProducts, Product } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon } from 'lucide-react';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
@@ -45,6 +47,7 @@ const readStoredTab = () => {
 
 export default function App() {
     const [currentUser, setCurrentUser] = useState<User | null>(() => readStoredUser());
+    const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
@@ -480,6 +483,7 @@ export default function App() {
         { id: 'products', label: 'Stany Zapasów SKU', icon: Package },
         { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
         { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
+        { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
     ];
 
     return (
@@ -564,6 +568,7 @@ export default function App() {
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    onSettingsClick={() => setIsProfileModalOpen(true)}
                 />
 
                 {isMobileMenuOpen && (
@@ -631,10 +636,28 @@ export default function App() {
                             usersSync={usersSync}
                         />
                     )}
+
+                    {currentTab === 'settings' && (
+                        <Settings />
+                    )}
                 </main>
 
                 <Footer />
             </div>
+
+            <ProfileModal
+                isOpen={isProfileModalOpen}
+                onClose={() => setIsProfileModalOpen(false)}
+                currentUser={currentUser}
+                onUpdateCurrentUser={(updatedUser) => {
+                    setCurrentUser(updatedUser);
+                    window.localStorage.setItem('wms-current-user', JSON.stringify(updatedUser));
+                    // Synchronizacja zmian profilu na liście personelu staffList
+                    if (updatedUser && staffList) {
+                        setStaffList(prev => prev.map(staff => staff.employeeId === updatedUser.employeeId || staff.id === updatedUser.id ? { ...staff, ...updatedUser } : staff));
+                    }
+                }}
+            />
         </div>
     );
 }

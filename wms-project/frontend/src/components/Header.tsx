@@ -8,6 +8,7 @@ interface HeaderProps {
     currentUser: any;
     onLogout: () => void;
     onMobileMenuToggle: () => void;
+    onSettingsClick: () => void;
 }
 
 export default function Header({
@@ -17,6 +18,7 @@ export default function Header({
     currentUser,
     onLogout,
     onMobileMenuToggle,
+    onSettingsClick,
 }: HeaderProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -80,7 +82,11 @@ export default function Header({
                         <Bell className="w-4.5 h-4.5 text-zinc-600" />
                         <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white"></span>
                     </button>
-                    <button className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" title="Ustawienia systemowe">
+                    <button 
+                        onClick={onSettingsClick}
+                        className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" 
+                        title="Ustawienia osobiste i profil"
+                    >
                         <Settings className="w-4.5 h-4.5 text-zinc-650" />
                     </button>
                     <button className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" title="Centrum Pomocy">
@@ -121,9 +127,19 @@ export default function Header({
                                     <button
                                         onClick={() => {
                                             setDropdownOpen(false);
+                                            onSettingsClick();
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-zinc-700 hover:bg-zinc-50 flex items-center gap-2 transition-colors font-semibold cursor-pointer border-none bg-transparent"
+                                    >
+                                        <Settings className="w-3.5 h-3.5 text-zinc-400" />
+                                        Profil & Preferencje
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setDropdownOpen(false);
                                             onLogout();
                                         }}
-                                        className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-semibold cursor-pointer"
+                                        className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-semibold cursor-pointer border-none bg-transparent"
                                     >
                                         <LogOut className="w-3.5 h-3.5" />
                                         Wyloguj się

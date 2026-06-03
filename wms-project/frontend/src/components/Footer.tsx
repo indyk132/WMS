@@ -11,7 +11,7 @@ export default function Footer() {
             <div className="flex gap-4 items-center">
                 <span>© {currentYear} Logistics OS Inc.</span>
                 <span className="text-zinc-300">|</span>
-                <span className="hover:text-blue-600 cursor-pointer transition-colors" onClick={() => window.open('https://ai.studio/build', '_blank')}>Dokumentacja</span>
+                <span className="hover:text-blue-600 cursor-pointer transition-colors" onClick={() => window.open('#', '_self')}>Dokumentacja</span>
                 <span className="text-zinc-300">|</span>
                 <span className="font-mono bg-zinc-100 px-1.5 py-0.5 rounded text-[10px] text-zinc-600">STREFA: PL-PÓŁNOC-1</span>
             </div>
