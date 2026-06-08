@@ -53,7 +53,11 @@ const DEFAULT_SETTINGS: WarehouseSettings = {
   defaultUserRole: 'Picker'
 };
 
-export default function Settings() {
+interface SettingsProps {
+  highlightedField?: string | null;
+}
+
+export default function Settings({ highlightedField }: SettingsProps) {
   const [settings, setSettings] = useState<WarehouseSettings>(() => {
     try {
       const stored = localStorage.getItem('wms-warehouse-settings');
@@ -64,6 +68,18 @@ export default function Settings() {
   });
 
   const [activeTab, setActiveTab] = useState<'general' | 'picking' | 'alerts' | 'integrations' | 'users'>('general');
+
+  useEffect(() => {
+    if (highlightedField === 'courier-api') {
+      setActiveTab('integrations');
+      setTimeout(() => {
+        const element = document.getElementById('settings-courier-api');
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [highlightedField]);
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -495,7 +511,14 @@ export default function Settings() {
             )}
 
             {activeTab === 'integrations' && (
-              <div className="space-y-5 animate-fadeIn">
+              <div 
+                id="settings-courier-api" 
+                className={`space-y-5 animate-fadeIn transition-all duration-500 ${
+                  highlightedField === 'courier-api' 
+                    ? 'bg-amber-50/50 p-4 rounded-xl ring-2 ring-amber-400 shadow-sm' 
+                    : ''
+                }`}
+              >
                 <div className="border-b border-slate-100 pb-3">
                   <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
                     <Key className="w-4 h-4 text-[#2170e4]" />

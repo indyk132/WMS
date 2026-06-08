@@ -30,15 +30,33 @@ interface ProductsProps {
     products: Product[];
     onUpdateStock: (product: Product, delta: number) => Promise<void>;
     onRestockItem: (product: Product) => Promise<void>;
+    highlightedSku?: string | null;
 }
 
-export default function Products({ products, onUpdateStock, onRestockItem }: ProductsProps) {
+export default function Products({ products, onUpdateStock, onRestockItem, highlightedSku }: ProductsProps) {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [draftStocks, setDraftStocks] = useState<Record<string, number>>({});
     const [pendingSku, setPendingSku] = useState('');
     const [stockError, setStockError] = useState('');
+
+    React.useEffect(() => {
+        if (highlightedSku) {
+            setSearch('');
+            setCategoryFilter('');
+            setStatusFilter('');
+        }
+    }, [highlightedSku]);
+
+    React.useEffect(() => {
+        if (highlightedSku) {
+            const element = document.getElementById(`product-row-${highlightedSku}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }, [highlightedSku]);
     
     const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))).sort();
 
@@ -178,8 +196,17 @@ export default function Products({ products, onUpdateStock, onRestockItem }: Pro
                                 const draftVal = draftStocks[p.sku] !== undefined ? draftStocks[p.sku] : p.stock;
                                 const isChanged = draftVal !== p.stock;
 
+                                const isHighlighted = highlightedSku && p.sku === highlightedSku;
                                 return (
-                                    <tr key={p.sku} className="hover:bg-zinc-50/70 transition-colors">
+                                    <tr 
+                                        id={`product-row-${p.sku}`}
+                                        key={p.sku} 
+                                        className={`transition-all duration-500 ${
+                                            isHighlighted 
+                                                ? 'bg-amber-100 ring-2 ring-amber-400 font-bold shadow-sm' 
+                                                : 'hover:bg-zinc-50/70'
+                                        }`}
+                                    >
                                         <td className="py-3 px-4 font-mono font-bold text-[#0052CC]">{p.sku}</td>
                                         <td className="py-3 px-4 font-normal text-zinc-700">{p.name}</td>
                                         <td className="py-3 px-4 text-zinc-500">{getCategoryLabel(p.category)}</td>

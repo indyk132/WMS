@@ -7,14 +7,15 @@ import Home from './pages/Home';
 import Dashboard from './pages/AdminPanel/Dashboard';
 import Orders from './pages/AdminPanel/Orders';
 import Products from './pages/AdminPanel/Products';
+import SalesProducts from './pages/AdminPanel/SalesProducts';
 import Storage from './pages/AdminPanel/Storage';
 import UsersPermissions from './pages/AdminPanel/Users';
 import Statistics from './pages/AdminPanel/Statistics';
 import Settings from './pages/AdminPanel/Settings';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
-import { adjustInventoryStock, fetchInventoryProducts, Product } from './services/inventoryApi';
+import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers } from 'lucide-react';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
@@ -48,6 +49,15 @@ const readStoredTab = () => {
 export default function App() {
     const [currentUser, setCurrentUser] = useState<User | null>(() => readStoredUser());
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+    const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
+        try {
+            const stored = window.localStorage.getItem('wms-read-notifications');
+            return stored ? JSON.parse(stored) : [];
+        } catch {
+            return [];
+        }
+    });
 
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
@@ -431,6 +441,66 @@ export default function App() {
         return handleUpdateStock(product, 100);
     };
 
+    const handleCreateProduct = async (newProd: any) => {
+        try {
+            await createInventoryProduct(newProd);
+            await loadInventory();
+        } catch (error) {
+            console.warn('Backend create failed, creating in local state:', error);
+            const mockId = Math.floor(Math.random() * 1000000);
+            const mappedProd: Product = {
+                productId: mockId,
+                sku: newProd.sku,
+                barcode: newProd.barcode || newProd.sku,
+                name: newProd.name,
+                category: newProd.category,
+                stock: 0,
+                reorderThreshold: newProd.reorderThreshold ?? 20,
+                zone: 'RAMPA-PRZYJEC',
+                locationCode: 'RAMPA-PRZYJEC',
+                zoneGroup: 'General',
+                primaryLocationId: null,
+                status: 'Out of Stock',
+                price: newProd.price ?? 0,
+                locations: ['RAMPA-PRZYJEC'],
+                stockEntries: [],
+                zoneGroups: ['General'],
+            };
+            setProducts(prev => [...prev, mappedProd].sort((a, b) => a.name.localeCompare(b.name)));
+        }
+    };
+
+    const handleUpdateProduct = async (id: any, fields: any) => {
+        try {
+            await updateInventoryProduct(id, fields);
+            await loadInventory();
+        } catch (error) {
+            console.warn('Backend update failed, updating local state:', error);
+            setProducts(prev => {
+                return prev.map(p => {
+                    if (p.productId === id) {
+                        return {
+                            ...p,
+                            ...fields,
+                            reorderThreshold: fields.reorderThreshold ?? fields.reorder_threshold ?? p.reorderThreshold,
+                        };
+                    }
+                    return p;
+                });
+            });
+        }
+    };
+
+    const handleDeleteProduct = async (id: any) => {
+        try {
+            await deleteInventoryProduct(id);
+            await loadInventory();
+        } catch (error) {
+            console.warn('Backend delete failed, deleting from local state:', error);
+            setProducts(prev => prev.filter(p => p.productId !== id));
+        }
+    };
+
     const handleToggleLockZone = (zoneId: string) => {
         setZones(prev => {
             return prev.map(z => {
@@ -446,6 +516,117 @@ export default function App() {
         const savedUser = await createUser(newStaff);
         setStaffList(prev => [...prev, savedUser]);
         return savedUser;
+    };
+
+    // Dynamic Notifications calculated from current WMS state
+    const notifications = React.useMemo(() => {
+        const list: any[] = [];
+
+        // 1. Critical out of stock products
+        products.forEach(p => {
+            if (p.stock === 0) {
+                list.push({
+                    id: `stock-empty-${p.sku}`,
+                    type: 'error',
+                    text: `Krytyczny brak zapasu: ${p.sku} (${p.name})`,
+                    time: 'Przed chwilą',
+                    targetTab: 'inventory',
+                    targetId: p.sku
+                });
+            } else if (p.stock <= p.reorderThreshold) {
+                list.push({
+                    id: `stock-low-${p.sku}`,
+                    type: 'warning',
+                    text: `Niski stan magazynowy: ${p.sku} (${p.name})`,
+                    time: '2 godz. temu',
+                    targetTab: 'inventory',
+                    targetId: p.sku
+                });
+            }
+        });
+
+        // 2. Zone utilization capacities
+        zones.forEach(z => {
+            if (z.capacityPercent > 85) {
+                list.push({
+                    id: `zone-cap-${z.id}`,
+                    type: 'warning',
+                    text: `Wysoka zajętość strefy ${z.id} (${z.capacityPercent}%)`,
+                    time: '1 godz. temu',
+                    targetTab: 'zones',
+                    targetId: z.id
+                });
+            }
+            if (z.isLocked) {
+                list.push({
+                    id: `zone-lock-${z.id}`,
+                    type: 'error',
+                    text: `Korytarz ${z.id} został zablokowany`,
+                    time: 'Wczoraj',
+                    targetTab: 'zones',
+                    targetId: z.id
+                });
+            }
+        });
+
+        // 3. Pending/Waiting orders
+        orders.forEach(o => {
+            if (o.status === 'Oczekujące') {
+                list.push({
+                    id: `order-pending-${o.id}`,
+                    type: 'info',
+                    text: `Zlecenie oczekuje na kompletację: ${o.id}`,
+                    time: 'Przed chwilą',
+                    targetTab: 'orders',
+                    targetId: o.id
+                });
+            }
+        });
+
+        // 4. Simulated system/API events matching screenshot aesthetics
+        list.push({
+            id: 'system-courier-api',
+            type: 'error',
+            text: 'Błąd połączenia z API kuriera (DHL)',
+            time: 'Przed chwilą',
+            targetTab: 'settings',
+            targetId: 'courier-api'
+        });
+
+        list.push({
+            id: 'system-order-status-change',
+            type: 'info',
+            text: 'Zmieniono status zamówienia ORD-89240',
+            time: '10 min. temu',
+            targetTab: 'orders',
+            targetId: 'ORD-89240'
+        });
+
+        return list;
+    }, [products, zones, orders]);
+
+    const handleMarkAllAsRead = () => {
+        const allIds = notifications.map(n => n.id);
+        setReadNotificationIds(allIds);
+        window.localStorage.setItem('wms-read-notifications', JSON.stringify(allIds));
+    };
+
+    const handleNotificationClick = (targetTab: string, notificationId: string, targetId?: string) => {
+        setCurrentTab(targetTab);
+        window.localStorage.setItem('wms-current-tab', targetTab);
+        
+        if (targetId) {
+            setHighlightedItemId(targetId);
+            setTimeout(() => {
+                setHighlightedItemId(null);
+            }, 3000); // Highlight for 3 seconds
+        }
+
+        if (!readNotificationIds.includes(notificationId)) {
+            const newReadIds = [...readNotificationIds, notificationId];
+            setReadNotificationIds(newReadIds);
+            window.localStorage.setItem('wms-read-notifications', JSON.stringify(newReadIds));
+        }
     };
 
     const isTerminalRoute = window.location.pathname === '/terminal' || window.location.hash === '#/terminal';
@@ -480,7 +661,8 @@ export default function App() {
         { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
         { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
         { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
-        { id: 'products', label: 'Stany Zapasów SKU', icon: Package },
+        { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+        { id: 'products', label: 'Katalog Produktów', icon: Layers },
         { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
         { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
         { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
@@ -569,6 +751,10 @@ export default function App() {
                     onLogout={handleLogout}
                     onMobileMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                     onSettingsClick={() => setIsProfileModalOpen(true)}
+                    notifications={notifications}
+                    readNotificationIds={readNotificationIds}
+                    onMarkAllAsRead={handleMarkAllAsRead}
+                    onNotificationClick={handleNotificationClick}
                 />
 
                 {isMobileMenuOpen && (
@@ -608,14 +794,25 @@ export default function App() {
                             onUpdateOrder={handleUpdateOrder}
                             onUpdateOrderStatus={handleUpdateOrderStatus}
                             onAddOrderChangeLog={handleAddOrderChangeLog}
+                            highlightedOrderId={highlightedItemId}
                         />
                     )}
 
-                    {currentTab === 'products' && (
+                    {currentTab === 'inventory' && (
                         <Products
                             products={products}
                             onUpdateStock={handleUpdateStock}
                             onRestockItem={handleRestockItem}
+                            highlightedSku={highlightedItemId}
+                        />
+                    )}
+
+                    {currentTab === 'products' && (
+                        <SalesProducts
+                            products={products}
+                            onAddProduct={handleCreateProduct}
+                            onUpdateProduct={handleUpdateProduct}
+                            onDeleteProduct={handleDeleteProduct}
                         />
                     )}
 
@@ -624,6 +821,7 @@ export default function App() {
                             zones={zones}
                             products={products}
                             onToggleLockZone={handleToggleLockZone}
+                            highlightedZoneId={highlightedItemId}
                         />
                     )}
 
@@ -638,7 +836,7 @@ export default function App() {
                     )}
 
                     {currentTab === 'settings' && (
-                        <Settings />
+                        <Settings highlightedField={highlightedItemId} />
                     )}
                 </main>
 

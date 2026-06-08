@@ -6,14 +6,27 @@ interface StorageProps {
     zones: any[];
     products: Product[];
     onToggleLockZone: (zoneId: string) => void;
+    highlightedZoneId?: string | null;
 }
 
-export default function Storage({ zones, products, onToggleLockZone }: StorageProps) {
+export default function Storage({ zones, products, onToggleLockZone, highlightedZoneId }: StorageProps) {
     const [selectedZoneId, setSelectedZoneId] = useState('A1');
     const [zoomLevel, setZoomLevel] = useState(100);
     const [rackSearch, setRackSearch] = useState('');
     const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
     const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'info' | 'warning' } | null>(null);
+
+    React.useEffect(() => {
+        if (highlightedZoneId) {
+            setSelectedZoneId(highlightedZoneId);
+            setTimeout(() => {
+                const element = document.getElementById(`zone-block-${highlightedZoneId}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+    }, [highlightedZoneId]);
 
     const showNotification = (msg: string, type: 'success' | 'info' | 'warning' = 'success') => {
         setNotification({ msg, type });
@@ -133,13 +146,19 @@ export default function Storage({ zones, products, onToggleLockZone }: StoragePr
                                         {zones.filter(z => z.block === 'AMBIENT').map(zone => {
                                             const isSelected = selectedZoneId === zone.id;
                                             const status = getCapacityStatus(zone.capacityPercent);
+                                            const isHighlighted = highlightedZoneId && zone.id === highlightedZoneId;
                                             return (
                                                 <button
                                                     key={zone.id}
+                                                    id={`zone-block-${zone.id}`}
                                                     onClick={() => handleSelectZone(zone.id)}
-                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative transition-all bg-white hover:bg-zinc-50 border-zinc-200 shadow-sm min-h-[76px] ${
+                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative transition-all min-h-[76px] ${
                                                         isSelected
                                                             ? 'ring-2 ring-zinc-950 scale-[1.03] shadow-md z-10 border-transparent'
+                                                            : 'bg-white hover:bg-zinc-50 border-zinc-200 shadow-sm'
+                                                    } ${
+                                                        isHighlighted
+                                                            ? 'bg-amber-100 ring-4 ring-amber-400 animate-pulse border-transparent'
                                                             : ''
                                                     }`}
                                                 >
@@ -175,13 +194,19 @@ export default function Storage({ zones, products, onToggleLockZone }: StoragePr
                                         {zones.filter(z => z.block === 'COLD STORAGE').map(zone => {
                                             const isSelected = selectedZoneId === zone.id;
                                             const status = getCapacityStatus(zone.capacityPercent);
+                                            const isHighlighted = highlightedZoneId && zone.id === highlightedZoneId;
                                             return (
                                                 <button
                                                     key={zone.id}
+                                                    id={`zone-block-${zone.id}`}
                                                     onClick={() => handleSelectZone(zone.id)}
-                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative transition-all bg-white hover:bg-zinc-50 border-zinc-200 shadow-sm min-h-[76px] ${
+                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative transition-all min-h-[76px] ${
                                                         isSelected
                                                             ? 'ring-2 ring-zinc-950 scale-[1.03] shadow-md z-10 border-transparent'
+                                                            : 'bg-white hover:bg-zinc-50 border-zinc-200 shadow-sm'
+                                                    } ${
+                                                        isHighlighted
+                                                            ? 'bg-amber-100 ring-4 ring-amber-400 animate-pulse border-transparent'
                                                             : ''
                                                     }`}
                                                 >
@@ -217,13 +242,19 @@ export default function Storage({ zones, products, onToggleLockZone }: StoragePr
                                         {zones.filter(z => z.block === 'HAZMAT').map(zone => {
                                             const isSelected = selectedZoneId === zone.id;
                                             const status = getCapacityStatus(zone.capacityPercent);
+                                            const isHighlighted = highlightedZoneId && zone.id === highlightedZoneId;
                                             return (
                                                 <button
                                                     key={zone.id}
+                                                    id={`zone-block-${zone.id}`}
                                                     onClick={() => handleSelectZone(zone.id)}
-                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative overflow-hidden bg-white hover:bg-zinc-50 border-zinc-200 shadow-sm min-h-[76px] ${
+                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative overflow-hidden min-h-[76px] transition-all ${
                                                         isSelected
                                                             ? 'ring-2 ring-zinc-950 scale-[1.03] shadow-md z-10 border-transparent'
+                                                            : 'bg-white hover:bg-zinc-50 border-zinc-200 shadow-sm'
+                                                    } ${
+                                                        isHighlighted
+                                                            ? 'bg-amber-100 ring-4 ring-amber-400 animate-pulse border-transparent'
                                                             : ''
                                                     }`}
                                                 >

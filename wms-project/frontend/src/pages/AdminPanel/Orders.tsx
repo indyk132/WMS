@@ -71,6 +71,7 @@ interface OrdersProps {
     onUpdateOrder: (id: string, fields: any) => void;
     onUpdateOrderStatus: (id: string, status: string) => void;
     onAddOrderChangeLog: (id: string, title: string, description: string) => void;
+    highlightedOrderId?: string | null;
 }
 
 export default function Orders({
@@ -79,7 +80,8 @@ export default function Orders({
     onAddOrder,
     onUpdateOrder,
     onUpdateOrderStatus,
-    onAddOrderChangeLog
+    onAddOrderChangeLog,
+    highlightedOrderId
 }: OrdersProps) {
     const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -175,6 +177,32 @@ export default function Orders({
 
         return matchesStatus && matchesPriority && matchesSearch && matchesDate;
     });
+
+    React.useEffect(() => {
+        if (highlightedOrderId) {
+            setSearchQuery('');
+            setStatusFilter('');
+            setPriorityFilter('');
+            setDateFilter('all');
+        }
+    }, [highlightedOrderId]);
+
+    React.useEffect(() => {
+        if (highlightedOrderId) {
+            const index = filteredOrders.findIndex(o => o.id === highlightedOrderId);
+            if (index !== -1) {
+                const targetPage = Math.floor(index / rowsPerPage) + 1;
+                setCurrentPage(targetPage);
+                
+                setTimeout(() => {
+                    const element = document.getElementById(`order-row-${highlightedOrderId}`);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            }
+        }
+    }, [highlightedOrderId, filteredOrders]);
 
     const totalPages = Math.ceil(filteredOrders.length / rowsPerPage) || 1;
     const startIndex = (currentPage - 1) * rowsPerPage;
@@ -400,8 +428,19 @@ export default function Orders({
                         ) : (
                             paginatedOrders.map(order => {
                                 const isChecked = selectedOrders.includes(order.id);
+                                const isHighlighted = highlightedOrderId && order.id === highlightedOrderId;
                                 return (
-                                    <tr key={order.id} className={`hover:bg-zinc-50/70 transition-colors ${isChecked ? 'bg-blue-50/20' : ''}`}>
+                                    <tr 
+                                        id={`order-row-${order.id}`}
+                                        key={order.id} 
+                                        className={`transition-all duration-500 hover:bg-zinc-50/70 ${
+                                            isHighlighted 
+                                                ? 'bg-amber-100 ring-2 ring-amber-400 font-bold' 
+                                                : isChecked 
+                                                    ? 'bg-blue-50/20' 
+                                                    : ''
+                                        }`}
+                                    >
                                         <td className="py-3 px-4 text-center">
                                             <button onClick={() => handleSelectRow(order.id)} className="p-1 text-zinc-500 bg-transparent border-none cursor-pointer">
                                                 {isChecked ? (

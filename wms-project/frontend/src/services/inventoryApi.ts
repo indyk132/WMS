@@ -133,3 +133,53 @@ export const adjustInventoryStock = async ({ productId, sku, delta, locationId }
 
     return payload;
 };
+
+export const createInventoryProduct = async (product: { sku: string; name: string; category: string; price: number; reorderThreshold: number; barcode?: string }) => {
+    const response = await fetch(`${API_BASE_URL}/api/products`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(product),
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        throw new Error(payload?.error || `Failed to create product: ${response.status}`);
+    }
+
+    return payload;
+};
+
+export const updateInventoryProduct = async (productId: any, product: Partial<Product>) => {
+    const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(product),
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        throw new Error(payload?.error || `Failed to update product: ${response.status}`);
+    }
+
+    return payload;
+};
+
+export const deleteInventoryProduct = async (productId: any) => {
+    const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
+        method: 'DELETE',
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        throw new Error(payload?.error || `Failed to delete product: ${response.status}`);
+    }
+
+    return payload;
+};
