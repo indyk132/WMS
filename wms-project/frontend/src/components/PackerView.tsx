@@ -5,6 +5,7 @@ import {
   User, Clock, RotateCcw, AlertCircle, Truck
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
+import { defaultImages } from '../data/warehouseData';
 
 interface PackerViewProps {
   orders: any[];
@@ -18,8 +19,8 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cartonSize, setCartonSize] = useState('Carton-M'); 
   const [weightKg, setWeightKg] = useState(3.45);
-  const [isWeightCalibrated, setIsWeightCalibrated] = useState(false);
-  const [isCartonScanned, setIsCartonScanned] = useState(false);
+  const [isWeightCalibrated, setIsWeightCalibrated] = useState(true);
+  const [isCartonScanned, setIsCartonScanned] = useState(true);
   const [kpiStats, setKpiStats] = useState({ packedToday: 18, avgTimeSec: 42 });
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [packedItems, setPackedItems] = useState<Record<string, { qty: number; finalized: boolean }>>({}); 
@@ -32,6 +33,21 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   const [skuModalInput, setSkuModalInput] = useState('');
   const [isCartonModalOpen, setIsCartonModalOpen] = useState(false);
   const [cartonModalInput, setCartonModalInput] = useState('');
+  const [shouldSimulateApiError, setShouldSimulateApiError] = useState(false);
+
+  // Product images state & fallbacks
+  const [productImages] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('wms-product-images');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getProductImage = (sku: string) => {
+    return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
+  };
 
   const showLocalToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setLocalToast({ msg, type });
@@ -86,14 +102,24 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
       })
     : false;
 
+  // Auto-dispatch when all items are packed
+  useEffect(() => {
+    if (selectedOrderId && selectedOrder && areAllItemsPacked && !processingOrderData) {
+      const timer = setTimeout(() => {
+        handleStartDispatchProcessing();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [areAllItemsPacked, selectedOrderId, selectedOrder, processingOrderData]);
+
   const [focusedSku, setFocusedSku] = useState<string | null>(null);
 
   const proceedWithPacking = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCartonSize('Carton-M');
     setWeightKg(parseFloat((2.5 + Math.random() * 8).toFixed(2))); 
-    setIsWeightCalibrated(false);
-    setIsCartonScanned(false);
+    setIsWeightCalibrated(true);
+    setIsCartonScanned(true);
     setSecondsElapsed(0);
     setPackedItems({}); 
     setFocusedSku(null); 
@@ -152,8 +178,10 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
           setFocusedSku(sku);
         }
       } else {
-        sounds.playError();
-        showLocalToast(`BŁĄD: Towar o SKU "${sku}" nie został jeszcze zeskanowany czytnikiem!`, 'error');
+        // Dla zwykłych pracowników kliknięcie wiersza otwiera modal ręcznego wpisu SKU z pre-definiowanym kodem towaru
+        sounds.playBeep();
+        setSkuModalInput(sku);
+        setIsSkuModalOpen(true);
       }
     } else {
       if (focusedSku === sku) {
@@ -328,6 +356,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     }
     setSelectedOrderId(null);
     setProcessingOrderData(null);
+    setShouldSimulateApiError(false);
     setKpiStats(prev => ({
       ...prev,
       packedToday: prev.packedToday + 1
@@ -348,8 +377,10 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
         onBack={() => {
           sounds.playBeep();
           setProcessingOrderData(null);
+          setShouldSimulateApiError(false);
         }}
         onComplete={handleCompleteDispatch}
+        forceError={shouldSimulateApiError}
       />
     );
   }
@@ -506,6 +537,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                           <th className="py-3.5 px-5">Zbieracz</th>
                           <th className="py-3.5 px-5">Godzina</th>
                           <th className="py-3.5 px-5">Klient</th>
+                          <th className="py-3.5 px-5">Zawartość</th>
                           <th className="py-3.5 px-5 text-right">Akcja</th>
                         </tr>
                       </thead>
@@ -541,8 +573,15 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                               </td>
 
                               {/* Klient */}
-                              <td className="py-3.5 px-5 font-medium text-zinc-650 truncate max-w-[200px]" title={order.customer || order.customerName}>
+                              <td className="py-3.5 px-5 font-medium text-zinc-650 truncate max-w-[150px]" title={order.customer || order.customerName}>
                                 {order.customer || order.customerName || 'Klient detaliczny'}
+                              </td>
+
+                              {/* Zawartość (Product names) */}
+                              <td className="py-3.5 px-5">
+                                <div className="text-[11px] text-zinc-500 font-medium max-w-[220px] truncate" title={(order.items || []).map((item: any) => `${item.product || item.name} (${item.quantity || item.qty || 0} szt.)`).join(', ')}>
+                                  {(order.items || []).map((item: any) => `${item.product || item.name} (${item.quantity || item.qty || 0})`).join(', ')}
+                                </div>
                               </td>
 
                               {/* Akcja button */}
@@ -605,17 +644,15 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                     <p className="text-[10px] text-zinc-500">Zeskanuj SKU towaru czytnikiem laserowym lub wpisz ręcznie.</p>
                   </div>
                 </div>
-                {isUserAdminOrManager && (
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button
                       onClick={handleGlobalScanPrompt}
                       className="flex-1 sm:flex-none h-10 px-4 bg-purple-50/50 border border-purple-200 hover:bg-purple-50 text-purple-700 text-xs font-bold uppercase rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all border-none"
                     >
                       <Barcode className="w-4 h-4" />
-                      Wpisz kod SKU (Test)
+                      Wpisz kod SKU ręcznie
                     </button>
                   </div>
-                )}
               </div>
 
               <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm animate-fadeIn">
@@ -629,6 +666,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-zinc-200 text-zinc-500 font-bold bg-zinc-50/50">
+                      <th className="px-4 py-2.5 text-center w-24">Zdjęcie</th>
                       <th className="px-4 py-2.5">SKU</th>
                       <th className="px-4 py-2.5">Nazwa towaru</th>
                       <th className="px-4 py-2.5 text-right">Ilość (szt.)</th>
@@ -655,11 +693,22 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                 : 'border-transparent hover:bg-zinc-50/50'
                           }`}
                         >
+                          {/* Zdjęcie na samej lewej stronie */}
+                          <td className="px-4 py-3 text-center select-none w-24">
+                            <div className="w-18 h-18 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 flex items-center justify-center mx-auto shadow-sm">
+                              {getProductImage(item.sku) ? (
+                                <img src={getProductImage(item.sku)} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Box className="w-8 h-8 text-zinc-350" />
+                              )}
+                            </div>
+                          </td>
+
                           <td className="px-4 py-3 font-bold text-[#0052CC] select-none">{item.sku}</td>
                           
                           <td className="px-4 py-3 font-sans font-semibold text-zinc-900 relative">
-                            <div className="flex flex-col gap-1">
-                              <span className={`transition-all ${isFocused ? 'text-purple-700 font-extrabold' : ''}`}>{item.product || item.name}</span>
+                            <div className="flex flex-col gap-1 text-left">
+                              <span className={`transition-all ${isFocused ? 'text-purple-750 font-extrabold' : ''}`}>{item.product || item.name}</span>
                               {isFocused && (
                                 <div 
                                   onClick={(e) => e.stopPropagation()} 
@@ -668,7 +717,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                   <button
                                     type="button"
                                     onClick={() => handleManualAdjustQty(item.sku, -1)}
-                                    className="w-8 h-8 rounded-full bg-red-50 border border-red-200 hover:bg-red-100 text-red-655 font-black flex items-center justify-center transition-all cursor-pointer text-lg active:scale-90"
+                                    className="w-8 h-8 rounded-full bg-red-50 border border-red-200 hover:bg-red-100 text-red-655 font-black flex items-center justify-center transition-all cursor-pointer text-lg active:scale-90 border-none"
                                     title="Zmniejsz o 1 szt."
                                   >
                                     -
@@ -682,7 +731,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                     <button
                                       type="button"
                                       onClick={() => handleManualAdjustQty(item.sku, 1)}
-                                      className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-250 hover:bg-emerald-100 text-emerald-700 font-black flex items-center justify-center transition-all cursor-pointer text-lg active:scale-90"
+                                      className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-250 hover:bg-emerald-100 text-emerald-700 font-black flex items-center justify-center transition-all cursor-pointer text-lg active:scale-90 border-none"
                                       title="Zwiększ o 1 szt."
                                     >
                                       +
@@ -787,79 +836,64 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
             </div>
 
             <div className="w-full lg:w-80 shrink-0 flex flex-col gap-6 animate-fadeIn">
-              <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 font-display">Krok 2: Odczyt wagi paczki</h4>
-                
-                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 flex flex-col items-center justify-center gap-1.5 shadow-inner">
-                  <span className="text-[9px] font-mono text-zinc-500 uppercase">Kalibracja Wagi Magazynowej</span>
-                  <div className="text-3xl font-black font-mono tracking-tight text-zinc-950 leading-none flex items-baseline gap-1 mt-1">
-                    {weightKg.toFixed(2)} <span className="text-sm font-semibold text-purple-650">kg</span>
-                  </div>
-                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase font-mono mt-1 ${
-                    isWeightCalibrated 
-                      ? 'bg-emerald-50 border border-emerald-250 text-emerald-700' 
-                      : 'bg-amber-50 border border-amber-250 text-amber-700 font-semibold'
-                  }`}>
-                    {isWeightCalibrated ? 'TARA / STABILNA' : 'NIEZATWIERDZONA'}
-                  </span>
-                </div>
-
-                {!isWeightCalibrated ? (
-                  <button
-                    onClick={handleReadScaleWeight}
-                    className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-display font-black text-xs uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 cursor-pointer shadow active:scale-[0.98] transition-all border-none"
-                  >
-                    <Scale className="w-4 h-4" />
-                    ZATWIERDŹ WAGĘ PACZKI
-                  </button>
-                ) : (
-                  <div className="h-11 bg-emerald-50 border border-emerald-250 rounded-lg flex items-center justify-center text-emerald-700 text-xs font-bold gap-1.5">
-                    <Check className="w-4 h-4" />
-                    Waga zatwierdzona pomyślnie
-                  </div>
-                )}
-              </div>
-
               <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm space-y-4 flex-grow flex flex-col justify-between">
                 <div className="space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-2 font-display">Krok 3: Weryfikacja wysyłkowa</h4>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 border-b border-zinc-200 pb-2 font-display">Podsumowanie Przesyłki</h4>
                   
-                  <div className="flex flex-col gap-3">
-                    {!isCartonScanned ? (
-                      <button
-                        onClick={handleScanCartonCode}
-                        className="w-full h-11 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-display font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all"
-                      >
-                        <Barcode className="w-4 h-4 text-purple-650" />
-                        SKANUJ KOD KARTONU
-                      </button>
-                    ) : (
-                      <div className="h-11 bg-emerald-50 border border-emerald-250 rounded-lg flex items-center justify-center text-emerald-700 text-xs font-bold gap-1.5 font-sans">
-                        <Check className="w-4 h-4" />
-                        Karton zweryfikowany (OK)
-                      </div>
-                    )}
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 shadow-inner">
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase">Waga paczki</span>
+                    <div className="text-3xl font-black font-mono tracking-tight text-zinc-950 leading-none flex items-baseline gap-1 mt-1">
+                      {weightKg.toFixed(2)} <span className="text-sm font-semibold text-purple-650">kg</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-500 font-medium">Typ opakowania:</span>
+                      <span className="font-bold text-zinc-800">
+                        {cartonSize === 'Carton-S' ? 'Koperta / Karton S' : cartonSize === 'Carton-L' ? 'Karton Duży L' : 'Karton Średni M'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-500 font-medium">Status pakowania:</span>
+                      <span className={`font-bold ${areAllItemsPacked ? 'text-emerald-600' : 'text-amber-600 animate-pulse'}`}>
+                        {areAllItemsPacked ? 'Wszystko spakowane ✓' : 'Weryfikacja w toku...'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-zinc-200 mt-4">
-                  {(() => {
-                    const isAllComplete = isWeightCalibrated && isCartonScanned && areAllItemsPacked;
-                    return (
-                      <button
-                        onClick={handleStartDispatchProcessing}
-                        disabled={!isAllComplete}
-                        className={`w-full h-13 rounded-xl font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all border-none ${
-                          isAllComplete 
-                            ? 'bg-[#0052CC] hover:bg-[#0041a3] text-white shadow-lg cursor-pointer active:scale-[0.98]' 
-                            : 'bg-zinc-100 text-zinc-405 cursor-not-allowed border border-zinc-200'
-                        }`}
+                  <button
+                    onClick={handleStartDispatchProcessing}
+                    disabled={!areAllItemsPacked}
+                    className={`w-full h-13 rounded-xl font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2.5 transition-all border-none ${
+                      areAllItemsPacked 
+                        ? 'bg-[#0052CC] hover:bg-[#0041a3] text-white shadow-lg cursor-pointer active:scale-[0.98]' 
+                        : 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                    }`}
+                  >
+                    <Printer className="w-4.5 h-4.5" />
+                    DRUKUJ ETYKIETĘ DPD & NADAJ
+                  </button>
+
+                  {isUserAdminOrManager && areAllItemsPacked && (
+                    <div className="mt-3.5 flex items-center justify-center gap-2 select-none border border-dashed border-purple-200 bg-purple-50/30 rounded-lg py-1.5 px-3">
+                      <input
+                        type="checkbox"
+                        id="simulate-api-error-chk"
+                        checked={shouldSimulateApiError}
+                        onChange={(e) => setShouldSimulateApiError(e.target.checked)}
+                        className="w-4 h-4 text-purple-650 border-zinc-350 rounded focus:ring-purple-550 cursor-pointer"
+                      />
+                      <label 
+                        htmlFor="simulate-api-error-chk" 
+                        className="text-[10px] font-bold text-purple-700 uppercase tracking-wide cursor-pointer hover:text-purple-900 font-sans"
                       >
-                        <Printer className="w-4.5 h-4.5" />
-                        DRUKUJ ETYKIETĘ DPD & NADAJ
-                      </button>
-                    );
-                  })()}
+                        🧪 Symuluj błąd API DPD (Test)
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1058,6 +1092,7 @@ interface ProcessingOrderScreenProps {
   kpiStats: any;
   onBack: () => void;
   onComplete: (data: any) => void;
+  forceError?: boolean;
 }
 
 export function ProcessingOrderScreen({ 
@@ -1070,7 +1105,8 @@ export function ProcessingOrderScreen({
   currentUser,
   kpiStats,
   onBack,
-  onComplete
+  onComplete,
+  forceError = false
 }: ProcessingOrderScreenProps) {
   const [processState, setProcessState] = useState<'processing' | 'error' | 'success'>('processing'); 
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -1125,13 +1161,23 @@ export function ProcessingOrderScreen({
         showToast("Zmieniono status zlecenia na 'Zatwierdzone'", "success");
 
         const t3 = setTimeout(() => {
-          setStepStates(prev => ({ 
-            ...prev, 
-            courierLabel: 'failed' 
-          }));
-          setProcessState('error');
-          sounds.playError();
-          showToast("Błąd API: Przekroczono limit czasu połączenia!", "error");
+          if (forceError) {
+            setStepStates(prev => ({ 
+              ...prev, 
+              courierLabel: 'failed' 
+            }));
+            setProcessState('error');
+            sounds.playError();
+            showToast("Błąd API: Przekroczono limit czasu połączenia!", "error");
+          } else {
+            setStepStates(prev => ({ 
+              ...prev, 
+              courierLabel: 'complete' 
+            }));
+            setProcessState('success');
+            sounds.playSuccess();
+            showToast("Pomyślnie wygenerowano list przewozowy DPD", "success");
+          }
         }, 1800);
 
         return () => clearTimeout(t3);
@@ -1141,7 +1187,7 @@ export function ProcessingOrderScreen({
     }, 1200);
 
     return () => clearTimeout(t1);
-  }, [processState]);
+  }, [processState, forceError]);
 
   const showToast = (msg: string, type = 'success') => {
     setToast({ msg, type });

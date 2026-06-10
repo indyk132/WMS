@@ -18,6 +18,7 @@ import {
   Edit2,
   Box
 } from 'lucide-react';
+import { defaultImages } from '../data/warehouseData';
 
 export interface OrderItem {
   lp: number;
@@ -75,6 +76,19 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
   const [copied, setCopied] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [noteText, setNoteText] = useState(order.internalNotes || '');
+
+  const [productImages] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('wms-product-images');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getImage = (sku: string) => {
+    return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
+  };
 
   // Custom modal inputs instead of prompts
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -346,7 +360,18 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                       <tr key={item.sku || idx} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 px-4 text-center font-mono text-slate-400">{item.lp || (idx + 1)}</td>
                         <td className="py-3 px-4 font-mono font-bold text-[#0052cc]">{item.sku}</td>
-                        <td className="py-3 px-4 text-slate-900 font-medium">{item.product || 'Artykuł WMS'}</td>
+                        <td className="py-3 px-4 text-slate-900 font-medium">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded overflow-hidden border border-slate-200 bg-slate-50 shrink-0 select-none flex items-center justify-center">
+                              {getImage(item.sku) ? (
+                                <img src={getImage(item.sku)} alt={item.product || 'Artykuł WMS'} className="w-full h-full object-cover" />
+                              ) : (
+                                <Box className="w-4 h-4 text-slate-400" />
+                              )}
+                            </div>
+                            <span>{item.product || 'Artykuł WMS'}</span>
+                          </div>
+                        </td>
                         <td className="py-3 px-4 font-mono text-slate-500">{item.zone || 'A1'}</td>
                         <td className="py-3 px-4 text-center font-mono font-bold text-[#0f172a]">{item.quantity} szt.</td>
                         <td className="py-3 px-4 text-right select-none">

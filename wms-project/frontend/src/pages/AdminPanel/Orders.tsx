@@ -79,6 +79,38 @@ const getStatusBadgeStyles = (status: string) => {
     }
 };
 
+const getPageNumbers = (currentPage: number, totalPages: number) => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) {
+            pages.push(i);
+        }
+    } else {
+        if (currentPage <= 4) {
+            for (let i = 1; i <= 5; i++) {
+                pages.push(i);
+            }
+            pages.push('...');
+            pages.push(totalPages);
+        } else if (currentPage >= totalPages - 3) {
+            pages.push(1);
+            pages.push('...');
+            for (let i = totalPages - 4; i <= totalPages; i++) {
+                pages.push(i);
+            }
+        } else {
+            pages.push(1);
+            pages.push('...');
+            pages.push(currentPage - 1);
+            pages.push(currentPage);
+            pages.push(currentPage + 1);
+            pages.push('...');
+            pages.push(totalPages);
+        }
+    }
+    return pages;
+};
+
 interface OrdersProps {
     orders: any[];
     products: Product[];
@@ -103,17 +135,16 @@ export default function Orders({
     const [statusFilter, setStatusFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [dateFilter, setDateFilter] = useState('week');
+    const [dateFilter, setDateFilter] = useState('all');
 
     const [clientName, setClientName] = useState('');
     const [clientDest, setClientDest] = useState('');
     const [selectedSku, setSelectedSku] = useState('');
     const [orderQty, setOrderQty] = useState(12);
     const [orderPriority, setOrderPriority] = useState('Normalny');
-
-    const rowsPerPage = 5;
 
     const handleSelectAll = () => {
         if (selectedOrders.length === orders.length) {
@@ -389,6 +420,14 @@ export default function Orders({
 
                     <div className="ml-auto flex items-center border border-zinc-305 rounded bg-white overflow-hidden h-8 text-xs font-semibold select-none">
                         <button
+                            onClick={() => setDateFilter('all')}
+                            className={`px-3 border-r border-zinc-200 transition-colors cursor-pointer ${
+                                dateFilter === 'all' ? 'bg-zinc-900 text-white font-bold' : 'hover:bg-zinc-50 text-zinc-700'
+                            }`}
+                        >
+                            Wszystkie
+                        </button>
+                        <button
                             onClick={() => setDateFilter(dateFilter === 'today' ? 'all' : 'today')}
                             className={`px-3 border-r border-zinc-200 transition-colors cursor-pointer ${
                                 dateFilter === 'today' ? 'bg-zinc-900 text-white font-bold' : 'hover:bg-zinc-50 text-zinc-700'
@@ -525,12 +564,31 @@ export default function Orders({
                     </table>
                 </div>
 
-                <div className="px-5 py-3 border-t border-[#e5e7eb] bg-zinc-50 flex items-center justify-between mt-auto">
-                    <span className="text-zinc-500 text-xs font-semibold">
-                        Wyświetlono {startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredOrders.length)} z {filteredOrders.length} zamówień
-                    </span>
+                <div className="px-5 py-3 border-t border-[#e5e7eb] bg-zinc-50 flex flex-col sm:flex-row gap-3 items-center justify-between mt-auto">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-5">
+                        <span className="text-zinc-500 text-xs font-semibold">
+                            Wyświetlono {filteredOrders.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredOrders.length)} z {filteredOrders.length} zamówień
+                        </span>
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-semibold select-none">
+                            <span>Wierszy na stronie:</span>
+                            <select
+                                value={rowsPerPage}
+                                onChange={(e) => {
+                                    setRowsPerPage(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="h-7 px-1.5 rounded border border-zinc-300 bg-white text-xs outline-none cursor-pointer text-zinc-700 focus:border-blue-500"
+                            >
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+                    </div>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 select-none">
                         <button
                             onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
                             disabled={currentPage === 1}
@@ -539,16 +597,22 @@ export default function Orders({
                             <ChevronLeft className="w-4 h-4" />
                         </button>
 
-                        {[...Array(totalPages)].map((_, idx) => {
-                            const p = idx + 1;
+                        {getPageNumbers(currentPage, totalPages).map((p, idx) => {
+                            if (p === '...') {
+                                return (
+                                    <span key={`dots-${idx}`} className="w-7.5 h-7.5 flex items-center justify-center text-zinc-400 text-xs font-semibold select-none">
+                                        ...
+                                    </span>
+                                );
+                            }
                             return (
                                 <button
                                     key={p}
-                                    onClick={() => setCurrentPage(p)}
+                                    onClick={() => setCurrentPage(Number(p))}
                                     className={`w-7.5 h-7.5 rounded text-xs font-bold leading-none ${
                                         currentPage === p
                                             ? 'bg-blue-600 text-white shadow-sm font-black'
-                                            : 'border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-750 cursor-pointer'
+                                            : 'border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-755 cursor-pointer'
                                     }`}
                                 >
                                     {p}

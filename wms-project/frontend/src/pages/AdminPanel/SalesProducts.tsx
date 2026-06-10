@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Filter, ChevronLeft, ChevronRight, Trash2, Edit, X, Scale, CreditCard, Layers } from 'lucide-react';
+import { Search, Plus, Filter, ChevronLeft, ChevronRight, Trash2, Edit, X, Scale, CreditCard, Layers, Package } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
+import { defaultImages } from '../../data/warehouseData';
 
 interface SalesProductsProps {
     products: Product[];
@@ -8,6 +9,38 @@ interface SalesProductsProps {
     onUpdateProduct: (productId: any, updatedFields: any) => Promise<void>;
     onDeleteProduct: (productId: any) => Promise<void>;
 }
+
+const getPageNumbers = (currentPage: number, totalPages: number) => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) {
+            pages.push(i);
+        }
+    } else {
+        if (currentPage <= 4) {
+            for (let i = 1; i <= 5; i++) {
+                pages.push(i);
+            }
+            pages.push('...');
+            pages.push(totalPages);
+        } else if (currentPage >= totalPages - 3) {
+            pages.push(1);
+            pages.push('...');
+            for (let i = totalPages - 4; i <= totalPages; i++) {
+                pages.push(i);
+            }
+        } else {
+            pages.push(1);
+            pages.push('...');
+            pages.push(currentPage - 1);
+            pages.push(currentPage);
+            pages.push(currentPage + 1);
+            pages.push('...');
+            pages.push(totalPages);
+        }
+    }
+    return pages;
+};
 
 export default function SalesProducts({
     products,
@@ -104,8 +137,9 @@ export default function SalesProducts({
         localStorage.setItem('wms-product-dimensions', JSON.stringify(updated));
     };
 
+
     const getImage = (sku: string) => {
-        return productImages[sku] || '';
+        return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
     };
 
     const saveImage = (sku: string, url: string) => {
@@ -149,7 +183,7 @@ export default function SalesProducts({
     });
 
     // Pagination
-    const rowsPerPage = 5;
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const totalPages = Math.ceil(filteredProducts.length / rowsPerPage) || 1;
     const startIndex = (currentPage - 1) * rowsPerPage;
     const paginatedProducts = filteredProducts.slice(startIndex, startIndex + rowsPerPage);
@@ -678,12 +712,21 @@ export default function SalesProducts({
                                                         </button>
                                                     </td>
                                                     <td className="py-3.5 px-5 font-normal text-zinc-705">
-                                                        <button 
-                                                            onClick={() => setSelectedProductDetailId(p.sku)}
-                                                            className="hover:underline cursor-pointer border-none bg-transparent text-left outline-none text-zinc-700 font-bold"
-                                                        >
-                                                            {p.name}
-                                                        </button>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50/50 shrink-0 select-none flex items-center justify-center">
+                                                                {getImage(p.sku) ? (
+                                                                    <img src={getImage(p.sku)} alt={p.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <Package className="w-5 h-5 text-zinc-400" />
+                                                                )}
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => setSelectedProductDetailId(p.sku)}
+                                                                className="hover:underline cursor-pointer border-none bg-transparent text-left outline-none text-zinc-700 font-bold"
+                                                            >
+                                                                {p.name}
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                     <td className="py-3.5 px-5 text-zinc-500">{p.category === 'Zywnosc' ? 'Żywność' : p.category}</td>
                                                     <td className="py-3.5 px-5 text-right font-mono font-bold text-zinc-850">
@@ -724,10 +767,29 @@ export default function SalesProducts({
                         </div>
 
                         {/* Table Footer / Pagination */}
-                        <div className="px-5 py-3 border-t border-[#e5e7eb] bg-zinc-50 flex items-center justify-between">
-                            <span className="text-zinc-500 text-xs font-semibold">
-                                Pokazano {filteredProducts.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredProducts.length)} z {filteredProducts.length} produktów
-                            </span>
+                        <div className="px-5 py-3 border-t border-[#e5e7eb] bg-zinc-50 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-5">
+                                <span className="text-zinc-500 text-xs font-semibold">
+                                    Pokazano {filteredProducts.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + rowsPerPage, filteredProducts.length)} z {filteredProducts.length} produktów
+                                </span>
+                                <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-semibold select-none">
+                                    <span>Wierszy na stronie:</span>
+                                    <select
+                                        value={rowsPerPage}
+                                        onChange={(e) => {
+                                            setRowsPerPage(Number(e.target.value));
+                                            setCurrentPage(1);
+                                        }}
+                                        className="h-7 px-1.5 rounded border border-zinc-300 bg-white text-xs outline-none cursor-pointer text-zinc-700 focus:border-[#2170e4]"
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                    </select>
+                                </div>
+                            </div>
 
                             <div className="flex items-center gap-1.5 select-none">
                                 <button
@@ -738,12 +800,18 @@ export default function SalesProducts({
                                     <ChevronLeft className="w-4 h-4" />
                                 </button>
 
-                                {[...Array(totalPages)].map((_, idx) => {
-                                    const p = idx + 1;
+                                {getPageNumbers(currentPage, totalPages).map((p, idx) => {
+                                    if (p === '...') {
+                                        return (
+                                            <span key={`dots-${idx}`} className="w-7.5 h-7.5 flex items-center justify-center text-zinc-400 text-xs font-semibold select-none">
+                                                ...
+                                            </span>
+                                        );
+                                    }
                                     return (
                                         <button
                                             key={p}
-                                            onClick={() => setCurrentPage(p)}
+                                            onClick={() => setCurrentPage(Number(p))}
                                             className={`w-7.5 h-7.5 rounded text-xs font-bold leading-none ${
                                                 currentPage === p
                                                     ? 'bg-[#2170e4] text-white shadow-sm font-black'

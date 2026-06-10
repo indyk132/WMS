@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Minus, Plus, Check } from 'lucide-react';
+import { Search, RefreshCw, Minus, Plus, Check, Package } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
+import { defaultImages } from '../../data/warehouseData';
 
 const polishStatusMap: Record<string, string> = {
     'In Stock': 'Dostępny',
@@ -40,6 +41,19 @@ export default function Products({ products, onUpdateStock, onRestockItem, highl
     const [draftStocks, setDraftStocks] = useState<Record<string, number>>({});
     const [pendingSku, setPendingSku] = useState('');
     const [stockError, setStockError] = useState('');
+
+    const [productImages] = useState<Record<string, string>>(() => {
+        try {
+            const stored = localStorage.getItem('wms-product-images');
+            return stored ? JSON.parse(stored) : {};
+        } catch {
+            return {};
+        }
+    });
+
+    const getImage = (sku: string) => {
+        return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
+    };
 
     React.useEffect(() => {
         if (highlightedSku) {
@@ -208,7 +222,18 @@ export default function Products({ products, onUpdateStock, onRestockItem, highl
                                         }`}
                                     >
                                         <td className="py-3 px-4 font-mono font-bold text-[#0052CC]">{p.sku}</td>
-                                        <td className="py-3 px-4 font-normal text-zinc-700">{p.name}</td>
+                                        <td className="py-3 px-4 font-normal text-zinc-700">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 shrink-0 select-none flex items-center justify-center">
+                                                    {getImage(p.sku) ? (
+                                                        <img src={getImage(p.sku)} alt={p.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <Package className="w-5 h-5 text-zinc-400" />
+                                                    )}
+                                                </div>
+                                                <span className="font-bold text-zinc-800">{p.name}</span>
+                                            </div>
+                                        </td>
                                         <td className="py-3 px-4 text-zinc-500">{getCategoryLabel(p.category)}</td>
                                         <td className="py-3 px-4 font-mono font-bold text-zinc-650">{p.locationCode || `Korytarz ${p.zone}`}</td>
                                         <td className="py-3 px-4 text-right font-mono text-zinc-500">{p.reorderThreshold}</td>

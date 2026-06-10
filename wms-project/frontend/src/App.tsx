@@ -123,6 +123,7 @@ const generateMockOrders = () => {
     
     const cust = customers[Math.floor(rand() * customers.length)];
     const dest = destinations[Math.floor(rand() * destinations.length)];
+    const prio = rand() < 0.2 ? 'Wysoki' : 'Normalny';
     const wh = rand() < 0.6 ? 'HUB-PL-01' : 'HUB-PL-02';
     
     let status = 'Oczekujące';
@@ -267,16 +268,32 @@ export default function App() {
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
     const [usersSync, setUsersSync] = useState({ isLoading: false, error: '' });
 
-    const [products, setProducts] = useState<Product[]>([
+    const defaultProducts: Product[] = [
         { productId: 1, sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, locationCode: 'C-03-01-01', zoneGroup: 'General', primaryLocationId: 1, locations: ['C-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 1, locationId: 1, locationCode: 'C-03-01-01', zoneGroup: 'General', quantity: 120 }] },
         { productId: 2, sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, locationCode: 'A-01-01-02', zoneGroup: 'General', primaryLocationId: 2, locations: ['A-01-01-02'], zoneGroups: ['General'], stockEntries: [{ stockId: 2, locationId: 2, locationCode: 'A-01-01-02', zoneGroup: 'General', quantity: 15 }] },
         { productId: 3, sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99, locationCode: 'A-02-01-01', zoneGroup: 'General', primaryLocationId: 3, locations: [], zoneGroups: ['General'], stockEntries: [] },
         { productId: 4, sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Artykuły chemiczne', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99, locationCode: 'C-02-03-01', zoneGroup: 'General', primaryLocationId: 4, locations: ['C-02-03-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 4, locationId: 4, locationCode: 'C-02-03-01', zoneGroup: 'General', quantity: 8 }] },
         { productId: 5, sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99, locationCode: 'A-03-01-01', zoneGroup: 'General', primaryLocationId: 5, locations: ['A-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 5, locationId: 5, locationCode: 'A-03-01-01', zoneGroup: 'General', quantity: 245 }] },
         { productId: 6, sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, locationCode: 'B-02-01-03', zoneGroup: 'General', primaryLocationId: 6, locations: ['B-02-01-03'], zoneGroups: ['General'], stockEntries: [{ stockId: 6, locationId: 6, locationCode: 'B-02-01-03', zoneGroup: 'General', quantity: 85 }] }
-    ]);
+    ];
+
+    const [products, setProducts] = useState<Product[]>(() => {
+        try {
+            const stored = window.localStorage.getItem('wms-products');
+            if (stored) return JSON.parse(stored);
+        } catch (e) {
+            console.error("Failed to parse stored products:", e);
+        }
+        return defaultProducts;
+    });
 
     const [orders, setOrders] = useState<any[]>(() => {
+        try {
+            const stored = window.localStorage.getItem('wms-orders');
+            if (stored) return JSON.parse(stored);
+        } catch (e) {
+            console.error("Failed to parse stored orders:", e);
+        }
         return generateMockOrders();
     });
 
@@ -368,6 +385,41 @@ export default function App() {
     useEffect(() => {
         loadUsers();
     }, []);
+
+    useEffect(() => {
+        window.localStorage.setItem('wms-products', JSON.stringify(products));
+    }, [products]);
+
+    useEffect(() => {
+        window.localStorage.setItem('wms-orders', JSON.stringify(orders));
+    }, [orders]);
+
+    useEffect(() => {
+        const handleStorage = (e: StorageEvent) => {
+            if (e.key === 'wms-orders' && e.newValue) {
+                try {
+                    const parsed = JSON.parse(e.newValue);
+                    if (JSON.stringify(parsed) !== JSON.stringify(orders)) {
+                        setOrders(parsed);
+                    }
+                } catch (err) {
+                    console.error("Sync error wms-orders:", err);
+                }
+            }
+            if (e.key === 'wms-products' && e.newValue) {
+                try {
+                    const parsed = JSON.parse(e.newValue);
+                    if (JSON.stringify(parsed) !== JSON.stringify(products)) {
+                        setProducts(parsed);
+                    }
+                } catch (err) {
+                    console.error("Sync error wms-products:", err);
+                }
+            }
+        };
+        window.addEventListener('storage', handleStorage);
+        return () => window.removeEventListener('storage', handleStorage);
+    }, [orders, products]);
 
     useEffect(() => {
         if (currentUser) {

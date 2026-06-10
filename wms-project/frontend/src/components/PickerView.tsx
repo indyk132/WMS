@@ -4,6 +4,7 @@ import {
   Check, Timer, Target, AlertTriangle, XCircle, Volume2, ShieldAlert
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
+import { defaultImages } from '../data/warehouseData';
 
 interface PickerViewProps {
   orders: any[];
@@ -29,6 +30,20 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const binInputRef = useRef<HTMLInputElement>(null);
+
+  // Product images state & fallbacks
+  const [productImages] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('wms-product-images');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getProductImage = (sku: string) => {
+    return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
+  };
 
   useEffect(() => {
     let interval: any = null;
@@ -303,6 +318,10 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
                         <p className="text-xs text-zinc-650 leading-normal">
                           Kontrahent: <strong className="text-zinc-900">{order.customer || order.customerName}</strong> • Pozycji łącznie: <strong className="text-[#0052CC] font-extrabold">{itemsCount} szt.</strong>
                         </p>
+                        <div className="text-xs text-zinc-500 mt-2 font-medium max-w-xl truncate" title={(order.items || []).map((item: any) => `${item.product || item.name} (${item.quantity || item.qty || 0} szt.)`).join(', ')}>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mr-1.5">Zawartość:</span>
+                          {(order.items || []).map((item: any) => `${item.product || item.name} (${item.quantity || item.qty || 0})`).join(', ')}
+                        </div>
                       </div>
 
                       <button
@@ -391,12 +410,20 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
                   return (
                     <div 
                       key={item.sku || idx}
-                      className={`border rounded-2xl p-4.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all ${
+                      className={`border rounded-2xl p-4.5 flex flex-col sm:flex-row items-start sm:items-center gap-5 transition-all ${
                         isDone 
                           ? 'bg-emerald-50/40 border-emerald-250 text-zinc-500 shadow-inner' 
                           : 'bg-white border-zinc-200 text-zinc-800 shadow-sm'
                       }`}
                     >
+                      <div className="w-16 h-16 rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50 shrink-0 select-none flex items-center justify-center">
+                        {getProductImage(item.sku) ? (
+                          <img src={getProductImage(item.sku)} alt={item.product || item.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Barcode className="w-6 h-6 text-zinc-350" />
+                        )}
+                      </div>
+
                       <div className="space-y-2.5 flex-grow w-full">
                         <div className="flex justify-between items-start gap-4 w-full">
                           <div className="space-y-1 text-left">

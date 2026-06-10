@@ -5,6 +5,7 @@ import {
   Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
+import { defaultImages } from '../../data/warehouseData';
 
 interface DashboardProps {
     products: Product[];
@@ -20,6 +21,18 @@ export default function Dashboard({
     allocationsLog = []
 }: DashboardProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [productImages] = useState<Record<string, string>>(() => {
+        try {
+            const stored = localStorage.getItem('wms-product-images');
+            return stored ? JSON.parse(stored) : {};
+        } catch {
+            return {};
+        }
+    });
+
+    const getImage = (sku: string) => {
+        return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
+    };
     const [formSku, setFormSku] = useState('');
     const [formZone, setFormZone] = useState('A1');
     const [formQty, setFormQty] = useState(12);
@@ -366,9 +379,18 @@ export default function Dashboard({
                                 }
                                 return criticalProducts.map(prod => (
                                     <div key={prod.sku} className="p-3 bg-slate-50 hover:bg-slate-100/80 rounded-lg border border-[#e2e8f0] flex justify-between items-center gap-3 transition-colors">
-                                        <div className="min-w-0">
-                                            <p className="font-bold text-slate-900 text-xs truncate">{prod.name}</p>
-                                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">{prod.sku} • Lok: {prod.locationCode || `Zn: ${prod.zone}`}</p>
+                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                            <div className="w-8 h-8 rounded overflow-hidden border border-slate-200 bg-white shrink-0 select-none flex items-center justify-center">
+                                                {getImage(prod.sku) ? (
+                                                    <img src={getImage(prod.sku)} alt={prod.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <Package className="w-4 h-4 text-slate-400" />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-bold text-slate-900 text-xs truncate">{prod.name}</p>
+                                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">{prod.sku} • Lok: {prod.locationCode || `Zn: ${prod.zone}`}</p>
+                                            </div>
                                         </div>
                                         <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono shrink-0 border ${
                                             prod.stock === 0
