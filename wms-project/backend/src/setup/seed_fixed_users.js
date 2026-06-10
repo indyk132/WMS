@@ -43,6 +43,36 @@ const DEMO_USERS = [
         status: 'Active',
         password: 'packer',
     },
+    {
+        employeeId: 'EMP-2039',
+        firstName: 'Zofia',
+        lastName: 'Bielska',
+        email: 'sales@logistics-os.com',
+        role: 'Sales Manager',
+        zoneAssignment: 'Office / Sales',
+        status: 'Active',
+        password: 'sales',
+    },
+    {
+        employeeId: 'EMP-3048',
+        firstName: 'Maciej',
+        lastName: 'Kaczmarek',
+        email: 'planner@logistics-os.com',
+        role: 'Logistics Planner',
+        zoneAssignment: 'Global Access',
+        status: 'Active',
+        password: 'planner',
+    },
+    {
+        employeeId: 'EMP-4059',
+        firstName: 'Hanna',
+        lastName: 'Wiśniewska',
+        email: 'auditor@logistics-os.com',
+        role: 'Inventory Auditor',
+        zoneAssignment: 'Aisle 1-12 & B1-B7',
+        status: 'Active',
+        password: 'auditor',
+    },
 ];
 
 async function run() {

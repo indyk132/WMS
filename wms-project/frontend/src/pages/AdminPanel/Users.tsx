@@ -26,7 +26,10 @@ export default function UsersPermissions({
         'Packer': 'Pakowacz (Packer)',
         'Warehouse Manager': 'Kierownik magazynu',
         'Super Admin': 'Super Administrator',
-        'Admin': 'Administrator'
+        'Admin': 'Administrator',
+        'Sales Manager': 'Kierownik sprzedaży',
+        'Logistics Planner': 'Planista logistyki',
+        'Inventory Auditor': 'Inwentaryzator'
     };
     const getPolishRole = (role: string) => {
         return polishRoleMap[role] || role;
@@ -179,6 +182,9 @@ export default function UsersPermissions({
                         <option value="All">Wszystkie role</option>
                         <option value="Admin">Administrator</option>
                         <option value="Warehouse Manager">Kierownik magazynu</option>
+                        <option value="Sales Manager">Kierownik sprzedaży</option>
+                        <option value="Logistics Planner">Planista logistyki</option>
+                        <option value="Inventory Auditor">Inwentaryzator</option>
                         <option value="Picker">Kompletujący (Picker)</option>
                         <option value="Packer">Pakowacz (Packer)</option>
                     </select>
@@ -374,6 +380,9 @@ export default function UsersPermissions({
                                         <option value="Packer">Pakowacz (Packer)</option>
                                         <option value="Warehouse Manager">Kierownik magazynu</option>
                                         <option value="Admin">Administrator</option>
+                                        <option value="Sales Manager">Kierownik sprzedaży</option>
+                                        <option value="Logistics Planner">Planista logistyki</option>
+                                        <option value="Inventory Auditor">Inwentaryzator</option>
                                     </select>
                                 </div>
 

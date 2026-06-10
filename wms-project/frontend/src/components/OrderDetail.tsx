@@ -15,7 +15,8 @@ import {
   ScrollText,
   AlertTriangle,
   Check,
-  Edit2
+  Edit2,
+  Box
 } from 'lucide-react';
 
 export interface OrderItem {
@@ -133,18 +134,21 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
 
   const getStatusColorDot = (status: string) => {
     switch (status) {
-      case 'W realizacji':
-        return 'bg-blue-600';
+      case 'Do kompletacji':
+        return 'bg-amber-500';
+      case 'W kompletacji':
+        return 'bg-purple-600';
+      case 'Oczekuje na pakowanie':
+        return 'bg-teal-600';
+      case 'Spakowane':
+        return 'bg-indigo-600';
       case 'Wysłane':
         return 'bg-emerald-600';
-      case 'Oczekujące':
-        return 'bg-amber-500';
       case 'Dostarczone':
         return 'bg-emerald-700';
-      case 'Anulowane':
-        return 'bg-red-600';
+      case 'Oczekujące':
       default:
-        return 'bg-indigo-600';
+        return 'bg-slate-500';
     }
   };
 
@@ -210,11 +214,13 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                 className="appearance-none bg-white border border-slate-350 rounded-lg pl-3 pr-8 py-1 font-bold text-xs text-slate-800 focus:ring-2 focus:ring-[#2563eb]/20 outline-none cursor-pointer h-8"
               >
                 <option value="" disabled>Zmień status</option>
-                <option value="Nowe">Nowe</option>
-                <option value="W realizacji">W realizacji</option>
+                <option value="Oczekujące">Oczekujące</option>
+                <option value="Do kompletacji">Do kompletacji</option>
+                <option value="W kompletacji">W kompletacji</option>
+                <option value="Oczekuje na pakowanie">Oczekuje na pakowanie</option>
+                <option value="Spakowane">Spakowane</option>
                 <option value="Wysłane">Wysłane</option>
                 <option value="Dostarczone">Dostarczone</option>
-                <option value="Anulowane">Anulowane</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-slate-450">
                 <span className="text-[10px]">&#9662;</span>
@@ -297,6 +303,17 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                     <p className="text-xs font-semibold text-teal-650 font-mono mt-0.5">{order.estimatedDelivery}</p>
                   </div>
                 </div>
+                {order.binId && (
+                  <div className="pt-3 border-t border-slate-100 mt-3 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Przypisany pojemnik</span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50/50 text-[#0052cc] font-mono text-[11px] font-black tracking-wide select-none">
+                        <Box className="w-3.5 h-3.5 text-blue-500" />
+                        {order.binId}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -23,7 +23,12 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [simulatorBarcodeInput, setSimulatorBarcodeInput] = useState('');
 
+  // Bin modal states
+  const [isBinModalOpen, setIsBinModalOpen] = useState(false);
+  const [selectedBinId, setSelectedBinId] = useState('');
+
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const binInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let interval: any = null;
@@ -37,7 +42,15 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
     return () => clearInterval(interval);
   }, [selectedOrderId]);
 
-  const activeOrders = orders.filter(o => o.status === 'W realizacji' || o.status === 'Oczekujące');
+  useEffect(() => {
+    if (isBinModalOpen) {
+      setTimeout(() => {
+        binInputRef.current?.focus();
+      }, 150);
+    }
+  }, [isBinModalOpen]);
+
+  const activeOrders = orders.filter(o => o.status === 'Do kompletacji' || o.status === 'W kompletacji');
   const selectedOrder = orders.find(o => o.id === selectedOrderId);
 
   // Trigger non-blocking audio-visual alerts
@@ -63,6 +76,10 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
     setSecondsElapsed(0);
     showFeedback('success', `Inicjalizacja ścieżki zbiórki dla zamówienia ${orderId}.`);
     
+    if (onUpdateOrder) {
+      onUpdateOrder(orderId, { status: 'W kompletacji' });
+    }
+
     // Auto focus scan input
     setTimeout(() => {
       barcodeInputRef.current?.focus();
@@ -153,19 +170,26 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
     return () => window.removeEventListener("keypress", handleKeyPress);
   }, [selectedOrderId, selectedOrder, pickedItems]);
 
-  const handleCompleteOrderPick = () => {
+  const handleCompleteOrderPick = (binName: string) => {
     sounds.playSuccess();
+    const cleanBin = binName.toUpperCase().trim() || 'BIN-000';
+    const currentTime = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
     
     if (onUpdateOrder && selectedOrderId) {
       onUpdateOrder(selectedOrderId, {
-        status: 'Wysłane',
-        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PICKER]: Kompletacja zakończona przez ${workerName}. Czas: ${Math.floor(secondsElapsed / 60)}m ${secondsElapsed % 60}s.`,
+        status: 'Oczekuje na pakowanie',
+        binId: cleanBin,
+        pickedBy: workerName,
+        pickCompletedTime: currentTime,
+        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PICKER]: Kompletacja zakończona przez ${workerName}. Pojemnik: ${cleanBin}. Czas: ${Math.floor(secondsElapsed / 60)}m ${secondsElapsed % 60}s.`,
         internalNotesActor: workerName
       });
     }
 
-    showFeedback('success', `Zlecenie ${selectedOrderId} pomyślnie zebrane. Przekazano na taśmociąg pakowania.`);
+    showFeedback('success', `Zlecenie ${selectedOrderId} pomyślnie zebrane. Pojemnik: ${cleanBin}.`);
     setSelectedOrderId(null);
+    setIsBinModalOpen(false);
+    setSelectedBinId('');
   };
 
   const handleSimulatorSubmit = (e: React.FormEvent) => {
@@ -471,7 +495,11 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
 
                         <div className="pt-4">
                           <button
-                            onClick={handleCompleteOrderPick}
+                            onClick={() => {
+                              sounds.playBeep();
+                              setSelectedBinId('');
+                              setIsBinModalOpen(true);
+                            }}
                             disabled={!allDone}
                             className={`w-full h-12 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all border-none ${
                               allDone 
@@ -545,6 +573,97 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Zakończ kompletację / Wybierz pojemnik */}
+      {isBinModalOpen && (
+        <div id="assign-bin-modal" className="fixed inset-0 bg-[#0b1329]/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-250 rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-150 text-left font-sans">
+            <div className="flex items-center gap-3 text-zinc-950 border-b border-zinc-150 pb-4 mb-4 select-none">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                <Target className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-black text-sm text-zinc-950 uppercase tracking-wide">Zakończ kompletację</h4>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase mt-0.5 tracking-wider">Krok 2/2: Przypisanie Pojemnika</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <p className="text-zinc-650 leading-relaxed font-semibold">
+                Przypisz skompletowane zamówienie <strong className="text-blue-600 font-mono font-black">{selectedOrderId}</strong> do pojemnika transportowego (np. kuwety lub wózka typu BIN).
+              </p>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Wybierz z sugerowanych wolnych pojemników</label>
+                <div className="flex flex-wrap gap-2 mb-4 select-none">
+                  {['BIN-008', 'BIN-015', 'BIN-018', 'BIN-024', 'BIN-035', 'BIN-042'].map(bin => (
+                    <button
+                      key={bin}
+                      type="button"
+                      onClick={() => {
+                        sounds.playBeep();
+                        setSelectedBinId(bin);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg border font-mono font-bold text-xs cursor-pointer transition-all hover:bg-blue-50/50 ${
+                        selectedBinId === bin
+                          ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-sm'
+                          : 'bg-zinc-50 border-zinc-200 text-zinc-650'
+                      }`}
+                    >
+                      {bin}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Wpisz lub zeskanuj kod pojemnika</label>
+                <div className="relative">
+                  <input
+                    ref={binInputRef}
+                    type="text"
+                    required
+                    placeholder="np. BIN-024"
+                    value={selectedBinId}
+                    onChange={(e) => setSelectedBinId(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-zinc-300 rounded-xl text-zinc-900 outline-none focus:ring-2 focus:ring-[#0052CC] font-mono text-sm uppercase shadow-inner"
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
+                    <Barcode className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 select-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sounds.playBeep();
+                    setIsBinModalOpen(false);
+                    setSelectedBinId('');
+                  }}
+                  className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-750 font-bold rounded-lg text-xs cursor-pointer bg-white"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCompleteOrderPick(selectedBinId)}
+                  disabled={!selectedBinId.trim() || selectedBinId.trim().length < 3}
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all border-none flex items-center gap-1.5 ${
+                    selectedBinId.trim() && selectedBinId.trim().length >= 3
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md cursor-pointer active:scale-[0.97]'
+                      : 'bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Zakończ kompletację
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

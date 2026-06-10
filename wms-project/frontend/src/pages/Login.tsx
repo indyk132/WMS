@@ -39,6 +39,24 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setError('');
     };
 
+    const fillQuickSales = () => {
+        setEmail('sales@logistics-os.com');
+        setPassword('sales');
+        setError('');
+    };
+
+    const fillQuickPlanner = () => {
+        setEmail('planner@logistics-os.com');
+        setPassword('planner');
+        setError('');
+    };
+
+    const fillQuickAuditor = () => {
+        setEmail('auditor@logistics-os.com');
+        setPassword('auditor');
+        setError('');
+    };
+
     return (
         <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden animate-fadeIn">
             <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-blue-500/[0.04] blur-3xl pointer-events-none" />
@@ -117,7 +135,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         <h3 className="text-zinc-500 text-xs font-bold text-center mb-3 tracking-wide uppercase">
                             Konta demonstracyjne
                         </h3>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             <button
                                 type="button"
                                 onClick={fillQuickAdmin}
@@ -143,6 +161,48 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                                 </div>
                                 <div className="text-[10px] text-zinc-500 mt-1">
                                     Hasło: <span className="font-mono font-semibold">manager</span>
+                                </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={fillQuickSales}
+                                className="p-2.5 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 rounded text-left transition-colors cursor-pointer"
+                            >
+                                <div className="font-bold text-zinc-850 text-[11px] flex items-center gap-1">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                    Handlowiec
+                                </div>
+                                <div className="text-[10px] text-zinc-500 mt-1">
+                                    Hasło: <span className="font-mono font-semibold">sales</span>
+                                </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={fillQuickPlanner}
+                                className="p-2.5 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 rounded text-left transition-colors cursor-pointer"
+                            >
+                                <div className="font-bold text-zinc-850 text-[11px] flex items-center gap-1">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                                    Planista
+                                </div>
+                                <div className="text-[10px] text-zinc-500 mt-1">
+                                    Hasło: <span className="font-mono font-semibold">planner</span>
+                                </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={fillQuickAuditor}
+                                className="p-2.5 border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 rounded text-left transition-colors cursor-pointer"
+                            >
+                                <div className="font-bold text-zinc-850 text-[11px] flex items-center gap-1">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                                    Audytor
+                                </div>
+                                <div className="text-[10px] text-zinc-500 mt-1">
+                                    Hasło: <span className="font-mono font-semibold">auditor</span>
                                 </div>
                             </button>
                         </div>

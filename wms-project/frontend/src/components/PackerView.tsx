@@ -24,6 +24,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [packedItems, setPackedItems] = useState<Record<string, { qty: number; finalized: boolean }>>({}); 
   const [processingOrderData, setProcessingOrderData] = useState<any | null>(null);
+  const [packedPromptOrder, setPackedPromptOrder] = useState<any | null>(null);
 
   // Replacement for blocking alerts & prompts
   const [localToast, setLocalToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -75,7 +76,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     return () => clearInterval(interval);
   }, [selectedOrderId]);
 
-  const activeOrders = orders.filter(o => o.status === 'Wysłane' || o.status === 'W realizacji');
+  const activeOrders = orders.filter(o => o.status === 'Oczekuje na pakowanie' || o.status === 'Spakowane');
   const selectedOrder = orders.find(o => o.id === selectedOrderId);
 
   const areAllItemsPacked = selectedOrder 
@@ -87,8 +88,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
   const [focusedSku, setFocusedSku] = useState<string | null>(null);
 
-  const handleStartPacking = (orderId: string) => {
-    sounds.playSuccess();
+  const proceedWithPacking = (orderId: string) => {
     setSelectedOrderId(orderId);
     setCartonSize('Carton-M');
     setWeightKg(parseFloat((2.5 + Math.random() * 8).toFixed(2))); 
@@ -97,6 +97,34 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     setSecondsElapsed(0);
     setPackedItems({}); 
     setFocusedSku(null); 
+  };
+
+  const handleStartPacking = (orderId: string) => {
+    sounds.playSuccess();
+    const order = orders.find(o => o.id === orderId);
+    if (order && order.isPacked) {
+      setPackedPromptOrder(order);
+    } else {
+      proceedWithPacking(orderId);
+    }
+  };
+
+  const handleRetryLabelGeneration = (order: any) => {
+    sounds.playSuccess();
+    setSelectedOrderId(order.id);
+    setCartonSize('Carton-M');
+    const weight = parseFloat((2.5 + Math.random() * 8).toFixed(2));
+    setWeightKg(weight);
+    setIsWeightCalibrated(true);
+    setIsCartonScanned(true);
+    setProcessingOrderData({
+      orderId: order.id,
+      clientName: order.customer || order.customerName || "Klient detaliczny",
+      weight: weight,
+      cartonSize: 'Karton Średni M',
+      cartonCode: `BOX-M-${order.id}`
+    });
+    setPackedPromptOrder(null);
   };
 
   const handleRowClick = (sku: string) => {
@@ -272,6 +300,13 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
   const handleStartDispatchProcessing = () => {
     sounds.playSuccess();
+    if (onUpdateOrder && selectedOrderId) {
+      onUpdateOrder(selectedOrderId, {
+        isPacked: true,
+        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Spakowano do ${cartonSize === 'Carton-S' ? 'Koperta / Karton S' : cartonSize === 'Carton-L' ? 'Karton Duży L' : 'Karton Średni M'} o wadze ${weightKg.toFixed(2)}kg przez ${workerName}.`,
+        internalNotesActor: workerName,
+      });
+    }
     setProcessingOrderData({
       orderId: selectedOrderId,
       clientName: selectedOrder?.customer || selectedOrder?.customerName || "Klient detaliczny",
@@ -284,7 +319,8 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   const handleCompleteDispatch = (pData: any) => {
     if (onUpdateOrder) {
       onUpdateOrder(pData.orderId, {
-        status: 'Dostarczone',
+        status: 'Spakowane',
+        isPacked: true,
         internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę DPD.`,
         internalNotesActor: workerName,
         waybillPdfDate: new Date().toLocaleDateString('pl-PL')
@@ -454,65 +490,83 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
             </div>
 
             <div className="flex-grow overflow-y-auto pr-1">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {activeOrders.length === 0 ? (
-                  <div className="col-span-3 bg-white border border-dashed border-zinc-250 rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4">
-                    <Box className="w-16 h-16 text-zinc-300" />
-                    <p className="text-sm font-bold text-zinc-500">Brak zleceń do spakowania.</p>
+              {activeOrders.length === 0 ? (
+                <div className="bg-white border border-dashed border-zinc-250 rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4 shadow-xs">
+                  <Box className="w-16 h-16 text-zinc-350 animate-pulse" />
+                  <p className="text-sm font-bold text-zinc-500">Brak zleceń oczekujących na spakowanie.</p>
+                </div>
+              ) : (
+                <div className="bg-white border border-zinc-200 rounded-2xl shadow-xs overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-zinc-550/[0.03] text-zinc-400 text-[10px] font-bold border-b border-zinc-200 uppercase tracking-wider font-mono select-none">
+                          <th className="py-3.5 px-5">Zamówienie</th>
+                          <th className="py-3.5 px-5">Pojemnik</th>
+                          <th className="py-3.5 px-5">Zbieracz</th>
+                          <th className="py-3.5 px-5">Godzina</th>
+                          <th className="py-3.5 px-5">Klient</th>
+                          <th className="py-3.5 px-5 text-right">Akcja</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-150 text-xs font-semibold text-zinc-700">
+                        {activeOrders.map((order: any) => {
+                          const isPacked = order.status === 'Spakowane';
+                          return (
+                            <tr 
+                              key={order.id} 
+                              className="hover:bg-[#0052cc]/[0.02] transition-colors group"
+                            >
+                              {/* Zamówienie ID */}
+                              <td className="py-3.5 px-5 font-mono font-extrabold text-[#0052CC] text-sm">
+                                {order.id.startsWith('#') ? order.id : `#${order.id}`}
+                              </td>
+
+                              {/* Pojemnik Badge */}
+                              <td className="py-3.5 px-5 select-none">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-blue-200 bg-blue-50/40 text-blue-700 font-mono text-[11px] font-black tracking-wide">
+                                  <Box className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                  {order.binId || 'BRAK'}
+                                </span>
+                              </td>
+
+                              {/* Zbieracz (Picker) */}
+                              <td className="py-3.5 px-5 font-sans font-bold text-zinc-800">
+                                {order.pickedBy || 'System'}
+                              </td>
+
+                              {/* Godzina (Time) */}
+                              <td className="py-3.5 px-5 font-mono text-zinc-550">
+                                {order.pickCompletedTime || '--:--'}
+                              </td>
+
+                              {/* Klient */}
+                              <td className="py-3.5 px-5 font-medium text-zinc-650 truncate max-w-[200px]" title={order.customer || order.customerName}>
+                                {order.customer || order.customerName || 'Klient detaliczny'}
+                              </td>
+
+                              {/* Akcja button */}
+                              <td className="py-3.5 px-5 text-right select-none">
+                                <button
+                                  onClick={() => handleStartPacking(order.id)}
+                                  className={`h-9 px-4 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer ml-auto border-none shadow-sm transition-all duration-150 active:scale-[0.98] ${
+                                    isPacked
+                                      ? 'bg-zinc-150 text-zinc-500 border border-zinc-200 hover:bg-zinc-205'
+                                      : 'bg-[#0052CC] hover:bg-[#0041a3] text-white hover:shadow-blue-500/10'
+                                  }`}
+                                >
+                                  <Play className="w-3 h-3 fill-current" />
+                                  {isPacked ? 'Zapakowane' : 'Zapakuj'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                ) : (
-                  activeOrders.map((order: any) => {
-                     const itemsCount = (order.items || []).reduce((sum: number, i: any) => sum + (i.quantity || i.qty || 0), 0);
-                     return (
-                      <div 
-                        key={order.id} 
-                        className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col justify-between gap-5 hover:border-[#0052CC]/40 hover:shadow-lg hover:shadow-blue-50/20 transition-all shadow-sm"
-                      >
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center">
-                            <span className="px-2.5 py-1 rounded border border-blue-200 bg-blue-50/50 text-[#0052CC] font-mono text-[10px] font-extrabold uppercase tracking-wide">
-                              {order.id}
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-600 font-mono text-[8px] font-extrabold uppercase tracking-widest">
-                              Skompletowane
-                            </span>
-                          </div>
-
-                          <h4 className="text-base font-black text-zinc-900 leading-tight">
-                            {order.customer || order.customerName || "Klient detaliczny"}
-                          </h4>
-
-                          <div className="space-y-2">
-                            <span className="text-[9px] font-bold text-zinc-400 uppercase font-mono block tracking-wider">
-                              Artykuły ({itemsCount} szt.):
-                            </span>
-                            <ul className="space-y-1.5 text-xs text-zinc-650">
-                              {(order.items || []).map((item: any, idx: number) => (
-                                <li key={idx} className="flex items-baseline gap-2 font-sans font-semibold text-xs">
-                                  <span className="font-mono text-[#0052CC] font-extrabold text-sm shrink-0">
-                                    {item.quantity || item.qty}x
-                                  </span>
-                                  <span className="truncate text-zinc-700">
-                                    {item.product || item.name}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleStartPacking(order.id)}
-                          className="w-full h-11 bg-[#0052CC] hover:bg-[#0041a3] active:scale-[0.98] text-white text-xs font-display font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow transition-all shrink-0 border-none"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-white text-white" />
-                          ROZPOCZNIJ PAKOWANIE
-                        </button>
-                      </div>
-                     );
-                  })
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -938,6 +992,54 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {packedPromptOrder && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-300 rounded-2xl w-full max-w-md shadow-2xl p-6 font-sans" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 text-amber-600 border-b border-zinc-150 pb-3 mb-4 select-none">
+              <AlertTriangle className="w-6 h-6 shrink-0 text-amber-500 animate-pulse" />
+              <h4 className="font-extrabold text-base tracking-tight text-zinc-900">Zamówienie zostało już spakowane</h4>
+            </div>
+
+            <div className="space-y-4 text-xs text-zinc-700">
+              <p className="leading-relaxed font-semibold">
+                Zlecenie <strong className="text-blue-600 font-mono text-sm">{packedPromptOrder.id}</strong> zostało już zweryfikowane i spakowane przez operatora.
+              </p>
+              <p className="text-zinc-500 font-medium">
+                Prawdopodobnie wystąpił błąd podczas generowania etykiety kurierskiej lub proces został przerwany. Wybierz jedną z poniższych akcji:
+              </p>
+
+              <div className="flex flex-col gap-2.5 pt-2 select-none">
+                <button
+                  onClick={() => handleRetryLabelGeneration(packedPromptOrder)}
+                  className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all border-none"
+                >
+                  <RefreshCw className="w-4 h-4 animate-spin-slow" />
+                  Spróbuj wygenerować etykietę ponownie
+                </button>
+                
+                <button
+                  onClick={() => {
+                    proceedWithPacking(packedPromptOrder.id);
+                    setPackedPromptOrder(null);
+                  }}
+                  className="w-full h-11 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer border border-zinc-200 transition-all"
+                >
+                  <Play className="w-3.5 h-3.5 text-zinc-600 fill-zinc-600" />
+                  Akceptuję i przechodzę do zamówienia
+                </button>
+
+                <button
+                  onClick={() => setPackedPromptOrder(null)}
+                  className="w-full h-11 bg-white hover:bg-zinc-50 text-zinc-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer border border-zinc-300 hover:border-zinc-400 transition-all"
+                >
+                  Wróć do listy zamówień
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1388,7 +1490,7 @@ export function ProcessingOrderScreen({
                   <div>
                     <h6 className="font-bold text-xs text-emerald-800 uppercase tracking-wider">Proces zakończony sukcesem</h6>
                     <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
-                      List przewozowy DPD został poprawnie wygenerowany. Zatwierdź paczkę, aby przenieść zlecenie do statusu 'Dostarczone'.
+                      List przewozowy DPD został poprawnie wygenerowany. Zatwierdź paczkę, aby przenieść zlecenie do statusu 'Spakowane'.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">

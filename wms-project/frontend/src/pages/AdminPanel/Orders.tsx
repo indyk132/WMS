@@ -40,10 +40,25 @@ const getStatusLabel = (status: string) => {
 
 const getStatusBadgeStyles = (status: string) => {
     switch (status) {
-        case 'W realizacji':
+        case 'Do kompletacji':
             return {
-                badge: 'bg-blue-50 text-blue-750 border-blue-200',
-                dot: 'bg-blue-600'
+                badge: 'bg-amber-50 text-amber-700 border-amber-250',
+                dot: 'bg-amber-500'
+            };
+        case 'W kompletacji':
+            return {
+                badge: 'bg-purple-50 text-purple-705 border-purple-200 animate-pulse',
+                dot: 'bg-purple-600'
+            };
+        case 'Oczekuje na pakowanie':
+            return {
+                badge: 'bg-teal-50 text-teal-700 border-teal-200',
+                dot: 'bg-teal-600'
+            };
+        case 'Spakowane':
+            return {
+                badge: 'bg-indigo-50 text-indigo-705 border-indigo-200',
+                dot: 'bg-indigo-600'
             };
         case 'Wysłane':
             return {
@@ -58,8 +73,8 @@ const getStatusBadgeStyles = (status: string) => {
         case 'Oczekujące':
         default:
             return {
-                badge: 'bg-amber-50 text-amber-700 border-amber-250',
-                dot: 'bg-amber-500'
+                badge: 'bg-slate-50 text-slate-700 border-slate-205',
+                dot: 'bg-slate-500'
             };
     }
 };
@@ -352,9 +367,12 @@ export default function Orders({
                             className="h-8 pl-2 pr-6 rounded border border-zinc-300 bg-white text-xs text-zinc-800 outline-none cursor-pointer"
                         >
                             <option value="">Status: Wszystkie</option>
-                            <option value="W realizacji">W realizacji</option>
-                            <option value="Wysłane">Wysłane</option>
                             <option value="Oczekujące">Oczekujące</option>
+                            <option value="Do kompletacji">Do kompletacji</option>
+                            <option value="W kompletacji">W kompletacji</option>
+                            <option value="Oczekuje na pakowanie">Oczekuje na pakowanie</option>
+                            <option value="Spakowane">Spakowane</option>
+                            <option value="Wysłane">Wysłane</option>
                             <option value="Dostarczone">Dostarczone</option>
                         </select>
 
@@ -451,12 +469,26 @@ export default function Orders({
                                             </button>
                                         </td>
                                         <td className="py-3 px-4">
-                                            <button
-                                                onClick={() => setSelectedOrderId(order.id)}
-                                                className="font-mono font-bold text-[#0058be] hover:underline text-left cursor-pointer outline-none bg-transparent border-none"
-                                            >
-                                                {order.id}
-                                            </button>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    {(order.isPacked || order.status === 'Dostarczone') && (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-250 whitespace-nowrap">
+                                                            Spakowana
+                                                        </span>
+                                                    )}
+                                                    <button
+                                                        onClick={() => setSelectedOrderId(order.id)}
+                                                        className="font-mono font-bold text-[#0058be] hover:underline text-left cursor-pointer outline-none bg-transparent border-none"
+                                                    >
+                                                        {order.id}
+                                                    </button>
+                                                </div>
+                                                {order.binId && (
+                                                    <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-1 select-none">
+                                                        Pojemnik: <span className="font-bold text-[#0052cc] bg-blue-50/50 px-1 py-0.2 rounded border border-blue-100">{order.binId}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="py-3 px-4 font-bold text-zinc-900">{order.customer}</td>
                                         <td className="py-3 px-4 text-zinc-650">{order.destination}</td>

@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  TrendingUp, TrendingDown, DollarSign, PackageCheck, Package, 
+  TrendingUp, DollarSign, PackageCheck, Package, 
   Clock, UserCheck, MapPin, Activity, CheckCircle2, AlertTriangle, 
-  Percent, ShieldAlert, Users, Target, BarChart3, Filter, Check, Award
+  Users, Target, BarChart3, Filter, Award, Search, X, ChevronDown, Calendar, ArrowUpDown
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 
@@ -13,687 +13,1303 @@ interface StatisticsProps {
   staffList: any[];
 }
 
-export default function Statistics({ orders = [], products = [], zones = [], staffList = [] }: StatisticsProps) {
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState<string>('all');
-  const [activeChartTab, setActiveChartTab] = useState<'orders' | 'categories' | 'zones' | 'top_skus' | 'turnover' | 'frequency'>('orders');
-  const [hoveredDataId, setHoveredDataId] = useState<string | null>(null);
+interface AnalyticsEvent {
+  type: 'new' | 'completed' | 'pick' | 'pack';
+  date: Date;
+  warehouseCode: string;
+  workerName?: string;
+  orderId: string;
+}
 
-  // 1. DYNAMIC CALCULATIONS
+const polishMonthMap: Record<string, number> = {
+  'Sty': 0, 'Lut': 1, 'Mar': 2, 'Kwi': 3, 'Maj': 4, 'Cze': 5,
+  'Lip': 6, 'Sie': 7, 'Wrz': 8, 'Paź': 9, 'Lis': 10, 'Gru': 11
+};
+
+const parseOrderDate = (dateStr: string): Date | null => {
+  if (!dateStr || dateStr === 'Nieustalony' || dateStr === 'Ukończono') return null;
+  const match = dateStr.match(/^(\d+)\s+([a-zA-ZáćęłńóśźżĄĆĘŁŃÓŚŹŻ]{3})/);
+  if (!match) return null;
+  const day = parseInt(match[1], 10);
+  const monthStr = match[2];
+  const month = polishMonthMap[monthStr];
+  if (month === undefined) return null;
+  const d = new Date();
+  return new Date(d.getFullYear(), month, day);
+};
+
+const formatDayMonth = (d: Date) => {
+  const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+  return `${d.getDate()} ${months[d.getMonth()]}`;
+};
+
+const formatDateISO = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDaysInRange = (start: Date, end: Date) => {
+  const arr = [];
+  const dt = new Date(start);
+  while (dt <= end) {
+    arr.push(new Date(dt));
+    dt.setDate(dt.getDate() + 1);
+  }
+  return arr;
+};
+
+// Deterministic random number generator based on string seed
+const getDeterministicRandom = (seed: string) => {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0;
+  }
+  return function() {
+    h = Math.imul(h ^ h >>> 16, 2246822507);
+    h = Math.imul(h ^ h >>> 13, 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+};
+
+const generateMockStaff = () => {
+  const firstNames = ['Jan', 'Marcin', 'Piotr', 'Krzysztof', 'Tomasz', 'Andrzej', 'Paweł', 'Janusz', 'Mateusz', 'Michał', 'Jakub', 'Adam', 'Łukasz', 'Kamil', 'Rafał', 'Wojciech', 'Robert', 'Sebastian', 'Patryk', 'Maciej', 'Mariusz', 'Dariusz', 'Grzegorz', 'Jacek', 'Zofia', 'Hanna', 'Anna', 'Katarzyna', 'Małgorzata', 'Agnieszka'];
+  const lastNames = ['Nowak', 'Kowalski', 'Wiśniewski', 'Wójcik', 'Kowalczyk', 'Kamiński', 'Lewandowski', 'Zieliński', 'Szymański', 'Woźniak', 'Dąbrowski', 'Kozłowski', 'Mazur', 'Jankowski', 'Kwiatkowski', 'Wojciechowski', 'Krawczyk', 'Kaczmarek', 'Piotrowski', 'Grabowski'];
   
-  // Filtered Orders
-  const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
-      // Priority filter
-      const matchesPriority = priorityFilter === 'all' 
-        ? true 
-        : (order.priority || '').toLowerCase() === priorityFilter.toLowerCase();
+  const staff: any[] = [];
+  let idCounter = 1000;
+  for (let i = 0; i < firstNames.length; i++) {
+    for (let j = 0; j < lastNames.length; j++) {
+      const name = `${firstNames[i]} ${lastNames[j]}`;
+      const hash = i * 17 + j * 31;
+      const role = hash % 2 === 0 ? 'Picker' : 'Packer';
+      const wh = hash % 3 === 0 ? 'HUB-PL-01' : 'HUB-PL-02';
       
-      // Time Range filter (simulated based on shipmentDate status and order ID ranges)
-      let matchesTime = true;
-      if (timeRange === 'today') {
-        matchesTime = (order.shipmentDate && order.shipmentDate.includes('Dziś')) || order.status === 'W realizacji';
-      } else if (timeRange === '7days') {
-        matchesTime = order.id !== 'ORD-89232' && order.id !== 'ORD-89233'; // simulate recent ones
-      }
-      
-      return matchesPriority && matchesTime;
-    });
-  }, [orders, priorityFilter, timeRange]);
-
-  // Order Counts by Status
-  const orderStats = useMemo(() => {
-    const stats = {
-      pending: 0,     // 'Oczekujące'
-      inProgress: 0,  // 'W realizacji'
-      shipped: 0,     // 'Wysłane'
-      delivered: 0,   // 'Dostarczone'
-      total: filteredOrders.length
-    };
-
-    filteredOrders.forEach(o => {
-      const status = (o.status || '').toLowerCase();
-      if (status.includes('oczekując')) stats.pending++;
-      else if (status.includes('realizacj')) stats.inProgress++;
-      else if (status.includes('wysłan')) stats.shipped++;
-      else if (status.includes('dostarczo')) stats.delivered++;
-    });
-
-    return stats;
-  }, [filteredOrders]);
-
-  // Financial Estimation (Sum of: qty * standard product price)
-  const financialKPIs = useMemo(() => {
-    let totalValue = 0;
-    let fulfilledValue = 0;
-    let pendingValue = 0;
-    let totalItemsCount = 0;
-
-    filteredOrders.forEach(order => {
-      const isFulfilled = ['wysłane', 'dostarczone'].includes((order.status || '').toLowerCase());
-      
-      (order.items || []).forEach((item: any) => {
-        // Find matching product price or generate based on category/sku
-        const product = products.find(p => p.sku === item.sku);
-        const price = product?.price || 49.99; // Fallback price
-        
-        const itemVal = item.qty * price;
-        totalValue += itemVal;
-        totalItemsCount += item.qty;
-
-        if (isFulfilled) {
-          fulfilledValue += itemVal;
-        } else {
-          pendingValue += itemVal;
-        }
+      staff.push({
+        id: `EMP-${idCounter++}`,
+        firstName: firstNames[i],
+        lastName: lastNames[j],
+        name,
+        role,
+        warehouseCode: wh
       });
-    });
+      if (staff.length >= 150) return staff;
+    }
+  }
+  return staff;
+};
 
-    return {
-      totalValue,
-      fulfilledValue,
-      pendingValue,
-      totalItemsCount
-    };
-  }, [filteredOrders, products]);
+const formatLabel = (label: string, totalItemsCount: number) => {
+  const dateMatch = label.match(/^(\d+)\s+([a-zA-ZáćęłńóśźżĄĆĘŁŃÓŚŹŻ]{3})/);
+  if (dateMatch) {
+    if (totalItemsCount > 12) {
+      return dateMatch[1];
+    }
+    return label;
+  }
+  
+  if (label.includes(' ')) {
+    const parts = label.split(' ');
+    if (totalItemsCount > 6) {
+      return parts[0];
+    }
+    return label;
+  }
+  
+  return label;
+};
 
-  // Inventory Capacity & Alarm metrics
-  const inventoryMetrics = useMemo(() => {
-    const totalItems = products.reduce((sum, p) => sum + (p.stock || 0), 0);
-    const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= p.reorderThreshold).length;
-    const outOfStockCount = products.filter(p => p.stock === 0).length;
-    const avgPrice = products.length > 0 
-      ? products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length 
-      : 0;
+interface BarChartProps {
+  title: string;
+  data: { label: string; value: number }[];
+  colorFrom: string;
+  colorTo: string;
+  icon: React.ReactNode;
+  yLabel?: string;
+  onBarClick?: (name: string) => void;
+}
 
-    return {
-      totalItems,
-      lowStockCount,
-      outOfStockCount,
-      avgPrice
-    };
-  }, [products]);
-
-  // Top Demanded SKUs (calculated dynamically from orders)
-  const topDemandedSkus = useMemo(() => {
-    const skuMap: Record<string, { sku: string, name: string, qty: number, orderCount: number }> = {};
-    
-    orders.forEach(order => {
-      (order.items || []).forEach((item: any) => {
-        if (!skuMap[item.sku]) {
-          skuMap[item.sku] = {
-            sku: item.sku,
-            name: item.name || item.product,
-            qty: 0,
-            orderCount: 0
-          };
-        }
-        skuMap[item.sku].qty += item.qty;
-        skuMap[item.sku].orderCount += 1;
-      });
-    });
-
-    return Object.values(skuMap)
-      .sort((a, b) => b.qty - a.qty)
-      .slice(0, 5); // Return top 5
-  }, [orders]);
-
-  // Product Category Proportions
-  const categoryStats = useMemo(() => {
-    const categories: Record<string, { count: number, value: number, stock: number }> = {};
-    
-    products.forEach(p => {
-      const cat = p.category || 'Inne';
-      if (!categories[cat]) {
-        categories[cat] = { count: 0, value: 0, stock: 0 };
-      }
-      categories[cat].count += 1;
-      categories[cat].value += (p.stock || 0) * (p.price || 0);
-      categories[cat].stock += (p.stock || 0);
-    });
-
-    return Object.entries(categories).map(([name, data]) => ({
-      name,
-      ...data
-    })).sort((a, b) => b.value - a.value);
-  }, [products]);
-
-  // Worker performance stats leaderboards
-  const workerKPIs = useMemo(() => {
-    // Generate simulated analytics based on staffList names
-    return staffList.map((staff, idx) => {
-      // Pseudo-random but static generator based on staff name to keep it consistent
-      const nameStr = staff.firstName && staff.lastName ? `${staff.firstName} ${staff.lastName}` : (staff.name || '');
-      const prime = nameStr.charCodeAt(0) || 75;
-      const picksToday = Math.round((prime * 1.5) % 80) + 40;
-      const accuracy = 98.2 + ((prime % 15) / 10);
-      const avgPickSec = 35 + (prime % 25);
-      const level = staff.role === 'Admin' ? 'A+' : staff.role === 'Packer' ? 'A' : 'B+';
-      
-      return {
-        id: staff.id,
-        name: nameStr,
-        role: staff.role || staff.position || 'Kompletujący',
-        picksToday,
-        accuracy: Math.min(accuracy, 100).toFixed(1),
-        avgPickSec,
-        level
-      };
-    }).sort((a, b) => b.picksToday - a.picksToday);
-  }, [staffList]);
-
-  // Turnover rate and depletion estimation
-  const turnoverStats = useMemo(() => {
-    return products.map(p => {
-      // Create stable pseudo-random calculations for demonstration
-      const prime = p.sku.charCodeAt(p.sku.length - 1) || 5;
-      const salesQty = Math.round((prime * 7) % 45) + 5;
-      const ratio = p.stock > 0 ? (salesQty / p.stock) : 0;
-      const rate = ratio > 1 ? ratio : ratio + 0.15;
-      const days = Math.round(30 / (rate || 1));
-      return {
-        sku: p.sku,
-        name: p.name,
-        stock: p.stock,
-        salesQty,
-        rate: parseFloat(rate.toFixed(2)),
-        daysToDeplete: days > 90 ? '90+' : `${days} dni`
-      };
-    }).sort((a, b) => b.rate - a.rate);
-  }, [products]);
-
-  // Order frequency statistics over 30d
-  const frequencyStats = useMemo(() => {
-    return [
-      { week: 'Tydzień 1 (W1)', count: 28, value: 14200, color: 'bg-emerald-500', hoverColor: 'hover:bg-emerald-600' },
-      { week: 'Tydzień 2 (W2)', count: 35, value: 18500, color: 'bg-teal-500', hoverColor: 'hover:bg-teal-600' },
-      { week: 'Tydzień 3 (W3)', count: 42, value: 22400, color: 'bg-blue-500', hoverColor: 'hover:bg-blue-650' },
-      { week: 'Tydzień 4 (W4)', count: 31, value: 15900, color: 'bg-indigo-500', hoverColor: 'hover:bg-indigo-600' },
-    ];
-  }, []);
-
-  // Max value calculation for bar chart scaling
-  const maxOrderStatusVal = Math.max(orderStats.pending, orderStats.inProgress, orderStats.shipped, orderStats.delivered, 1);
-  const maxCategoryStock = Math.max(...categoryStats.map(c => c.stock), 1);
-  const maxSkuQty = Math.max(...topDemandedSkus.map(s => s.qty), 1);
-  const maxTurnoverRate = Math.max(...turnoverStats.map(t => t.rate), 1);
-  const maxFreqCount = Math.max(...frequencyStats.map(f => f.count), 1);
+function BarChart({ title, data, colorFrom, colorTo, icon, yLabel = 'operacji', onBarClick }: BarChartProps) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  
+  const maxValue = useMemo(() => {
+    const vals = data.map(d => d.value);
+    return Math.max(...vals, 1);
+  }, [data]);
 
   return (
-    <div id="wms-analytics-panel" className="space-y-6 font-sans text-sm text-[#334155] animate-fadeIn pb-12">
-      {/* 1. Header with Live telemetry stats and Interactive Filters */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-[#0f172a] p-6 rounded-xl border border-[#1e293b] text-white shadow-xl">
+    <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col h-[400px] relative transition-all hover:shadow-md">
+      {/* Title */}
+      <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="text-[#2170e4]">{icon}</div>
+          <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">{title}</h3>
+        </div>
+        <span className="text-[10px] text-slate-400 font-mono">Kliknij słupek po szczegóły</span>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="flex-grow flex items-center justify-center text-xs text-slate-400">
+          Brak danych do wyświetlenia w tym zakresie
+        </div>
+      ) : (
+        <div className="flex-grow flex flex-col justify-end">
+          {/* Main Chart Area */}
+          <div className="flex-grow flex items-end justify-between gap-1.5 h-56 relative border-b border-slate-200 pb-1">
+            {/* Grid Y-lines */}
+            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none text-[8px] text-slate-400">
+              <div className="border-b border-slate-100/70 w-full pt-0.5 pr-1 text-right">{Math.round(maxValue)}</div>
+              <div className="border-b border-slate-100/70 w-full pt-0.5 pr-1 text-right">{Math.round(maxValue * 0.75)}</div>
+              <div className="border-b border-slate-100/70 w-full pt-0.5 pr-1 text-right">{Math.round(maxValue * 0.5)}</div>
+              <div className="border-b border-slate-100/70 w-full pt-0.5 pr-1 text-right">{Math.round(maxValue * 0.25)}</div>
+              <div className="w-full pr-1 text-right">0</div>
+            </div>
+
+            {/* Bars */}
+            <div className="w-full h-full flex items-end justify-around relative z-10 pt-4">
+              {data.map((item, idx) => {
+                const heightPercent = (item.value / maxValue) * 100;
+                const isHovered = hoveredIdx === idx;
+                
+                return (
+                  <div
+                    key={idx}
+                    className="flex-grow flex flex-col items-center group relative cursor-pointer"
+                    onMouseEnter={() => setHoveredIdx(idx)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                    onClick={() => onBarClick && onBarClick(item.label)}
+                    style={{ height: '100%', justifyContent: 'flex-end' }}
+                  >
+                    {/* Tooltip */}
+                    {isHovered && (
+                      <div className="absolute -top-11 z-30 bg-[#0f172a] text-white px-2.5 py-1 rounded-md text-[10px] md:text-xs font-semibold shadow-xl border border-[#334155] whitespace-nowrap animate-fadeIn flex flex-col items-center">
+                        <span className="font-bold">{item.label}</span>
+                        <span className="text-blue-400 font-mono font-bold mt-0.5">{item.value} {yLabel}</span>
+                        <div className="w-1.5 h-1.5 bg-[#0f172a] rotate-45 border-r border-b border-[#334155] absolute -bottom-1"></div>
+                      </div>
+                    )}
+
+                    {/* Bar Column */}
+                    <div
+                      style={{ height: `${Math.max(heightPercent, 2)}%` }}
+                      className={`w-full max-w-[28px] bg-gradient-to-t ${colorFrom} ${colorTo} rounded-t-sm transition-all duration-300 ${
+                        isHovered ? 'brightness-110 shadow-sm' : ''
+                      }`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* X-axis labels */}
+          <div className="flex justify-around items-start pt-2.5 h-10 select-none">
+            {data.map((item, idx) => {
+              const formattedLabel = formatLabel(item.label, data.length);
+              const isHovered = hoveredIdx === idx;
+              return (
+                <div
+                  key={idx}
+                  className={`text-[8px] md:text-[9px] font-bold text-center truncate ${
+                    isHovered ? 'text-blue-600 font-extrabold' : 'text-slate-400'
+                  }`}
+                  style={{ width: `${100 / data.length}%` }}
+                  title={item.label}
+                >
+                  {formattedLabel}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Statistics({ orders = [], products = [], zones = [], staffList = [] }: StatisticsProps) {
+  const [activeTab, setActiveTab] = useState<'packers' | 'pickers' | 'new_orders' | 'completed_orders'>('packers');
+  const [dateRangeType, setDateRangeType] = useState<'day' | 'week' | 'month' | 'custom'>('month');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
+  
+  // Worker filters
+  const [workerSearchText, setWorkerSearchText] = useState('');
+  const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
+  const [workerSearchQuery, setWorkerSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [topLimit, setTopLimit] = useState<10 | 20 | 50 | 'all'>(20);
+  const [viewType, setViewType] = useState<'chart' | 'table'>('chart');
+  
+  // Detailed Analysis state
+  const [selectedWorkerName, setSelectedWorkerName] = useState<string | null>(null);
+
+  // Sorting for table
+  const [sortField, setSortField] = useState<'rank' | 'name' | 'value'>('rank');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Combined operation staff (mock seed + real staff)
+  const combinedStaff = useMemo(() => {
+    const mockList = generateMockStaff();
+    const realList = staffList.map(s => ({
+      id: s.employeeId || s.id,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      name: `${s.firstName} ${s.lastName}`,
+      role: s.role,
+      warehouseCode: s.warehouseCode || 'HUB-PL-01'
+    }));
+    
+    const seen = new Set();
+    const list: any[] = [];
+    [...realList, ...mockList].forEach(s => {
+      if (s.name && !seen.has(s.name) && s.role !== 'Admin') {
+        seen.add(s.name);
+        list.push(s);
+      }
+    });
+    return list;
+  }, [staffList]);
+
+  // Picker & Packer subsets for deterministic seeding
+  const pickersList = useMemo(() => combinedStaff.filter(s => s.role === 'Picker' || s.role === 'Logistics Planner' || s.role === 'Inventory Auditor'), [combinedStaff]);
+  const packersList = useMemo(() => combinedStaff.filter(s => s.role === 'Packer' || s.role === 'Warehouse Manager' || s.role === 'Sales Manager'), [combinedStaff]);
+
+  // Unique worker names for chips search dropdown
+  const dropdownMatches = useMemo(() => {
+    if (!workerSearchQuery) return [];
+    return combinedStaff.filter(s => 
+      s.name.toLowerCase().includes(workerSearchQuery.toLowerCase()) &&
+      !selectedWorkers.includes(s.name)
+    ).slice(0, 6);
+  }, [workerSearchQuery, combinedStaff, selectedWorkers]);
+
+  // Date check logic
+  const isWithinDateRange = useMemo(() => {
+    return (date: Date) => {
+      const now = new Date();
+      
+      if (dateRangeType === 'day') {
+        return date.getDate() === now.getDate() &&
+               date.getMonth() === now.getMonth() &&
+               date.getFullYear() === now.getFullYear();
+      }
+      
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (dateRangeType === 'week') {
+        const oneWeekAgo = new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
+        oneWeekAgo.setHours(0, 0, 0, 0);
+        return date >= oneWeekAgo && date <= now;
+      }
+      
+      if (dateRangeType === 'month') {
+        const oneMonthAgo = new Date(startOfToday.getTime() - 29 * 24 * 60 * 60 * 1000);
+        oneMonthAgo.setHours(0, 0, 0, 0);
+        return date >= oneMonthAgo && date <= now;
+      }
+      
+      if (dateRangeType === 'custom') {
+        const targetTime = date.getTime();
+        if (startDate) {
+          const sD = new Date(startDate);
+          sD.setHours(0, 0, 0, 0);
+          if (targetTime < sD.getTime()) return false;
+        }
+        if (endDate) {
+          const eD = new Date(endDate);
+          eD.setHours(23, 59, 59, 999);
+          if (targetTime > eD.getTime()) return false;
+        }
+        return true;
+      }
+      
+      return true;
+    };
+  }, [dateRangeType, startDate, endDate]);
+
+  // Unified telemetry events database
+  const allEvents = useMemo(() => {
+    const events: AnalyticsEvent[] = [];
+    const now = new Date();
+
+    // Parse live orders and append their analytics
+    orders.forEach(o => {
+      let dateObj = parseOrderDate(o.shipmentDate);
+      if (!dateObj) {
+        const orderNum = parseInt(o.id.replace(/\D/g, ''), 10) || 0;
+        dateObj = new Date(now.getTime() - (orderNum % 25) * 24 * 60 * 60 * 1000);
+      }
+      
+      const wh = o.warehouseCode || (parseInt(o.id.replace(/\D/g, ''), 10) % 2 === 0 ? 'HUB-PL-01' : 'HUB-PL-02');
+      
+      events.push({
+        type: 'new',
+        date: dateObj,
+        warehouseCode: wh,
+        orderId: o.id
+      });
+      
+      if (['spakowane', 'wysłane', 'dostarczone'].includes((o.status || '').toLowerCase())) {
+        events.push({
+          type: 'completed',
+          date: dateObj,
+          warehouseCode: wh,
+          orderId: o.id
+        });
+      }
+      
+      if (o.internalNotes) {
+        const lines = o.internalNotes.split('\n');
+        lines.forEach((line: string) => {
+          if (line.includes('[PICKER]')) {
+            const parts = line.split('przez ');
+            if (parts.length > 1) {
+              const namePart = parts[1].split('.')[0].split(' Czas:')[0].trim();
+              if (namePart) {
+                events.push({
+                  type: 'pick',
+                  date: dateObj,
+                  warehouseCode: wh,
+                  workerName: namePart,
+                  orderId: o.id
+                });
+              }
+            }
+          }
+          if (line.includes('[PACKER]')) {
+            const parts = line.split('przez ');
+            if (parts.length > 1) {
+              const namePart = parts[1].split('.')[0].split(' Wygenerowano')[0].trim();
+              if (namePart) {
+                events.push({
+                  type: 'pack',
+                  date: dateObj,
+                  warehouseCode: wh,
+                  workerName: namePart,
+                  orderId: o.id
+                });
+              }
+            }
+          }
+        });
+      }
+    });
+
+    return events;
+  }, [orders]);
+
+  // Helper check for employee search text & multiselect chip inputs
+  const matchesWorkerFilter = useMemo(() => {
+    return (name?: string) => {
+      if (!name) return false;
+      
+      // Text search
+      if (workerSearchText && !name.toLowerCase().includes(workerSearchText.toLowerCase())) {
+        return false;
+      }
+      
+      // Multiselect chips
+      if (selectedWorkers.length > 0 && !selectedWorkers.includes(name)) {
+        return false;
+      }
+      
+      return true;
+    };
+  }, [workerSearchText, selectedWorkers]);
+
+  // Filtered events based on date, warehouse and employee selection
+  const filteredEvents = useMemo(() => {
+    return allEvents.filter(e => {
+      // Date range filter
+      if (!isWithinDateRange(e.date)) return false;
+      
+      // Warehouse filter
+      if (warehouseFilter !== 'all' && e.warehouseCode !== warehouseFilter) return false;
+      
+      // Worker filter
+      const isFilteredByWorker = workerSearchText || selectedWorkers.length > 0;
+      if (isFilteredByWorker) {
+        if (e.workerName) {
+          return matchesWorkerFilter(e.workerName);
+        } else {
+          // If order, verify if it was processed by any worker matching filter
+          const relatesToMatchedWorker = allEvents.some(ae => 
+            ae.orderId === e.orderId && 
+            (ae.type === 'pick' || ae.type === 'pack') && 
+            ae.workerName && matchesWorkerFilter(ae.workerName)
+          );
+          return relatesToMatchedWorker;
+        }
+      }
+      
+      return true;
+    });
+  }, [allEvents, isWithinDateRange, warehouseFilter, matchesWorkerFilter, workerSearchText, selectedWorkers]);
+
+  // KPI calculations
+  const kpiStats = useMemo(() => {
+    let newOrdersCount = 0;
+    let completedOrdersCount = 0;
+    let packedCount = 0;
+    let pickedCount = 0;
+    
+    filteredEvents.forEach(e => {
+      if (e.type === 'new') newOrdersCount++;
+      else if (e.type === 'completed') completedOrdersCount++;
+      else if (e.type === 'pack') packedCount++;
+      else if (e.type === 'pick') pickedCount++;
+    });
+    
+    return {
+      newOrdersCount,
+      completedOrdersCount,
+      packedCount,
+      pickedCount
+    };
+  }, [filteredEvents]);
+
+  // Packers aggregation
+  const packersDataAll = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredEvents.forEach(e => {
+      if (e.type === 'pack' && e.workerName) {
+        counts[e.workerName] = (counts[e.workerName] || 0) + 1;
+      }
+    });
+    
+    // Seed with 0 if no specific workers filtered to keep full roster visible
+    const isFiltered = workerSearchText || selectedWorkers.length > 0;
+    if (!isFiltered) {
+      combinedStaff.forEach(s => {
+        if (s.role === 'Packer' || s.role === 'Warehouse Manager' || s.role === 'Sales Manager') {
+          if (counts[s.name] === undefined) counts[s.name] = 0;
+        }
+      });
+    }
+    
+    return Object.entries(counts)
+      .map(([label, value]) => ({ label, value }))
+      .filter(item => {
+        if (isFiltered) return matchesWorkerFilter(item.label);
+        return true;
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [filteredEvents, combinedStaff, matchesWorkerFilter, workerSearchText, selectedWorkers]);
+
+  // Sliced Packers data by limit selector
+  const packerData = useMemo(() => {
+    if (topLimit === 'all') return packersDataAll;
+    return packersDataAll.slice(0, topLimit);
+  }, [packersDataAll, topLimit]);
+
+  // Pickers aggregation
+  const pickersDataAll = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredEvents.forEach(e => {
+      if (e.type === 'pick' && e.workerName) {
+        counts[e.workerName] = (counts[e.workerName] || 0) + 1;
+      }
+    });
+    
+    const isFiltered = workerSearchText || selectedWorkers.length > 0;
+    if (!isFiltered) {
+      combinedStaff.forEach(s => {
+        if (s.role === 'Picker' || s.role === 'Inventory Auditor' || s.role === 'Logistics Planner') {
+          if (counts[s.name] === undefined) counts[s.name] = 0;
+        }
+      });
+    }
+    
+    return Object.entries(counts)
+      .map(([label, value]) => ({ label, value }))
+      .filter(item => {
+        if (isFiltered) return matchesWorkerFilter(item.label);
+        return true;
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [filteredEvents, combinedStaff, matchesWorkerFilter, workerSearchText, selectedWorkers]);
+
+  // Sliced Pickers data by limit selector
+  const pickerData = useMemo(() => {
+    if (topLimit === 'all') return pickersDataAll;
+    return pickersDataAll.slice(0, topLimit);
+  }, [pickersDataAll, topLimit]);
+
+  // Order volumes timeline aggregation
+  const timeSeriesData = useMemo(() => {
+    const now = new Date();
+    
+    if (dateRangeType === 'day') {
+      const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
+      const newCounts: Record<string, number> = {};
+      const compCounts: Record<string, number> = {};
+      
+      hours.forEach(h => {
+        newCounts[h] = 0;
+        compCounts[h] = 0;
+      });
+      
+      filteredEvents.forEach(e => {
+        if (e.type === 'new' || e.type === 'completed') {
+          const hour = e.date.getHours();
+          let slot = '22:00';
+          if (hour < 10) slot = '08:00';
+          else if (hour < 12) slot = '10:00';
+          else if (hour < 14) slot = '12:00';
+          else if (hour < 16) slot = '14:00';
+          else if (hour < 18) slot = '16:00';
+          else if (hour < 20) slot = '18:00';
+          else if (hour < 22) slot = '20:00';
+          
+          if (e.type === 'new') newCounts[slot]++;
+          else compCounts[slot]++;
+        }
+      });
+      
+      return {
+        newOrders: hours.map(h => ({ label: h, value: newCounts[h] })),
+        completedOrders: hours.map(h => ({ label: h, value: compCounts[h] }))
+      };
+    }
+    
+    // Group by Day for ranges
+    let startDateObj = new Date();
+    let endDateObj = new Date();
+    
+    if (dateRangeType === 'week') {
+      startDateObj = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+    } else if (dateRangeType === 'month') {
+      startDateObj = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+    } else if (dateRangeType === 'custom') {
+      startDateObj = startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      endDateObj = endDate ? new Date(endDate) : new Date();
+    }
+    
+    startDateObj.setHours(0, 0, 0, 0);
+    endDateObj.setHours(23, 59, 59, 999);
+    
+    const days = getDaysInRange(startDateObj, endDateObj);
+    const newCounts: Record<string, number> = {};
+    const compCounts: Record<string, number> = {};
+    
+    days.forEach(d => {
+      const label = formatDayMonth(d);
+      newCounts[label] = 0;
+      compCounts[label] = 0;
+    });
+    
+    filteredEvents.forEach(e => {
+      if (e.type === 'new' || e.type === 'completed') {
+        const label = formatDayMonth(e.date);
+        if (newCounts[label] !== undefined) {
+          if (e.type === 'new') newCounts[label]++;
+          else compCounts[label]++;
+        }
+      }
+    });
+    
+    return {
+      newOrders: days.map(d => {
+        const label = formatDayMonth(d);
+        return { label, value: newCounts[label] };
+      }),
+      completedOrders: days.map(d => {
+        const label = formatDayMonth(d);
+        return { label, value: compCounts[label] };
+      })
+    };
+  }, [filteredEvents, dateRangeType, startDate, endDate]);
+
+  // Determine active dataset & layouts
+  const activeData = useMemo(() => {
+    if (activeTab === 'packers') return packerData;
+    if (activeTab === 'pickers') return pickerData;
+    if (activeTab === 'new_orders') return timeSeriesData.newOrders;
+    return timeSeriesData.completedOrders;
+  }, [activeTab, packerData, pickerData, timeSeriesData]);
+
+  // Raw counts before limit slicing (used to determine >30 threshold)
+  const rawListLength = useMemo(() => {
+    if (activeTab === 'packers') return packersDataAll.length;
+    if (activeTab === 'pickers') return pickersDataAll.length;
+    return activeData.length;
+  }, [activeTab, packersDataAll, pickersDataAll, activeData]);
+
+  const shouldSwitchToAltView = (activeTab === 'packers' || activeTab === 'pickers') && rawListLength > 30;
+
+  // Sorting table data
+  const sortedTableData = useMemo(() => {
+    const list = activeData.map((item, idx) => ({
+      rank: idx + 1,
+      name: item.label,
+      value: item.value
+    }));
+    
+    return list.sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'rank') {
+        comparison = a.rank - b.rank;
+      } else if (sortField === 'name') {
+        comparison = a.name.localeCompare(b.name, 'pl');
+      } else if (sortField === 'value') {
+        comparison = a.value - b.value;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [activeData, sortField, sortDirection]);
+
+  const handleSort = (field: 'rank' | 'name' | 'value') => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Detailed Analysis modes helper values
+  const daysCount = useMemo(() => {
+    const now = new Date();
+    if (dateRangeType === 'day') return 1;
+    if (dateRangeType === 'week') return 7;
+    if (dateRangeType === 'month') return 30;
+    if (dateRangeType === 'custom') {
+      const start = startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const end = endDate ? new Date(endDate) : new Date();
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      return Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 1);
+    }
+    return 30;
+  }, [dateRangeType, startDate, endDate]);
+
+  const selectedWorkerInfo = useMemo(() => {
+    if (!selectedWorkerName) return null;
+    
+    // Find worker role
+    const worker = combinedStaff.find(s => s.name === selectedWorkerName);
+    const role = worker?.role || 'Pracownik';
+    
+    // Gather all operations
+    const packerCount = allEvents.filter(e => e.type === 'pack' && e.workerName === selectedWorkerName && isWithinDateRange(e.date)).length;
+    const pickerCount = allEvents.filter(e => e.type === 'pick' && e.workerName === selectedWorkerName && isWithinDateRange(e.date)).length;
+    const totalOps = packerCount + pickerCount;
+    
+    // Find rank in respective list
+    let rankPos = 1;
+    let listLength = 1;
+    if (role === 'Packer') {
+      rankPos = packersDataAll.findIndex(item => item.label === selectedWorkerName) + 1;
+      listLength = packersDataAll.length;
+    } else {
+      rankPos = pickersDataAll.findIndex(item => item.label === selectedWorkerName) + 1;
+      listLength = pickersDataAll.length;
+    }
+    if (rankPos === 0) rankPos = listLength + 1;
+
+    // Timeline activity grouped by days/hours
+    const trendData: { label: string; value: number }[] = [];
+    const now = new Date();
+    
+    if (dateRangeType === 'day') {
+      const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
+      const counts: Record<string, number> = {};
+      hours.forEach(h => counts[h] = 0);
+      
+      allEvents.forEach(e => {
+        if (e.workerName === selectedWorkerName && isWithinDateRange(e.date)) {
+          const hour = e.date.getHours();
+          let slot = '22:00';
+          if (hour < 10) slot = '08:00';
+          else if (hour < 12) slot = '10:00';
+          else if (hour < 14) slot = '12:00';
+          else if (hour < 16) slot = '14:00';
+          else if (hour < 18) slot = '16:00';
+          else if (hour < 20) slot = '18:00';
+          else if (hour < 22) slot = '20:00';
+          counts[slot]++;
+        }
+      });
+      hours.forEach(h => trendData.push({ label: h, value: counts[h] }));
+    } else {
+      let startDateObj = new Date();
+      let endDateObj = new Date();
+      if (dateRangeType === 'week') startDateObj = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+      else if (dateRangeType === 'month') startDateObj = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+      else if (dateRangeType === 'custom') {
+        startDateObj = startDate ? new Date(startDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        endDateObj = endDate ? new Date(endDate) : new Date();
+      }
+      startDateObj.setHours(0, 0, 0, 0);
+      endDateObj.setHours(23, 59, 59, 999);
+      
+      const days = getDaysInRange(startDateObj, endDateObj);
+      const counts: Record<string, number> = {};
+      days.forEach(d => counts[formatDayMonth(d)] = 0);
+      
+      allEvents.forEach(e => {
+        if (e.workerName === selectedWorkerName && isWithinDateRange(e.date)) {
+          const label = formatDayMonth(e.date);
+          if (counts[label] !== undefined) counts[label]++;
+        }
+      });
+      days.forEach(d => {
+        const label = formatDayMonth(d);
+        trendData.push({ label, value: counts[label] });
+      });
+    }
+
+    return {
+      name: selectedWorkerName,
+      role,
+      packerCount,
+      pickerCount,
+      totalOps,
+      dailyAverage: (totalOps / daysCount).toFixed(1),
+      rankPos,
+      listLength,
+      trendData
+    };
+  }, [selectedWorkerName, combinedStaff, allEvents, isWithinDateRange, dateRangeType, startDate, endDate, daysCount, packersDataAll, pickersDataAll]);
+
+  // Max value for horizontal chart sizing
+  const horizontalMaxVal = useMemo(() => {
+    const vals = activeData.map(d => d.value);
+    return Math.max(...vals, 1);
+  }, [activeData]);
+
+  return (
+    <div id="wms-analytics-panel" className="space-y-6 font-sans text-sm text-[#334155] animate-fadeIn pb-12 relative overflow-hidden">
+      {/* 1. Header with Filters */}
+      <div className="flex flex-col gap-5 bg-[#0f172a] p-6 rounded-xl border border-[#1e293b] text-white shadow-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="bg-[#2170e4] text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded tracking-wide animate-pulse flex items-center gap-1">
+            <span className="bg-blue-600 text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded tracking-wide animate-pulse flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ANALITYKA WMS
             </span>
             <h2 className="text-xl md:text-2xl font-extrabold tracking-tight text-white font-sans">
-              Statystyki i Raporty Systemowe
+              Statystyki i Wydajność Magazynu
             </h2>
           </div>
           <p className="text-zinc-400 text-xs mt-1 font-medium max-w-2xl leading-relaxed">
-            Interaktywne zestawienie przepustowości operacji logistycznych. Analiza wartości koszyków wydań, zapełnienia fizycznego korytarzy oraz czasu kompletacji.
+            Wydajność operacyjna ekipy kompletacyjnej (50-500 pracowników). Szybkie wyszukiwanie, multiselect, wykresy dynamiczne w pionie i poziomie oraz tabele rankingowe.
           </p>
         </div>
 
-        {/* Filters bar */}
-        <div className="flex flex-wrap items-center gap-3.5 select-none text-zinc-300">
-          <div className="flex items-center gap-2 bg-[#1e293b] px-3 py-1.5 rounded-lg border border-[#334155]">
-            <Filter className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">Priorytet:</span>
+        {/* Filter Controls Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-[#1e293b] text-zinc-300">
+          {/* Date range type */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-blue-400" /> Zakres dat
+            </label>
             <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="bg-transparent border-none text-white text-xs font-bold outline-none cursor-pointer focus:ring-0"
+              value={dateRangeType}
+              onChange={(e) => setDateRangeType(e.target.value as any)}
+              className="bg-[#1e293b] border border-[#334155] text-white text-xs font-bold rounded-lg px-3 py-2 outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="all" className="bg-[#1e293b]">Wszystkie</option>
-              <option value="wysoki" className="bg-[#1e293b]">Wysoki (Prio 1)</option>
-              <option value="normalny" className="bg-[#1e293b]">Normalny</option>
+              <option value="day">Dzień (Dzisiaj)</option>
+              <option value="week">Tydzień (Ostatnie 7 dni)</option>
+              <option value="month">Miesiąc (Ostatnie 30 dni)</option>
+              <option value="custom">Własny zakres...</option>
             </select>
           </div>
 
-          <div className="flex items-center gap-2 bg-[#1e293b] px-3 py-1.5 rounded-lg border border-[#334155]">
-            <Clock className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">Okres:</span>
+          {/* Warehouse */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-blue-400" /> Magazyn / Dział
+            </label>
             <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="bg-transparent border-none text-white text-xs font-bold outline-none cursor-pointer focus:ring-0"
+              value={warehouseFilter}
+              onChange={(e) => setWarehouseFilter(e.target.value)}
+              className="bg-[#1e293b] border border-[#334155] text-white text-xs font-bold rounded-lg px-3 py-2 outline-none focus:border-blue-500 cursor-pointer"
             >
-              <option value="all" className="bg-[#1e293b]">Wszystkie dane</option>
-              <option value="today" className="bg-[#1e293b]">Dzisiejsze rundy</option>
-              <option value="7days" className="bg-[#1e293b]">Ostatnie 7 dni</option>
+              <option value="all">Wszystkie magazyny</option>
+              <option value="HUB-PL-01">HUB-PL-01 - Główny W-A1</option>
+              <option value="HUB-PL-02">HUB-PL-02 - Pomocniczy W-B2</option>
             </select>
           </div>
-        </div>
-      </div>
 
-      {/* 2. Key Performance Indicators Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Value of total pipeline */}
-        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono"> pipeline finansowy zapotrzebowania </span>
-              <span className="text-2xl font-black text-slate-900 tracking-tight font-mono block mt-1">
-                {financialKPIs.totalValue.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
-              </span>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <DollarSign className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-[11px]">
-            <span className="text-emerald-600 font-extrabold flex items-center gap-0.5">
-              <TrendingUp className="w-3 h-3" />
-              {financialKPIs.fulfilledValue > 0 ? Math.round((financialKPIs.fulfilledValue / financialKPIs.totalValue) * 100) : 0}%
-            </span>
-            <span className="text-slate-500">Zrealizowano ({financialKPIs.fulfilledValue.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł)</span>
-          </div>
-        </div>
-
-        {/* KPI 2: Order shipment rate */}
-        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Wydane zamówienia</span>
-              <span className="text-2xl font-black text-slate-900 tracking-tight font-mono block mt-1">
-                {orderStats.shipped + orderStats.delivered} / {orderStats.total}
-              </span>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <PackageCheck className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-[11px]">
-            <span className="text-blue-600 font-extrabold">
-              {orderStats.total > 0 ? Math.round(((orderStats.shipped + orderStats.delivered) / orderStats.total) * 100) : 0}%
-            </span>
-            <span className="text-slate-500">Wskaźnik wysyłki (Outbound)</span>
-          </div>
-        </div>
-
-        {/* KPI 3: Inventory value density & Low Stock alerts */}
-        <div className={`bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all ${inventoryMetrics.outOfStockCount > 0 ? 'border-red-200 bg-red-50/10' : ''}`}>
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Pozycje do reorderu</span>
-              <span className={`text-2xl font-black tracking-tight font-mono block mt-1 ${inventoryMetrics.outOfStockCount > 0 ? 'text-red-700' : 'text-slate-900'}`}>
-                {inventoryMetrics.lowStockCount + inventoryMetrics.outOfStockCount} SKU
-              </span>
-            </div>
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${inventoryMetrics.outOfStockCount > 0 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-[11px]">
-            <span className={inventoryMetrics.outOfStockCount > 0 ? 'text-red-700 font-bold' : 'text-amber-700 font-bold'}>
-              {inventoryMetrics.outOfStockCount} szt. zero-status
-            </span>
-            <span className="text-slate-500">Wymaga pilnego zatowarowania</span>
-          </div>
-        </div>
-
-        {/* KPI 4: Global picking accuracy rate percentage */}
-        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Dokładność kompletacji</span>
-              <span className="text-2xl font-black text-emerald-600 tracking-tight font-mono block mt-1">
-                99.85%
-              </span>
-            </div>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <Target className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-[11px]">
-            <span className="text-emerald-600 font-extrabold">NORMA WMS: &gt;99.5%</span>
-            <span className="text-slate-500">• Cel operacyjny osiągnięty</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Main Chart section & Ranking Lists Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Interactive Graph block (Takes 2 Columns) */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4 mb-6">
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-[#2170e4]" />
-                Interaktywne Wykresy Statystyczne
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">Wybierz zakładkę, aby przeanalizować rozkład danych operacyjnych.</p>
-            </div>
-
-            {/* Sub-tabs for chart select */}
-            <div className="flex flex-wrap bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0 select-none gap-0.5">
-              <button
-                onClick={() => setActiveChartTab('orders')}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold cursor-pointer transition-all border-none ${
-                  activeChartTab === 'orders' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Status Zamówień
-              </button>
-              <button
-                onClick={() => setActiveChartTab('categories')}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold cursor-pointer transition-all border-none ${
-                  activeChartTab === 'categories' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Kategorie SKU
-              </button>
-              <button
-                onClick={() => setActiveChartTab('zones')}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold cursor-pointer transition-all border-none ${
-                  activeChartTab === 'zones' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Zapełnienie Hal
-              </button>
-              <button
-                onClick={() => setActiveChartTab('top_skus')}
-                className={`px-3 py-1.5 rounded-md text-[11px] font-bold cursor-pointer transition-all border-none ${
-                  activeChartTab === 'top_skus' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Gorące SKU
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChartTab('turnover')}
-                className={`px-2.5 py-1.5 rounded-md text-[10px] sm:text-[11px] font-bold cursor-pointer transition-all border-none ${
-                  activeChartTab === 'turnover' ? 'bg-[#2170e4] text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                📈 Rotacja Zapasów
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveChartTab('frequency')}
-                className={`px-2.5 py-1.5 rounded-md text-[10px] sm:text-[11px] font-bold cursor-pointer transition-all border-none ${
-                  activeChartTab === 'frequency' ? 'bg-[#2170e4] text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                📅 Częstotliwość (30d)
-              </button>
-            </div>
-          </div>
-
-          {/* Dynamic Render of Selected Chart View */}
-          <div className="flex-grow flex flex-col justify-center min-h-[300px]">
-            {activeChartTab === 'orders' && (
-              <div className="space-y-5">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Liczba zarejestrowanych dokumentów out-of-door posortowanych według statusu:</p>
-                
-                {[
-                  { key: 'oczekujace', label: 'Oczekujące (Zlecone do terminala)', count: orderStats.pending, color: 'bg-purple-500', hoverColor: 'hover:bg-purple-600', textColor: 'text-purple-700', bgLt: 'bg-purple-50' },
-                  { key: 'realizacja', label: 'W realizacji (Picker / Packer)', count: orderStats.inProgress, color: 'bg-blue-500', hoverColor: 'hover:bg-blue-600', textColor: 'text-blue-700', bgLt: 'bg-blue-50' },
-                  { key: 'wyslane', label: 'Wysłane (Przekazane kurierom)', count: orderStats.shipped, color: 'bg-amber-500', hoverColor: 'hover:bg-amber-600', textColor: 'text-amber-700', bgLt: 'bg-amber-50' },
-                  { key: 'dostarczone', label: 'Dostarczone do kontrahentów', count: orderStats.delivered, color: 'bg-emerald-500', hoverColor: 'hover:bg-emerald-600', textColor: 'text-emerald-700', bgLt: 'bg-emerald-50' },
-                ].map((row) => {
-                  const percent = maxOrderStatusVal > 0 ? (row.count / maxOrderStatusVal) * 100 : 0;
-                  const isHovered = hoveredDataId === row.key;
-                  return (
-                    <div 
-                      key={row.key} 
-                      className={`space-y-1.5 p-2 rounded-lg transition-all ${isHovered ? 'bg-slate-50' : ''}`}
-                      onMouseEnter={() => setHoveredDataId(row.key)}
-                      onMouseLeave={() => setHoveredDataId(null)}
-                    >
-                      <div className="flex justify-between items-center text-xs font-semibold">
-                        <span className="text-slate-800 font-bold">{row.label}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${row.textColor} ${row.bgLt}`}>{row.count} zam.</span>
-                          <span className="text-[#a0a0a0] font-mono text-[10px]">({Math.round(percent)}%)</span>
-                        </div>
-                      </div>
-                      
-                      <div className="w-full bg-slate-100 rounded-lg h-5 overflow-hidden flex border border-slate-200">
-                        <div 
-                          className={`${row.color} ${row.hoverColor} h-full transition-all duration-500 rounded-lg flex items-center pl-2`}
-                          style={{ width: `${Math.max(percent, 3)}%` }}
-                        >
-                          {percent > 12 && (
-                            <span className="text-[9px] font-black text-white uppercase tracking-widest leading-none">
-                              {row.count}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {activeChartTab === 'categories' && (
-              <div className="space-y-4">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Dystrybucja stanów magazynowych oraz wartości asortymentów wg głównych kategorii:</p>
-                
-                {categoryStats.length === 0 ? (
-                  <p className="text-center text-xs text-slate-400 py-10">Brak danych o kategoriach produktowych.</p>
-                ) : (
-                  categoryStats.map((cat, idx) => {
-                    const percentStock = maxCategoryStock > 0 ? (cat.stock / maxCategoryStock) * 100 : 0;
-                    return (
-                      <div key={idx} className="space-y-1.5 p-2 rounded-lg hover:bg-zinc-50 transition-all">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-slate-800">{cat.name}</span>
-                          <span className="text-slate-500 font-mono text-[11px]">
-                            Liczba: <strong className="text-slate-800 font-bold">{cat.count} SKU</strong> • Łącznie: <strong className="text-slate-900 font-bold">{cat.stock} szt.</strong> ({cat.value.toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł)
-                          </span>
-                        </div>
-                        <div className="w-full bg-[#f1f5f9] rounded-lg h-4.5 overflow-hidden flex border border-slate-200">
-                          <div 
-                            className="bg-sky-500 hover:bg-sky-600 h-full rounded-lg transition-all"
-                            style={{ width: `${percentStock}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {activeChartTab === 'zones' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {zones.slice(0, 4).map((zone, idx) => {
-                  const percent = zone.capacityPercent || 0;
-                  const isHighLoad = percent > 85;
-                  
-                  return (
-                    <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:border-blue-400 transition-all">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase font-mono">ADRES SKŁADOWANIA</span>
-                          <span className="text-sm font-extrabold text-[#0f172a] block">Korytarz ryglowy {zone.id}</span>
-                        </div>
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-black border ${
-                          isHighLoad ? 'bg-amber-100 text-amber-805 border-amber-300 animate-pulse' : 'bg-green-100 text-green-800 border-green-300'
-                        }`}>
-                          {zone.temp}
-                        </span>
-                      </div>
-
-                      <div className="space-y-2 mt-2">
-                        <div className="flex justify-between text-xs font-semibold">
-                          <span className="text-slate-500">Stopień zapełnienia:</span>
-                          <span className={isHighLoad ? 'text-amber-700 font-black' : 'text-slate-800 font-black'}>
-                            {percent}% ({zone.totalPallets} / {zone.maxPallets} PL)
-                          </span>
-                        </div>
-                        <div className="w-full bg-[#e2e8f0] rounded-full h-3 overflow-hidden border border-slate-300">
-                          <div 
-                            className={`h-full rounded-full transition-all ${isHighLoad ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {activeChartTab === 'top_skus' && (
-              <div className="space-y-4">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Najbardziej rozchwytywane pozycje asortymentowe według zliczonej ilości sztuk w zamówieniach:</p>
-                
-                {topDemandedSkus.length === 0 ? (
-                  <p className="text-center text-xs text-slate-400 py-10">Brak zarejestrowanych SKU w pliku outbound.</p>
-                ) : (
-                  topDemandedSkus.map((sku, idx) => {
-                    const percent = maxSkuQty > 0 ? (sku.qty / maxSkuQty) * 100 : 0;
-                    return (
-                      <div key={idx} className="space-y-1.5 p-2 rounded-lg hover:bg-slate-50 transition-all">
-                        <div className="flex justify-between items-center text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-[#2170e4] bg-blue-50 px-2 py-0.5 rounded font-mono text-[10px]">{sku.sku}</span>
-                            <span className="font-extrabold text-slate-800 truncate max-w-xs">{sku.name}</span>
-                          </div>
-                          <span className="text-slate-600 font-mono text-[11px]">
-                            Łącznie zamówiono: <strong className="text-slate-950 font-black">{sku.qty} szt.</strong> ({sku.orderCount} transakcji)
-                          </span>
-                        </div>
-                        <div className="w-full bg-[#f1f5f9] rounded-lg h-3.5 overflow-hidden flex border border-slate-200">
-                          <div 
-                            className="bg-indigo-500 hover:bg-indigo-600 h-full rounded-lg transition-all"
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {activeChartTab === 'turnover' && (
-              <div className="space-y-4 animate-fadeIn">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Wskaźnik rotacji zapasów (skorelowana prędkość wydań do stanów magazynowych w okresie 30 dni):</p>
-                {turnoverStats.length === 0 ? (
-                  <p className="text-center text-xs text-slate-400 py-10">Brak zapasów do analizy rotacji.</p>
-                ) : (
-                  turnoverStats.map((item, idx) => {
-                    const percent = maxTurnoverRate > 0 ? (item.rate / maxTurnoverRate) * 100 : 0;
-                    return (
-                      <div key={idx} className="space-y-1.5 p-2 rounded-lg hover:bg-slate-50 transition-all">
-                        <div className="flex justify-between items-center text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 truncate max-w-xs">{item.name}</span>
-                            <span className="font-mono text-[10px] text-slate-400">({item.sku})</span>
-                          </div>
-                          <span className="text-slate-650 font-mono text-[11px]">
-                            Rotacja: <strong className="text-blue-600 font-extrabold">{item.rate}x / msc</strong> • Stan: <strong className="text-slate-800 font-bold">{item.stock} szt.</strong> (Wydano: {item.salesQty})
-                          </span>
-                        </div>
-                        <div className="w-full bg-[#f1f5f9] rounded-lg h-3.5 overflow-hidden flex border border-slate-200">
-                          <div 
-                            className="bg-emerald-500 hover:bg-emerald-600 h-full rounded-lg transition-all"
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-semibold px-0.5">
-                          <span>Szacowany czas wyczerpania: <strong className="text-zinc-650 font-bold">{item.daysToDeplete}</strong></span>
-                          <span>Rekomendacja: {item.rate > 1.5 ? <span className="text-amber-600 font-bold">Pilne domówienie</span> : <span className="text-emerald-600 font-bold">Stan optymalny</span>}</span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {activeChartTab === 'frequency' && (
-              <div className="space-y-4 animate-fadeIn">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Wolumen zrealizowanych kompletacji i wydań w ujęciu tygodniowym (ostatnie 30 dni):</p>
-                {frequencyStats.map((item, idx) => {
-                  const percent = maxFreqCount > 0 ? (item.count / maxFreqCount) * 100 : 0;
-                  return (
-                    <div key={idx} className="space-y-1.5 p-2 rounded-lg hover:bg-slate-50 transition-all">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-800">{item.week}</span>
-                        <span className="text-slate-600 font-mono text-[11px]">
-                          Liczba rund: <strong className="text-slate-900 font-black">{item.count}</strong> • Wartość wydań: <strong className="text-slate-900 font-bold">{item.value.toLocaleString('pl-PL')} zł</strong>
-                        </span>
-                      </div>
-                      <div className="w-full bg-[#f1f5f9] rounded-lg h-4.5 overflow-hidden flex border border-slate-200">
-                        <div 
-                          className={`${item.color} ${item.hoverColor} h-full rounded-lg transition-all`}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Quick summary line under the active chart */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-mono">
-            <span>Synchronizacja z telemetrią bramki RFID: aktywna</span>
-            <span>Baza danych zaktualizowana: w czasie rzeczywistym</span>
-          </div>
-        </div>
-
-        {/* Right Columns: Personnel Productivity Leaderboard */}
-        <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2 border-b border-slate-100 pb-3">
-              <Users className="w-4.5 h-4.5 text-[#2170e4]" />
-              <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Wydajność Ekipy (Dziś)</h3>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">Ranking operatorów terminali uszeregowany według pomyślnych kompletacji (picks):</p>
-
-            <div className="space-y-3.5 max-h-[350px] overflow-y-auto pr-1">
-              {workerKPIs.length === 0 ? (
-                <div className="text-center py-10 text-slate-400 text-xs">Brak aktywnych pracowników w bazie danych.</div>
-              ) : (
-                workerKPIs.map((worker, index) => {
-                  const isTop = index === 0;
-                  return (
-                    <div key={worker.id || index} className={`p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-[#e2e8f0] flex justify-between items-center transition-all ${isTop ? 'border-amber-200 bg-amber-50/10' : ''}`}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-black ${
-                          isTop 
-                            ? 'bg-amber-100 text-amber-700 animate-bounce' 
-                            : 'bg-slate-200 text-slate-700'
-                        }`}>
-                          {isTop ? <Award className="w-4.5 h-4.5 text-amber-600" /> : index + 1}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-900 text-xs truncate leading-tight">{worker.name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5 uppercase tracking-wide">{worker.role} • Klasa {worker.level}</p>
-                        </div>
-                      </div>
-
-                      <div className="text-right font-mono shrink-0">
-                        <span className="text-xs font-black text-[#2170e4] block leading-none">{worker.picksToday} szt.</span>
-                        <span className="text-[9px] text-emerald-600 font-bold block mt-1">{worker.accuracy}% acc</span>
-                      </div>
-                    </div>
-                  );
-                })
+          {/* General Text Worker Search */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+              <Search className="w-3.5 h-3.5 text-blue-400" /> Wyszukiwarka pracownika
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={workerSearchText}
+                onChange={(e) => setWorkerSearchText(e.target.value)}
+                placeholder="Wpisz imię lub nazwisko..."
+                className="w-full bg-[#1e293b] border border-[#334155] text-white text-xs font-bold rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-500"
+              />
+              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+              {workerSearchText && (
+                <button 
+                  onClick={() => setWorkerSearchText('')} 
+                  className="absolute right-2.5 top-2.5 text-zinc-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 mt-5 flex items-start gap-2.5">
-            <UserCheck className="w-4.5 h-4.5 text-emerald-500 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-slate-600 font-bold leading-normal">
-              <strong>Zalecenie dyspozytora:</strong> Pracownik <strong className="text-slate-900">{workerKPIs[0]?.name || 'n/a'}</strong> wykazuje najwyższe tempo zbiórek. Wyznacz go do wydań krytycznych (prio 1).
-            </p>
+          {/* Multiselect workers dropdown with chips */}
+          <div className="relative flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-blue-400" /> Wielokrotny wybór (Chipy)
+            </label>
+            <div className="flex flex-wrap gap-1 p-1 bg-[#1e293b] border border-[#334155] rounded-lg min-h-[36px] items-center text-xs">
+              {selectedWorkers.map(name => (
+                <span key={name} className="bg-blue-600/90 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1">
+                  {name.split(' ')[0]}
+                  <button 
+                    onClick={() => setSelectedWorkers(prev => prev.filter(n => n !== name))}
+                    className="hover:text-red-300 font-extrabold focus:outline-none"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                placeholder={selectedWorkers.length === 0 ? "Wybierz pracowników..." : ""}
+                value={workerSearchQuery}
+                onChange={(e) => {
+                  setWorkerSearchQuery(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                className="bg-transparent border-none text-white text-xs outline-none focus:ring-0 flex-grow min-w-[60px]"
+              />
+              {selectedWorkers.length > 0 && (
+                <button 
+                  onClick={() => setSelectedWorkers([])}
+                  className="text-[9px] text-zinc-400 hover:text-white font-extrabold ml-auto mr-1"
+                >
+                  Usuń
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown overlay */}
+            {isDropdownOpen && dropdownMatches.length > 0 && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsDropdownOpen(false)} />
+                <div className="absolute top-full left-0 right-0 z-40 bg-[#1e293b] border border-[#334155] rounded-lg mt-1 max-h-40 overflow-y-auto shadow-2xl">
+                  {dropdownMatches.map(worker => (
+                    <div
+                      key={worker.id}
+                      onClick={() => {
+                        setSelectedWorkers(prev => [...prev, worker.name]);
+                        setWorkerSearchQuery('');
+                        setIsDropdownOpen(false);
+                      }}
+                      className="px-3 py-1.5 text-xs text-zinc-200 hover:bg-blue-600 hover:text-white cursor-pointer transition-all flex justify-between items-center border-b border-[#334155]/30"
+                    >
+                      <span>{worker.name}</span>
+                      <span className="text-[8px] uppercase bg-slate-800 text-zinc-400 px-1.5 rounded">{worker.role}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Conditional Custom Date fields */}
+          {dateRangeType === 'custom' && (
+            <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Od</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-[#1e293b] border border-[#334155] text-white text-xs font-bold rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 cursor-pointer"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Do</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-[#1e293b] border border-[#334155] text-white text-xs font-bold rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Summary Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all flex justify-between items-start">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Nowe zamówienia</span>
+            <span className="text-3xl font-black text-slate-900 tracking-tight font-mono block mt-1">
+              {kpiStats.newOrdersCount}
+            </span>
+            <span className="text-[11px] text-slate-500 block">Zlecone w wybranym okresie</span>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Package className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all flex justify-between items-start">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Zrealizowane zamówienia</span>
+            <span className="text-3xl font-black text-emerald-600 tracking-tight font-mono block mt-1">
+              {kpiStats.completedOrdersCount}
+            </span>
+            <span className="text-[11px] text-slate-500 block">Zamknięte i wysłane paczki</span>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all flex justify-between items-start">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Spakowane paczki</span>
+            <span className="text-3xl font-black text-blue-600 tracking-tight font-mono block mt-1">
+              {kpiStats.packedCount}
+            </span>
+            <span className="text-[11px] text-slate-500 block">Liczba spakowanych paczek</span>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <PackageCheck className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 border border-[#e2e8f0] shadow-sm hover:shadow-md transition-all flex justify-between items-start">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">Zebrane zamówienia</span>
+            <span className="text-3xl font-black text-teal-600 tracking-tight font-mono block mt-1">
+              {kpiStats.pickedCount}
+            </span>
+            <span className="text-[11px] text-slate-500 block">Kompletacje pickerów</span>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+            <UserCheck className="w-5 h-5" />
           </div>
         </div>
       </div>
 
-      {/* 4. Sub-hall layout condition monitoring widgets */}
+      {/* 3. Main Switchable Full Width Graph Panel */}
+      <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col space-y-6">
+        
+        {/* Tab switcher header & controllers */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          {/* Main tabs */}
+          <div className="flex flex-wrap bg-slate-100 p-0.5 rounded-lg border border-slate-200 select-none gap-0.5 max-w-max">
+            {[
+              { id: 'packers', label: 'Pakowacze' },
+              { id: 'pickers', label: 'Zbieracze (pickerzy)' },
+              { id: 'new_orders', label: 'Nowe zamówienia' },
+              { id: 'completed_orders', label: 'Zrealizowane zamówienia' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  setSortField('rank');
+                  setSortDirection('asc');
+                }}
+                className={`px-4 py-1.5 rounded-md text-[11px] font-black uppercase tracking-wider cursor-pointer transition-all border-none ${
+                  activeTab === tab.id ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Conditional Controls for Worker statistics */}
+          {(activeTab === 'packers' || activeTab === 'pickers') && (
+            <div className="flex flex-wrap items-center gap-3 select-none">
+              {/* TOP limit selector */}
+              <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                <span className="px-2 text-slate-500 font-extrabold uppercase text-[9px] tracking-wide">Pokazuj:</span>
+                {[10, 20, 50, 'all'].map(limit => (
+                  <button
+                    key={limit}
+                    onClick={() => setTopLimit(limit as any)}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
+                      topLimit === limit ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    {limit === 'all' ? 'Wszyscy' : `TOP ${limit}`}
+                  </button>
+                ))}
+              </div>
+
+              {/* View layout selector */}
+              <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                <button
+                  onClick={() => setViewType('chart')}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
+                    viewType === 'chart' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Wykres
+                </button>
+                <button
+                  onClick={() => setViewType('table')}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
+                    viewType === 'table' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Tabela
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Dynamic Display area */}
+        <div className="min-h-[300px]">
+          {/* 3A: Alternative Layout for workers > 30 (scrollable horizontal bar chart or ranking table) */}
+          {shouldSwitchToAltView ? (
+            <div>
+              {viewType === 'chart' ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                      Ranking pracowników (Wykres poziomy, przewijalny z {rawListLength} osób):
+                    </p>
+                    <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-black">
+                      Wykres poziomy (Duży zbiór)
+                    </span>
+                  </div>
+
+                  <div className="max-h-[500px] overflow-y-auto space-y-2.5 pr-2 border border-slate-100 rounded-xl p-3 bg-slate-50/30">
+                    {activeData.map((item, idx) => {
+                      const percent = horizontalMaxVal > 0 ? (item.value / horizontalMaxVal) * 100 : 0;
+                      return (
+                        <div 
+                          key={idx}
+                          onClick={() => setSelectedWorkerName(item.label)}
+                          className="flex items-center gap-3 p-2 bg-white hover:bg-blue-50/40 rounded-xl border border-slate-200/80 cursor-pointer transition-all hover:border-blue-300 shadow-xs"
+                        >
+                          <span className="text-xs font-bold text-slate-400 w-8 text-right font-mono">#{idx + 1}</span>
+                          <span className="text-xs font-extrabold text-slate-800 w-36 truncate">{item.label}</span>
+                          <div className="flex-grow h-6 bg-slate-100/60 rounded-lg overflow-hidden relative border border-slate-200/50">
+                            <div 
+                              className={`h-full bg-gradient-to-r ${
+                                activeTab === 'packers' ? 'from-blue-600 to-blue-400' : 'from-teal-600 to-teal-400'
+                              } rounded-lg transition-all duration-500`}
+                              style={{ width: `${Math.max(percent, 1.5)}%` }}
+                            />
+                            <span className="absolute inset-y-0 right-3 flex items-center text-[10px] font-bold text-slate-500">
+                              {item.value} {activeTab === 'packers' ? 'paczek' : 'kompletacji'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* 3B: Sortable Ranking Table */
+                <div className="space-y-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                    Ranking pracowników w formie tabelarycznej:
+                  </p>
+                  <div className="overflow-x-auto border border-[#e2e8f0] rounded-xl shadow-xs">
+                    <table className="min-w-full bg-white text-xs select-none">
+                      <thead className="bg-[#f8fafc] border-b border-[#e2e8f0] font-bold text-slate-700 uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th onClick={() => handleSort('rank')} className="py-3 px-4 text-left cursor-pointer hover:bg-slate-100/80 transition-colors">
+                            <div className="flex items-center gap-1.5">Pozycja <ArrowUpDown className="w-3 h-3 text-slate-400" /></div>
+                          </th>
+                          <th onClick={() => handleSort('name')} className="py-3 px-4 text-left cursor-pointer hover:bg-slate-100/80 transition-colors">
+                            <div className="flex items-center gap-1.5">Pracownik <ArrowUpDown className="w-3 h-3 text-slate-400" /></div>
+                          </th>
+                          <th className="py-3 px-4 text-left">Dział / Rola</th>
+                          <th onClick={() => handleSort('value')} className="py-3 px-4 text-right cursor-pointer hover:bg-slate-100/80 transition-colors">
+                            <div className="flex items-center gap-1.5 justify-end">Liczba operacji <ArrowUpDown className="w-3 h-3 text-slate-400" /></div>
+                          </th>
+                          <th className="py-3 px-4 text-right">Udział w całości</th>
+                          <th className="py-3 px-4 text-right">Średnia dzienna</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#e2e8f0]">
+                        {sortedTableData.map((row) => {
+                          const totalSum = activeData.reduce((s, i) => s + i.value, 0) || 1;
+                          const share = ((row.value / totalSum) * 100).toFixed(1);
+                          const dailyAvg = (row.value / daysCount).toFixed(1);
+                          
+                          return (
+                            <tr
+                              key={row.name}
+                              onClick={() => setSelectedWorkerName(row.name)}
+                              className="hover:bg-blue-50/30 cursor-pointer transition-colors border-b border-slate-100"
+                            >
+                              <td className="py-3 px-4 font-mono font-bold text-slate-500">#{row.rank}</td>
+                              <td className="py-3 px-4 font-extrabold text-slate-900">{row.name}</td>
+                              <td className="py-3 px-4 font-medium text-slate-500">
+                                {activeTab === 'packers' ? 'Pakowacz WMS' : 'Kompletujący (Picker)'}
+                              </td>
+                              <td className="py-3 px-4 text-right font-mono font-bold text-blue-600">{row.value}</td>
+                              <td className="py-3 px-4 text-right font-mono font-semibold text-slate-500">{share}%</td>
+                              <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">{dailyAvg} /d</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* 3C: Standard vertical charts (for workers <= 30 or date timelines) */
+            <div className="space-y-4">
+              {activeTab === 'packers' && (
+                <BarChart
+                  title="Wydajność Pakowaczy (Spakowane paczki)"
+                  data={packerData}
+                  colorFrom="from-blue-600"
+                  colorTo="to-blue-400"
+                  icon={<Package className="w-4.5 h-4.5" />}
+                  yLabel="paczek"
+                  onBarClick={setSelectedWorkerName}
+                />
+              )}
+              {activeTab === 'pickers' && (
+                <BarChart
+                  title="Wydajność Zbieraczy (Zebrane zamówienia)"
+                  data={pickerData}
+                  colorFrom="from-teal-600"
+                  colorTo="to-teal-400"
+                  icon={<UserCheck className="w-4.5 h-4.5" />}
+                  yLabel="zamówień"
+                  onBarClick={setSelectedWorkerName}
+                />
+              )}
+              {activeTab === 'new_orders' && (
+                <BarChart
+                  title="Wolumen Nowych Zamówień"
+                  data={timeSeriesData.newOrders}
+                  colorFrom="from-indigo-600"
+                  colorTo="to-indigo-400"
+                  icon={<PackageCheck className="w-4.5 h-4.5" />}
+                  yLabel="zamówień"
+                />
+              )}
+              {activeTab === 'completed_orders' && (
+                <BarChart
+                  title="Wolumen Zrealizowanych Zamówień"
+                  data={timeSeriesData.completedOrders}
+                  colorFrom="from-emerald-600"
+                  colorTo="to-emerald-400"
+                  icon={<CheckCircle2 className="w-4.5 h-4.5" />}
+                  yLabel="zamówień"
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4. Single Worker Detailed Analysis Side Drawer Panel */}
+      {selectedWorkerName && selectedWorkerInfo && (
+        <>
+          {/* Dark Glass Backdrop overlay */}
+          <div 
+            className="fixed inset-0 bg-[#0f172a]/55 backdrop-blur-xs z-40 transition-opacity duration-300 ease-in-out"
+            onClick={() => setSelectedWorkerName(null)}
+          />
+          
+          {/* Slide Over panel */}
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white border-l border-slate-200 shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out animate-slideInRight h-full">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-[#0f172a] text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm tracking-wide shadow-md uppercase">
+                  {selectedWorkerInfo.name.split(' ').map((n: string) => n[0]).join('')}
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm tracking-tight">{selectedWorkerInfo.name}</h4>
+                  <p className="text-[10px] text-zinc-400 font-mono mt-0.5 uppercase tracking-wider">
+                    {selectedWorkerInfo.role === 'Packer' ? 'Pakowacz WMS' : 'Picker / Kompletujący'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedWorkerName(null)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="flex-grow overflow-y-auto p-6 space-y-6">
+              
+              {/* Detailed Metrics Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl space-y-1">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest font-mono">Spakowane paczki</span>
+                  <span className="text-xl font-black text-slate-900 block font-mono">{selectedWorkerInfo.packerCount}</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl space-y-1">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest font-mono">Zebrane zamówienia</span>
+                  <span className="text-xl font-black text-slate-900 block font-mono">{selectedWorkerInfo.pickerCount}</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl space-y-1">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest font-mono">Średnia dzienna</span>
+                  <span className="text-xl font-black text-blue-600 block font-mono">{selectedWorkerInfo.dailyAverage} ops</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl space-y-1">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest font-mono">Pozycja w rankingu</span>
+                  <span className="text-xl font-black text-emerald-600 block font-mono">
+                    #{selectedWorkerInfo.rankPos} <span className="text-[10px] text-slate-400 font-sans font-bold">z {selectedWorkerInfo.listLength}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Worker Trend activity chart */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4">
+                <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4 text-blue-600" />
+                  Wykres aktywności w czasie ({dateRangeType === 'day' ? 'Dzisiaj' : 'Historia'})
+                </p>
+                <div className="h-52">
+                  <BarChart
+                    title=""
+                    data={selectedWorkerInfo.trendData}
+                    colorFrom={selectedWorkerInfo.role === 'Packer' ? 'from-blue-600' : 'from-teal-600'}
+                    colorTo={selectedWorkerInfo.role === 'Packer' ? 'to-blue-400' : 'to-teal-400'}
+                    icon={<Activity className="w-4 h-4" />}
+                    yLabel="akcji"
+                  />
+                </div>
+              </div>
+
+              {/* Activity recommendation */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
+                <Target className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h5 className="font-bold text-xs text-blue-900 uppercase tracking-wide">Ocena telemetryczna</h5>
+                  <p className="text-[11px] text-blue-700 leading-normal font-medium">
+                    Pracownik {selectedWorkerInfo.name} wykazuje stabilne tempo pracy w wybranym okresie. Średnia dzienna wynosi {selectedWorkerInfo.dailyAverage} operacji, plasując go w grupie wydajnościowej klasy A. Brak wykrytych anomalii kompletacji.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 5. Physical telemetry monitoring (premium footer layout) */}
       <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm">
         <div className="flex items-center gap-2.5 mb-5 border-b border-slate-100 pb-3">
           <Activity className="w-4.5 h-4.5 text-[#2170e4]" />

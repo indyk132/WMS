@@ -46,9 +46,210 @@ const readStoredTab = () => {
     return window.localStorage.getItem('wms-current-tab') || 'overview';
 };
 
+const getDeterministicRandom = (seed: string) => {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0;
+  }
+  return function() {
+    h = Math.imul(h ^ h >>> 16, 2246822507);
+    h = Math.imul(h ^ h >>> 13, 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+};
+
+const generateMockStaffNames = () => {
+  const firstNames = ['Jan', 'Marcin', 'Piotr', 'Krzysztof', 'Tomasz', 'Andrzej', 'Paweł', 'Janusz', 'Mateusz', 'Michał', 'Jakub', 'Adam', 'Łukasz', 'Kamil', 'Rafał', 'Wojciech', 'Robert', 'Sebastian', 'Patryk', 'Maciej', 'Mariusz', 'Dariusz', 'Grzegorz', 'Jacek', 'Zofia', 'Hanna', 'Anna', 'Katarzyna', 'Małgorzata', 'Agnieszka'];
+  const lastNames = ['Nowak', 'Kowalski', 'Wiśniewski', 'Wójcik', 'Kowalczyk', 'Kamiński', 'Lewandowski', 'Zieliński', 'Szymański', 'Woźniak', 'Dąbrowski', 'Kozłowski', 'Mazur', 'Jankowski', 'Kwiatkowski', 'Wojciechowski', 'Krawczyk', 'Kaczmarek', 'Piotrowski', 'Grabowski'];
+  
+  const pickers: string[] = ['Jan Kowalski'];
+  const packers: string[] = ['Mariusz Pakosz'];
+  
+  for (let i = 0; i < firstNames.length; i++) {
+    for (let j = 0; j < lastNames.length; j++) {
+      const name = `${firstNames[i]} ${lastNames[j]}`;
+      if (name === 'Jan Kowalski' || name === 'Mariusz Pakosz') continue;
+      const hash = i * 17 + j * 31;
+      if (hash % 2 === 0) {
+        pickers.push(name);
+      } else {
+        packers.push(name);
+      }
+      if (pickers.length + packers.length >= 150) break;
+    }
+    if (pickers.length + packers.length >= 150) break;
+  }
+  return { pickers, packers };
+};
+
+const generateMockOrders = () => {
+  const customers = [
+    'Acme Corp Logistics', 'Global Imports LLC', 'TechNova Dist.', 'VeloSpeed Sp. z o.o.',
+    'ElectroWorld S.A.', 'Apex Logistics Europe', 'Krak-Tech Solutions', 'Baltic Shipping',
+    'Euro-Food Sp. z o.o.', 'Bio-Chemia Polska', 'Hurtownia Części Auto', 'Centrum Poznań',
+    'Import-Export Gdańsk', 'Logistyka Polska S.A.', 'Silesia Parts Sp. z o.o.'
+  ];
+  const destinations = [
+    'Seattle, WA', 'Miami, FL', 'Austin, TX', 'Poznań, PL', 'Warszawa, PL', 'Gdańsk, PL',
+    'Kraków, PL', 'Gdynia, PL', 'Wrocław, PL', 'Katowice, PL', 'Łódź, PL', 'Szczecin, PL',
+    'Bydgoszcz, PL', 'Lublin, PL', 'Białystok, PL'
+  ];
+  const productPool = [
+    { name: 'Kawa ziarnista Arabica 1kg', sku: 'FOOD-KAWA-001', price: 49.99 },
+    { name: 'Klocki hamulcowe przednie', sku: 'AUTO-KLOCKI-001', price: 120.00 },
+    { name: 'Akumulator 74Ah 12V', sku: 'AUTO-AKU-001', price: 299.00 },
+    { name: 'Skaner kodów kreskowych USB', sku: 'ELEC-SKAN-001', price: 189.99 },
+    { name: 'Bateria do skanera 2600mAh', sku: 'ELEC-BAT-001', price: 39.99 },
+    { name: 'Papier A4 500 arkuszy', sku: 'BIUR-PAP-001', price: 19.99 },
+    { name: 'Etykiety logistyczne 100x150', sku: 'BIUR-ETY-001', price: 25.00 },
+    { name: 'Rękawice nitrylowe 100 szt', sku: 'CHEM-REK-001', price: 15.50 },
+    { name: 'Płyn do dezynfekcji 5L', sku: 'CHEM-PLY-001', price: 45.00 }
+  ];
+
+  const { pickers, packers } = generateMockStaffNames();
+  
+  const ordersList: any[] = [];
+  let orderIdNum = 89500;
+  
+  const rand = getDeterministicRandom("wms-orders-seed-2026");
+  
+  for (let i = 0; i < 250; i++) {
+    const orderId = `ORD-${orderIdNum--}`;
+    const daysAgo = Math.floor(rand() * 28);
+    const hour = String(Math.floor(8 + rand() * 12)).padStart(2, '0');
+    const min = String(Math.floor(rand() * 60)).padStart(2, '0');
+    const timeStr = `${hour}:${min}`;
+    const shipmentDate = getRelativeDateStr(daysAgo, timeStr);
+    
+    const cust = customers[Math.floor(rand() * customers.length)];
+    const dest = destinations[Math.floor(rand() * destinations.length)];
+    const wh = rand() < 0.6 ? 'HUB-PL-01' : 'HUB-PL-02';
+    
+    let status = 'Oczekujące';
+    if (i < 50) status = 'Do kompletacji';
+    else if (i < 65) status = 'W kompletacji';
+    else if (i < 115) status = 'Oczekuje na pakowanie';
+    else if (i < 175) status = 'Spakowane';
+    else if (i < 225) status = 'Wysłane';
+    else if (i < 240) status = 'Dostarczone';
+    else status = 'Oczekujące';
+    
+    const itemsCount = Math.floor(1 + rand() * 3);
+    const orderItems: any[] = [];
+    const chosenSkus = new Set();
+    
+    for (let k = 0; k < itemsCount; k++) {
+      const p = productPool[Math.floor(rand() * productPool.length)];
+      if (!chosenSkus.has(p.sku)) {
+        chosenSkus.add(p.sku);
+        orderItems.push({
+          name: p.name,
+          sku: p.sku,
+          qty: Math.floor(1 + rand() * 15)
+        });
+      }
+    }
+    
+    let notes = '';
+    let actor = 'System';
+    const hasBeenPicked = ['Oczekuje na pakowanie', 'Spakowane', 'Wysłane', 'Dostarczone'].includes(status);
+    const hasBeenPacked = ['Spakowane', 'Wysłane', 'Dostarczone'].includes(status);
+    
+    let binId = '';
+    let pickedBy = '';
+    let pickCompletedTime = '';
+
+    if (hasBeenPicked) {
+      const picker = pickers[Math.floor(rand() * pickers.length)];
+      notes += `[PICKER]: Kompletacja zakończona przez ${picker}. Czas: ${Math.floor(1 + rand() * 4)}m ${Math.floor(rand() * 60)}s.`;
+      actor = picker;
+      pickedBy = picker;
+      binId = `BIN-${String(Math.floor(1 + rand() * 50)).padStart(3, '0')}`;
+      pickCompletedTime = timeStr;
+    }
+    
+    if (hasBeenPacked) {
+      const packer = packers[Math.floor(rand() * packers.length)];
+      notes += `\n[PACKER]: Spakowano do Karton Średni M o wadze ${(1 + rand() * 6).toFixed(2)}kg przez ${packer}. Wygenerowano etykietę DPD.`;
+      actor = packer;
+    }
+    
+    ordersList.push({
+      id: orderId,
+      customer: cust,
+      destination: dest,
+      status,
+      priority: prio,
+      shipmentDate,
+      items: orderItems,
+      warehouseCode: wh,
+      internalNotes: notes.trim(),
+      internalNotesActor: actor,
+      isPacked: hasBeenPacked,
+      binId: hasBeenPicked ? binId : undefined,
+      pickedBy: hasBeenPicked ? pickedBy : undefined,
+      pickCompletedTime: hasBeenPicked ? pickCompletedTime : undefined
+    });
+  }
+  
+  return ordersList;
+};
+
 export default function App() {
     const [currentUser, setCurrentUser] = useState<User | null>(() => readStoredUser());
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+    const getSideNavItems = () => {
+        if (!currentUser) return [];
+        const role = currentUser.role;
+
+        switch (role) {
+            case 'Sales Manager':
+                return [
+                    { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
+                    { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                    { id: 'products', label: 'Katalog Produktów', icon: Layers },
+                ];
+            case 'Logistics Planner':
+                return [
+                    { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+                    { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
+                    { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                    { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                ];
+            case 'Inventory Auditor':
+                return [
+                    { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+                    { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                    { id: 'products', label: 'Katalog Produktów', icon: Layers },
+                    { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                ];
+            case 'Picker':
+            case 'Packer':
+                return [
+                    { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+                    { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                ];
+            case 'Admin':
+            case 'Warehouse Manager':
+            default:
+                return [
+                    { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+                    { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
+                    { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                    { id: 'products', label: 'Katalog Produktów', icon: Layers },
+                    { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                    { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
+                    { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
+                ];
+        }
+    };
+
+    const sideNavItems = getSideNavItems();
+    const isTabAllowed = (tabId: string) => sideNavItems.some(item => item.id === tabId);
     const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
     const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
         try {
@@ -75,119 +276,9 @@ export default function App() {
         { productId: 6, sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, locationCode: 'B-02-01-03', zoneGroup: 'General', primaryLocationId: 6, locations: ['B-02-01-03'], zoneGroups: ['General'], stockEntries: [{ stockId: 6, locationId: 6, locationCode: 'B-02-01-03', zoneGroup: 'General', quantity: 85 }] }
     ]);
 
-    const [orders, setOrders] = useState<any[]>([
-        {
-            id: 'ORD-89241',
-            customer: 'Acme Corp Logistics',
-            destination: 'Seattle, WA',
-            status: 'W realizacji',
-            priority: 'Wysoki',
-            shipmentDate: getRelativeDateStr(0, '14:30'),
-            items: [{ name: 'Kawa ziarnista Arabica 1kg', sku: 'FOOD-KAWA-001', qty: 15 }]
-        },
-        {
-            id: 'ORD-89240',
-            customer: 'Global Imports LLC',
-            destination: 'Miami, FL',
-            status: 'Wysłane',
-            priority: 'Normalny',
-            shipmentDate: getRelativeDateStr(1, '09:15'),
-            items: [{ name: 'Klocki hamulcowe przednie', sku: 'AUTO-KLOCKI-001', qty: 50 }]
-        },
-        {
-            id: 'ORD-89239',
-            customer: 'TechNova Dist.',
-            destination: 'Austin, TX',
-            status: 'Oczekujące',
-            priority: 'Normalny',
-            shipmentDate: 'Nieustalony',
-            items: [{ name: 'Akumulator 74Ah 12V', sku: 'AUTO-AKU-001', qty: 25 }]
-        },
-        {
-            id: 'ORD-89238',
-            customer: 'VeloSpeed Sp. z o.o.',
-            destination: 'Poznań, PL',
-            status: 'Oczekujące',
-            priority: 'Normalny',
-            shipmentDate: 'Nieustalony',
-            items: [
-                { name: 'Skaner kodów kreskowych USB', sku: 'ELEC-SKAN-001', qty: 5 },
-                { name: 'Bateria do skanera 2600mAh', sku: 'ELEC-BAT-001', qty: 20 }
-            ]
-        },
-        {
-            id: 'ORD-89237',
-            customer: 'ElectroWorld S.A.',
-            destination: 'Warszawa, PL',
-            status: 'W realizacji',
-            priority: 'Wysoki',
-            shipmentDate: getRelativeDateStr(0, '11:00'),
-            items: [
-                { name: 'Papier A4 500 arkuszy', sku: 'BIUR-PAP-001', qty: 30 },
-                { name: 'Etykiety logistyczne 100x150', sku: 'BIUR-ETY-001', qty: 15 }
-            ]
-        },
-        {
-            id: 'ORD-89236',
-            customer: 'Apex Logistics Europe',
-            destination: 'Gdańsk, PL',
-            status: 'Dostarczone',
-            priority: 'Normalny',
-            shipmentDate: 'Ukończono',
-            items: [
-                { name: 'Rękawice nitrylowe 100 szt', sku: 'CHEM-REK-001', qty: 10 },
-                { name: 'Płyn do dezynfekcji 5L', sku: 'CHEM-PLY-001', qty: 5 }
-            ]
-        },
-        {
-            id: 'ORD-89235',
-            customer: 'Krak-Tech Solutions',
-            destination: 'Kraków, PL',
-            status: 'Oczekujące',
-            priority: 'Normalny',
-            shipmentDate: 'Nieustalony',
-            items: [
-                { name: 'Tablet magazynowy 10 cali', sku: 'ELEC-TAB-001', qty: 2 },
-                { name: 'Drukarka etykiet termiczna', sku: 'ELEC-DRUK-001', qty: 3 }
-            ]
-        },
-        {
-            id: 'ORD-89234',
-            customer: 'Baltic Shipping',
-            destination: 'Gdynia, PL',
-            status: 'Wysłane',
-            priority: 'Normalny',
-            shipmentDate: getRelativeDateStr(3, '16:45'),
-            items: [
-                { name: 'Olej silnikowy 5W30 4L', sku: 'AUTO-OLEJ-001', qty: 8 },
-                { name: 'Płyn hamulcowy DOT-4 1L', sku: 'AUTO-HAM-001', qty: 12 }
-            ]
-        },
-        {
-            id: 'ORD-89233',
-            customer: 'Euro-Food Sp. z o.o.',
-            destination: 'Wrocław, PL',
-            status: 'Oczekujące',
-            priority: 'Normalny',
-            shipmentDate: 'Nieustalony',
-            items: [
-                { name: 'Mleko UHT 3.2% 1L', sku: 'FOOD-MLEKO-001', qty: 200 },
-                { name: 'Ryż basmati 1kg', sku: 'FOOD-RYZ-001', qty: 50 }
-            ]
-        },
-        {
-            id: 'ORD-89232',
-            customer: 'Bio-Chemia Polska',
-            destination: 'Katowice, PL',
-            status: 'Oczekujące',
-            priority: 'Normalny',
-            shipmentDate: 'Nieustalony',
-            items: [
-                { name: 'Płyn do dezynfekcji 5L', sku: 'CHEM-PLY-001', qty: 20 },
-                { name: 'Rękawice nitrylowe 100 szt', sku: 'CHEM-REK-001', qty: 100 }
-            ]
-        }
-    ]);
+    const [orders, setOrders] = useState<any[]>(() => {
+        return generateMockOrders();
+    });
 
     const [zones, setZones] = useState<any[]>([
         { id: 'A1', block: 'AMBIENT', capacityPercent: 94, activeSKUs: 3, totalPallets: 32, maxPallets: 34, temp: 'Ambient (18°C)', hazmatStatus: 'None', lastAuditDaysAgo: 1, isLocked: false },
@@ -217,7 +308,10 @@ export default function App() {
         { id: 'EMP-8492', employeeId: 'EMP-8492', userId: '8492', firstName: 'System', lastName: 'Admin', email: 'admin@logistics-os.com', role: 'Admin', zoneAssignment: 'Global Access', status: 'Active', avatarUrl: null },
         { id: 'EMP-9104', employeeId: 'EMP-9104', userId: '9104', firstName: 'Wojtek', lastName: 'Nowak', email: 'manager@logistics-os.com', role: 'Warehouse Manager', zoneAssignment: 'Global Access', status: 'Active', avatarUrl: null },
         { id: 'EMP-1102', employeeId: 'EMP-1102', userId: '1102', firstName: 'Jan', lastName: 'Kowalski', email: 'j.kowalski@logistics-os.com', role: 'Picker', zoneAssignment: 'Aisle 4-12', status: 'Active', avatarUrl: null },
-        { id: 'EMP-9921', employeeId: 'EMP-9921', userId: '9921', firstName: 'Mariusz', lastName: 'Pakosz', email: 'm.pakosz@logistics-os.com', role: 'Packer', zoneAssignment: 'Station B', status: 'Active', avatarUrl: null }
+        { id: 'EMP-9921', employeeId: 'EMP-9921', userId: '9921', firstName: 'Mariusz', lastName: 'Pakosz', email: 'm.pakosz@logistics-os.com', role: 'Packer', zoneAssignment: 'Station B', status: 'Active', avatarUrl: null },
+        { id: 'EMP-2039', employeeId: 'EMP-2039', userId: '2039', firstName: 'Zofia', lastName: 'Bielska', email: 'sales@logistics-os.com', role: 'Sales Manager', zoneAssignment: 'Office / Sales', status: 'Active', avatarUrl: null },
+        { id: 'EMP-3048', employeeId: 'EMP-3048', userId: '3048', firstName: 'Maciej', lastName: 'Kaczmarek', email: 'planner@logistics-os.com', role: 'Logistics Planner', zoneAssignment: 'Global Access', status: 'Active', avatarUrl: null },
+        { id: 'EMP-4059', employeeId: 'EMP-4059', userId: '4059', firstName: 'Hanna', lastName: 'Wiśniewska', email: 'auditor@logistics-os.com', role: 'Inventory Auditor', zoneAssignment: 'Aisle 1-12 & B1-B7', status: 'Active', avatarUrl: null }
     ]);
 
     const [allocationsLog, setAllocationsLog] = useState<any[]>([
@@ -274,6 +368,16 @@ export default function App() {
     useEffect(() => {
         loadUsers();
     }, []);
+
+    useEffect(() => {
+        if (currentUser) {
+            const allowed = getSideNavItems();
+            if (allowed.length > 0 && !allowed.some(item => item.id === currentTab)) {
+                setCurrentTab(allowed[0].id);
+                window.localStorage.setItem('wms-current-tab', allowed[0].id);
+            }
+        }
+    }, [currentUser, currentTab]);
 
     const handleLoginSuccess = (userObj: User) => {
         setCurrentUser(userObj);
@@ -571,7 +675,7 @@ export default function App() {
 
         // 3. Pending/Waiting orders
         orders.forEach(o => {
-            if (o.status === 'Oczekujące') {
+            if (o.status === 'Oczekujące' || o.status === 'Do kompletacji') {
                 list.push({
                     id: `order-pending-${o.id}`,
                     type: 'info',
@@ -656,17 +760,6 @@ export default function App() {
             />
         );
     }
-
-    const sideNavItems = [
-        { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
-        { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
-        { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
-        { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
-        { id: 'products', label: 'Katalog Produktów', icon: Layers },
-        { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
-        { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
-        { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
-    ];
 
     return (
         <div className="bg-[#f5f7fa] text-[#0b1c30] min-h-screen font-sans shrink-0 antialiased flex">
@@ -768,7 +861,7 @@ export default function App() {
                         </div>
                     )}
 
-                    {currentTab === 'overview' && (
+                    {currentTab === 'overview' && isTabAllowed('overview') && (
                         <Dashboard
                             products={products}
                             zones={zones}
@@ -777,7 +870,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'statistics' && (
+                    {currentTab === 'statistics' && isTabAllowed('statistics') && (
                         <Statistics
                             orders={orders}
                             products={products}
@@ -786,7 +879,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'orders' && (
+                    {currentTab === 'orders' && isTabAllowed('orders') && (
                         <Orders
                             orders={orders}
                             products={products}
@@ -798,7 +891,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'inventory' && (
+                    {currentTab === 'inventory' && isTabAllowed('inventory') && (
                         <Products
                             products={products}
                             onUpdateStock={handleUpdateStock}
@@ -807,7 +900,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'products' && (
+                    {currentTab === 'products' && isTabAllowed('products') && (
                         <SalesProducts
                             products={products}
                             onAddProduct={handleCreateProduct}
@@ -816,7 +909,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'zones' && (
+                    {currentTab === 'zones' && isTabAllowed('zones') && (
                         <Storage
                             zones={zones}
                             products={products}
@@ -825,7 +918,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'permissions' && (
+                    {currentTab === 'permissions' && isTabAllowed('permissions') && (
                         <UsersPermissions
                             staffList={staffList}
                             onAddStaff={handleAddStaff}
@@ -835,7 +928,7 @@ export default function App() {
                         />
                     )}
 
-                    {currentTab === 'settings' && (
+                    {currentTab === 'settings' && isTabAllowed('settings') && (
                         <Settings highlightedField={highlightedItemId} />
                     )}
                 </main>
