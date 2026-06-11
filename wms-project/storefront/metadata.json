@@ -1,0 +1,6 @@
+{
+  "name": "WMS Premium Storefront Blueprint",
+  "description": "High-fidelity interactive e-commerce sandbox and principal-grade architectural blueprint integrating directly with WMS systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
