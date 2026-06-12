@@ -15,7 +15,7 @@ import Settings from './pages/AdminPanel/Settings';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag } from 'lucide-react';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
@@ -211,6 +211,7 @@ export default function App() {
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
+                    { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
             case 'Logistics Planner':
                 return [
@@ -219,6 +220,7 @@ export default function App() {
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                    { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
             case 'Inventory Auditor':
                 return [
@@ -226,6 +228,7 @@ export default function App() {
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                    { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
             case 'Picker':
             case 'Packer':
@@ -245,6 +248,7 @@ export default function App() {
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
                     { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
                     { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
+                    { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
         }
     };
@@ -829,16 +833,20 @@ export default function App() {
                 </div>
 
                 <ul className="flex flex-col gap-1 px-3 flex-grow select-none">
-                    {sideNavItems.map((item) => {
+                    {sideNavItems.map((item: any) => {
                         const Icon = item.icon;
                         const isActive = currentTab === item.id;
                         return (
                             <li key={item.id}>
                                 <button
                                     onClick={() => {
-                                        setCurrentTab(item.id);
-                                        window.localStorage.setItem('wms-current-tab', item.id);
-                                        setIsMobileMenuOpen(false);
+                                        if (item.isExternal) {
+                                            window.open('http://localhost:3001/', '_blank');
+                                        } else {
+                                            setCurrentTab(item.id);
+                                            window.localStorage.setItem('wms-current-tab', item.id);
+                                            setIsMobileMenuOpen(false);
+                                        }
                                     }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all font-sans text-xs font-bold cursor-pointer border-none bg-transparent text-left outline-none ${
                                         isActive

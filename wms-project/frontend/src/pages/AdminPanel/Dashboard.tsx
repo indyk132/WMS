@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Plus, Filter, TrendingUp, AlertTriangle, Layers, Database, 
   CheckCircle2, Users, Clock, Activity, ArrowUpRight, ShieldAlert,
-  Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw
+  Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { defaultImages } from '../../data/warehouseData';
