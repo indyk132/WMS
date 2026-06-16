@@ -15,9 +15,9 @@ interface SearchBarProps {
 export default function SearchBar({ products, onSelectProduct }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const [history, setHistory] = useState<string[]>(['Watch', 'Chair', 'Pro Audio', 'WMS-ACC']);
+  const [history, setHistory] = useState<string[]>(['Zegarek', 'Krzesło', 'Audio', 'Akcesoria']);
 
-  const popularSearches = ['Titanium', 'Ceramic Organizer', 'Audio Driver', 'Minimalist'];
+  const popularSearches = ['Tytan', 'Organizer ceramiczny', 'Audio', 'Minimalizm'];
 
   // Match items based on query
   const getFilteredProducts = () => {
@@ -50,7 +50,7 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
       <div className="relative flex items-center">
         <input
           type="text"
-          placeholder="🔎 Search WMS Database... {{api.query}}"
+          placeholder="Szukaj produktów..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
@@ -85,13 +85,13 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[10px] font-mono tracking-wider uppercase text-zinc-400 flex items-center gap-1.5">
-                        <RotateCcw size={10} /> Search History
+                        <RotateCcw size={10} /> Historia wyszukiwania
                       </span>
                       <button
                         onClick={clearHistory}
                         className="text-[9px] font-mono text-zinc-600 hover:text-zinc-400 hover:underline cursor-pointer"
                       >
-                        Clear
+                        Wyczyść
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -111,7 +111,7 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
                 {/* Popular Keywords suggestions */}
                 <div>
                   <span className="text-[10px] font-mono tracking-wider uppercase text-zinc-400 flex items-center gap-1.5 mb-2">
-                    <TrendingUp size={10} /> Popular Tags
+                    <TrendingUp size={10} /> Popularne tagi
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {popularSearches.map((keyword, idx) => (
@@ -132,14 +132,14 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
             {query.trim() && (
               <div className="divide-y divide-zinc-900">
                 <div className="p-2 bg-zinc-900/30 text-[9px] font-mono text-zinc-500 uppercase tracking-widest px-3">
-                  WMS Matches found: {filtered.length} ({"{{api.query_results_count}}"})
+                  Znalezione produkty: {filtered.length}
                 </div>
 
                 {filtered.length === 0 ? (
                   <div className="p-6 text-center text-zinc-500">
-                    <p className="text-xs">No items match your query.</p>
+                    <p className="text-xs">Brak produktów pasujących do zapytania.</p>
                     <p className="text-[10px] font-mono text-zinc-600 mt-1">
-                      Query placeholder: <code className="text-zinc-500">GET /api/search?q={query}</code>
+                      Zapytanie API: <code className="text-zinc-500">GET /api/search?q={query}</code>
                     </p>
                   </div>
                 ) : (
@@ -172,7 +172,7 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
                             {product.sku}
                           </span>
                           <span className="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-1 py-0.2 rounded-none font-mono uppercase tracking-widest scale-90">
-                            {product.stock.match(/\d+/) ? 'WMS STOCK' : 'SYNCED'}
+                            {product.stock.match(/\d+/) ? 'W MAGAZYNIE' : 'DOSTĘPNY'}
                           </span>
                         </div>
                       </div>

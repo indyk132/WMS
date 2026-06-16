@@ -7,112 +7,112 @@ import { Product, Category, Review } from './types';
 
 export const TEMPLATE_PRODUCTS: Product[] = [
   {
-    id: '{{product.id}}_001',
-    name: '{{product.name}} Premium Minimalist Watch',
-    description: '{{product.description}} Ultra-slim automatic movement with anti-reflective sapphire crystal, premium grade titanium casing, and sustainable leather straps.',
-    price: '{{product.price}} 899.00 EUR',
-    stock: '{{product.stock}} 14 units available in WMS',
+    id: 'prod_001',
+    name: 'Luksusowy Zegarek Minimalistyczny',
+    description: 'Wyjątkowo cienki zegarek automatyczny z antyrefleksyjnym szkiełkiem szafirowym, kopertą z tytanu klasy premium i paskiem z ekologicznej skóry.',
+    price: '899.00 EUR',
+    stock: 'Dostępne: 14 szt.',
     image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800',
-    category: '{{product.category}} Accessories',
-    sku: '{{product.sku}} WMS-ACC-W01',
-    rating: '{{product.rating}} 4.8 / 5.0 (24 reviews)',
+    category: 'Akcesoria',
+    sku: 'WMS-ACC-W01',
+    rating: '4.8 / 5.0 (24 opinie)',
     specifications: {
-      'Casing': 'Grade 5 Custom Titanium',
-      'Movement': 'WMS-Calibre 9012 Automatic',
-      'Water Resistance': '50 meters (5 ATM)',
-      'Glass Type': 'Curved Double Sapphire Crystal'
+      'Koperta': 'Tytan klasy 5',
+      'Mechanizm': 'Automatyczny WMS-Calibre 9012',
+      'Wodoodporność': '50 metrów (5 ATM)',
+      'Szkiełko': 'Zakrzywione podwójne szafirowe'
     }
   },
   {
-    id: '{{product.id}}_002',
-    name: '{{product.name}} Ergonomic Aluminium Chair',
-    description: '{{product.description}} High-density aerospace aluminium structure designed with synchronous tilt mechanics, flexible lumbar alignment, and responsive mesh.',
-    price: '{{product.price}} 1,250.00 EUR',
-    stock: '{{product.stock}} 8 units available in WMS',
+    id: 'prod_002',
+    name: 'Ergonomiczne Krzesło Aluminiowe',
+    description: 'Konstrukcja z aluminium lotniczego o wysokiej gęstości, wyposażona w mechanizm synchronicznego pochylania, regulację podparcia lędźwiowego i elastyczną siatkę.',
+    price: '1250.00 EUR',
+    stock: 'Dostępne: 8 szt.',
     image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800',
-    category: '{{product.category}} Living',
-    sku: '{{product.sku}} WMS-FURN-C12',
-    rating: '{{product.rating}} 4.9 / 5.0 (52 reviews)',
+    category: 'Dom i Wnętrze',
+    sku: 'WMS-FURN-C12',
+    rating: '4.9 / 5.0 (52 opinie)',
     specifications: {
-      'Structural Material': 'Anodized Carbon Aluminium',
-      'Tilt Angle': '90Â° to 135Â° Adaptive',
-      'Weight Capacity': '150 kg',
-      'Warranty': '10-Year WMS Certified'
+      'Materiał': 'Anodowane aluminium węglowe',
+      'Kąt nachylenia': 'Adaptacyjny od 90° do 135°',
+      'Maks. obciążenie': '150 kg',
+      'Gwarancja': '10 lat certyfikowanej gwarancji'
     }
   },
   {
-    id: '{{product.id}}_003',
-    name: '{{product.name}} Noise Cancelling Audio Pro',
-    description: '{{product.description}} Premium active adaptive dampening acoustics, featuring spatial high-res drivers, 40-hour continuous cache battery, and touch gesture pads.',
-    price: '{{product.price}} 420.00 EUR',
-    stock: '{{product.stock}} 31 units available in WMS',
+    id: 'prod_003',
+    name: 'Słuchawki Audio Pro (ANC)',
+    description: 'Akustyka premium z aktywnym tłumieniem hałasu (ANC), przetwornikami wysokiej rozdzielczości, 40-godzinnym czasem pracy na baterii i panelem dotykowym.',
+    price: '420.00 EUR',
+    stock: 'Dostępne: 31 szt.',
     image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&q=80&w=800',
-    category: '{{product.category}} Audio',
-    sku: '{{product.sku}} WMS-AUD-H03',
-    rating: '{{product.rating}} 4.7 / 5.0 (18 reviews)',
+    category: 'Sprzęt Audio',
+    sku: 'WMS-AUD-H03',
+    rating: '4.7 / 5.0 (18 opinii)',
     specifications: {
-      'Driver Unit': '40mm Dynamic Tesla Magnets',
-      'Noise Isolation': 'Dynamic Intelligent ANC up to 45dB',
-      'Wireless': 'Ultra-low Latency BT 5.3',
-      'Fast Charge': '15 mins charging = 8 hrs play'
+      'Przetworniki': 'Dynamiczne 40mm z magnesami Tesla',
+      'Tłumienie hałasu': 'Inteligentne aktywne ANC do 45dB',
+      'Łączność': 'Bluetooth 5.3 o niskim opóźnieniu',
+      'Szybkie ładowanie': '15 min ładowania = 8 godz. pracy'
     }
   },
   {
-    id: '{{product.id}}_004',
-    name: '{{product.name}} Ceramic Desk Organiser',
-    description: '{{product.description}} Minimalist modular structural container, crafted from raw matte clay and modular natural oak trays.',
-    price: '{{product.price}} 140.00 EUR',
-    stock: '{{product.stock}} 75 units available in WMS',
+    id: 'prod_004',
+    name: 'Ceramiczny Organizer na Biurko',
+    description: 'Minimalistyczny, modułowy organizer na biurko wykonany z matowej gliny i naturalnego drewna dębowego.',
+    price: '140.00 EUR',
+    stock: 'Dostępne: 75 szt.',
     image: 'https://images.unsplash.com/photo-1581404917879-17e19d71a950?auto=format&fit=crop&q=80&w=800',
-    category: '{{product.category}} Accessories',
-    sku: '{{product.sku}} WMS-ACC-O45',
-    rating: '{{product.rating}} 4.5 / 5.0 (9 reviews)',
+    category: 'Akcesoria',
+    sku: 'WMS-ACC-O45',
+    rating: '4.5 / 5.0 (9 opinii)',
     specifications: {
-      'Materials': 'Handcrafted Ceramic & Solid European Oak',
-      'Compartments': '3 Modular segments',
-      'Finish': 'Satin matte non-toxic coating'
+      'Materiały': 'Ręcznie wykonana ceramika i lity dąb',
+      'Segmenty': '3 modułowe segmenty',
+      'Wykończenie': 'Matowo-satynowe, nietoksyczne'
     }
   }
 ];
 
 export const TEMPLATE_CATEGORIES: Category[] = [
   {
-    id: '{{category.id}}_acc',
-    name: '{{category.name}} Accessories',
+    id: 'cat_acc',
+    name: 'Akcesoria',
     image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
-    productCount: '{{category.productCount}} 24 products',
-    description: '{{category.description}} High-end minimalist items designed to complement premium work setups.'
+    productCount: '24 produkty',
+    description: 'Wysokiej klasy minimalistyczne akcesoria uzupełniające stanowisko pracy.'
   },
   {
-    id: '{{category.id}}_liv',
-    name: '{{category.name}} Living',
+    id: 'cat_liv',
+    name: 'Dom i Wnętrze',
     image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&q=80&w=800',
-    productCount: '{{category.productCount}} 12 products',
-    description: '{{category.description}} Architectural and ergonomic structural items for premium living spaces.'
+    productCount: '12 produktów',
+    description: 'Ergonomiczne meble i designerskie dodatki do przestrzeni mieszkalnych.'
   },
   {
-    id: '{{category.id}}_aud',
-    name: '{{category.name}} Audio',
+    id: 'cat_aud',
+    name: 'Sprzęt Audio',
     image: 'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&q=80&w=800',
-    productCount: '{{category.productCount}} 18 products',
-    description: '{{category.description}} High-fidelity acoustic devices crafted with premium materials and drivers.'
+    productCount: '18 produktów',
+    description: 'Urządzenia audio wysokiej wierności wykonane z najlepszych materiałów.'
   }
 ];
 
 export const TEMPLATE_REVIEWS: Review[] = [
   {
-    id: '{{review.id}}_01',
-    author: '{{review.author}} Alexander W.',
+    id: 'rev_01',
+    author: 'Aleksander W.',
     rating: 5,
-    comment: '{{review.comment}} Absolute perfection. The integration of this WMS system schema resolved all our inventory bottlenecks. Visual feedback aligns perfectly with state logs.',
-    date: '{{review.date}} June 08, 2026'
+    comment: 'Absolutna perfekcja. Bardzo elegancki design, materiały premium i doskonała jakość dźwięku.',
+    date: '8 czerwca 2026'
   },
   {
-    id: '{{review.id}}_02',
-    author: '{{review.author}} Charlotte M.',
+    id: 'rev_02',
+    author: 'Karolina M.',
     rating: 5,
-    comment: '{{review.comment}} Beautiful minimalist feel. Very responsive layout on cellular connections and transitions are buttery smooth. Extremely clean visual hierarchy.',
-    date: '{{review.date}} May 24, 2026'
+    comment: 'Piękny minimalistyczny styl. Bardzo szybkie działanie strony i płynne przejścia. Niezwykle przejrzysty układ.',
+    date: '24 maja 2026'
   }
 ];
 

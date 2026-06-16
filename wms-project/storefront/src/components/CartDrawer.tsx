@@ -56,7 +56,7 @@ export default function CartDrawer({
     e.preventDefault();
     if (zipCode.trim()) {
       setShippingEstimator(
-        `WMS API response for Delivery to [${zipCode}]: Express Courier available in 24 hours.`
+        `Dostawa do [${zipCode}]: Ekspresowy kurier dostępny w 24 godziny.`
       );
     }
   };
@@ -87,7 +87,7 @@ export default function CartDrawer({
               <div className="flex items-center gap-2">
                 <ShoppingBag size={18} className="text-zinc-400" />
                 <h3 className="text-sm font-mono uppercase tracking-wider text-zinc-100">
-                  Cart ({"{{cart.items_count}}"} {cartItems.reduce((a, b) => a + b.quantity, 0)})
+                  Koszyk ({cartItems.reduce((a, b) => a + b.quantity, 0)})
                 </h3>
               </div>
               <button
@@ -103,8 +103,8 @@ export default function CartDrawer({
               {cartItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <ShoppingBag size={36} className="text-zinc-700 mb-3 animate-bounce" />
-                  <p className="text-sm text-zinc-400 font-medium">Cart is empty</p>
-                  <p className="text-xs text-zinc-600 mt-1">Select products to inspect active logic.</p>
+                  <p className="text-sm text-zinc-400 font-medium">Koszyk jest pusty</p>
+                  <p className="text-xs text-zinc-655 mt-1">Przeglądaj nasze produkty i dodaj je do koszyka.</p>
                 </div>
               ) : (
                 cartItems.map((item) => (
@@ -128,7 +128,7 @@ export default function CartDrawer({
                         {item.product.name}
                       </h4>
                       <p className="text-[10px] font-mono text-zinc-500 mt-1">
-                        Variant: {item.selectedColor} / {item.selectedSize}
+                        Wariant: {item.selectedColor} / {item.selectedSize}
                       </p>
                       
                       <div className="flex items-center justify-between mt-2.5">
@@ -162,7 +162,7 @@ export default function CartDrawer({
                     <button
                       onClick={() => onRemoveItem(item.id)}
                       className="absolute top-2 right-2 text-zinc-600 hover:text-red-400 p-1 cursor-pointer transition-colors"
-                      title="Remove Item"
+                      title="Usuń produkt"
                     >
                       <Trash2 size={13} />
                     </button>
@@ -180,18 +180,18 @@ export default function CartDrawer({
                     {/* Shipping Estimation */}
                     <form onSubmit={handleApplyZip} className="flex flex-col gap-1 border border-zinc-900 p-2">
                       <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono flex items-center gap-1">
-                        <Truck size={10} /> Shipping ZIP Estimator
+                        <Truck size={10} /> Dostawa (Kod pocztowy)
                       </label>
                       <div className="flex">
                         <input
                           type="text"
-                          placeholder="e.g. 00-001"
+                          placeholder="np. 00-001"
                           value={zipCode}
                           onChange={(e) => setZipCode(e.target.value)}
                           className="bg-black border border-zinc-800 text-[11px] text-white px-2 py-1 w-full rounded-none focus:outline-none focus:border-zinc-500 font-mono"
                         />
                         <button type="submit" className="bg-zinc-800 text-zinc-200 hover:bg-zinc-700 px-2 py-1 font-mono text-[10px] cursor-pointer">
-                          Apply
+                          Oblicz
                         </button>
                       </div>
                     </form>
@@ -199,18 +199,18 @@ export default function CartDrawer({
                     {/* Coupon Box */}
                     <form onSubmit={handleApplyCoupon} className="flex flex-col gap-1 border border-zinc-900 p-2">
                       <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono flex items-center gap-1">
-                        <Tag size={10} /> Promo Coupon
+                        <Tag size={10} /> Kupon promocyjny
                       </label>
                       <div className="flex">
                         <input
                           type="text"
-                          placeholder="e.g. WMS10"
+                          placeholder="np. WMS10"
                           value={coupon}
                           onChange={(e) => setCoupon(e.target.value)}
                           className="bg-black border border-zinc-800 text-[11px] text-white px-2 py-1 w-full rounded-none focus:outline-none focus:border-zinc-500 font-mono"
                         />
                         <button type="submit" className="bg-zinc-800 text-zinc-200 hover:bg-zinc-700 px-2 py-1 font-mono text-[10px] cursor-pointer">
-                          Apply
+                          Dodaj
                         </button>
                       </div>
                     </form>
@@ -225,30 +225,30 @@ export default function CartDrawer({
                   {/* Calculations breakdown containing variable placeholders */}
                   <div className="space-y-1.5 border-t border-zinc-900 pt-3">
                     <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span className="font-mono">Subtotal:</span>
+                      <span className="font-mono">Suma częściowa:</span>
                       <span className="font-mono text-zinc-300">
-                        {activeSubtotal.toFixed(2)} EUR ({"{{cart.subtotal}}"})
+                        {activeSubtotal.toFixed(2)} EUR
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span className="font-mono">Discount (10%):</span>
+                      <span className="font-mono">Rabat (10%):</span>
                       <span className="font-mono text-zinc-300">
-                        -{discountAmount.toFixed(2)} EUR ({"{{cart.discount}}"})
+                        -{discountAmount.toFixed(2)} EUR
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-zinc-400">
-                      <span className="font-mono">Est. Shipping:</span>
+                      <span className="font-mono">Szacowana dostawa:</span>
                       <span className="font-mono text-zinc-300">
-                        {shippingCost === 0 ? 'FREE' : `${shippingCost.toFixed(2)} EUR`} ({"{{cart.shipping}}"})
+                        {shippingCost === 0 ? 'DARMOWA' : `${shippingCost.toFixed(2)} EUR`}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-sm font-semibold text-white pt-2 border-t border-zinc-900">
-                      <span className="font-mono uppercase tracking-wider">Total:</span>
+                      <span className="font-mono uppercase tracking-wider">Łącznie:</span>
                       <span className="font-mono text-emerald-400">
-                        {activeTotal.toFixed(2)} EUR ({"{{cart.total}}"})
+                        {activeTotal.toFixed(2)} EUR
                       </span>
                     </div>
                   </div>
@@ -262,7 +262,7 @@ export default function CartDrawer({
                 onClick={onCheckout}
                 className="w-full bg-white text-zinc-950 hover:bg-zinc-200 font-medium py-3 text-xs uppercase tracking-wider font-mono text-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
-                Proceed to Checkout
+                Przejdź do kasy
               </button>
             </div>
           </motion.div>

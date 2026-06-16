@@ -34,15 +34,14 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
       {/* List Header */}
       <div className="flex items-center justify-between pb-3 border-b border-zinc-900">
         <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-300 font-bold flex items-center gap-2">
-          <ShoppingBag size={13} /> Review Order Items
+          <ShoppingBag size={13} /> Podsumowanie zamówienia
         </h3>
-        <span className="text-[10px] font-mono text-zinc-500">WMS API Schema Context</span>
       </div>
 
       {/* Cart Items List */}
       <div className="divide-y divide-zinc-900 overflow-y-auto max-h-[220px] pr-1.5 space-y-2.5">
         {cartItems.length === 0 ? (
-          <p className="text-xs text-zinc-500 text-center py-6 font-mono">No items in the checkout queue.</p>
+          <p className="text-xs text-zinc-500 text-center py-6 font-mono">Brak produktów w kasie.</p>
         ) : (
           cartItems.map((item) => {
             const match = item.product.price.match(/[\d.,]+/);
@@ -72,7 +71,7 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
                   
                   <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono text-zinc-500">
                     <span>
-                      Qty: {item.quantity} × {item.product.price}
+                      Ilość: {item.quantity} × {item.product.price}
                     </span>
                     <span>
                       SKU: {item.product.sku}
@@ -88,37 +87,37 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
       {/* Financial Calculations Sheet */}
       <div className="space-y-2 border-t border-zinc-900 pt-4 text-xs font-mono">
         <div className="flex items-center justify-between text-zinc-400">
-          <span>Subtotal:</span>
+          <span>Suma częściowa:</span>
           <span className="text-zinc-200">
-            {subtotal.toFixed(2)} EUR ({"{{cart.subtotal}}"})
+            {subtotal.toFixed(2)} EUR
           </span>
         </div>
 
         {couponDiscountPct > 0 && (
           <div className="flex items-center justify-between text-zinc-400">
-            <span>Coupon Promo ({(couponDiscountPct * 100).toFixed(0)}%):</span>
+            <span>Kupon promocyjny ({(couponDiscountPct * 100).toFixed(0)}%):</span>
             <span className="text-zinc-200">
-              -{discountAmount.toFixed(2)} EUR ({"{{cart.discount}}"})
+              -{discountAmount.toFixed(2)} EUR
             </span>
           </div>
         )}
 
         <div className="flex items-center justify-between text-zinc-400">
-          <span>Estimated Cargo Shipping:</span>
+          <span>Szacowany koszt wysyłki:</span>
           <span className="text-zinc-200">
-            {shippingCost === 0 ? 'FREE' : `${shippingCost.toFixed(2)} EUR`} ({"{{cart.shipping}}"})
+            {shippingCost === 0 ? 'DARMOWA' : `${shippingCost.toFixed(2)} EUR`}
           </span>
         </div>
 
         <div className="flex items-center justify-between text-[11px] text-zinc-500 border-t border-zinc-900 border-dashed pt-2.5">
-          <span>Included Tax (23% VAT Est):</span>
+          <span>Zawiera podatek (szac. 23% VAT):</span>
           <span>{vatAmount.toFixed(2)} EUR</span>
         </div>
 
         <div className="flex items-center justify-between text-sm font-semibold text-white pt-3 border-t border-zinc-900">
-          <span className="uppercase tracking-widest text-xs">Grand Total:</span>
+          <span className="uppercase tracking-widest text-xs">Suma całkowita:</span>
           <span className="text-emerald-400 text-base">
-            {grandTotal.toFixed(2)} EUR ({"{{cart.total}}"})
+            {grandTotal.toFixed(2)} EUR
           </span>
         </div>
       </div>
@@ -127,9 +126,9 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
       <div className="p-3 bg-zinc-950 border border-zinc-900 flex items-start gap-2.5">
         <CheckCircle2 size={15} className="text-emerald-400 flex-shrink-0 mt-0.5" />
         <div>
-          <h5 className="text-[10px] font-mono font-bold text-zinc-200 uppercase tracking-wider">WMS Secured Gateway</h5>
+          <h5 className="text-[10px] font-mono font-bold text-zinc-200 uppercase tracking-wider">Bezpieczna transakcja</h5>
           <p className="text-[9px] text-zinc-500 font-mono mt-0.5 leading-relaxed">
-            Upon confirmation, the system publishes a <code className="text-zinc-400">POST /api/order</code> transaction containing this breakdown directly to WMS, reserving active stocks automatically.
+            Po potwierdzeniu Twoje zamówienie zostanie zabezpieczone i natychmiast przetworzone przez nasz automatyczny system.
           </p>
         </div>
       </div>

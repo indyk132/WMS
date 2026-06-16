@@ -89,7 +89,7 @@ export default function ProductGallery({ primaryImage, name }: ProductGalleryPro
 
         {/* Floating image schema indicator */}
         <div className="absolute bottom-3 right-3 bg-black/90 border border-zinc-800 text-[9px] font-mono text-zinc-400 px-2 py-1 tracking-wider pointer-events-none">
-          {"{{product.image}}"} • Image index [{activeIndex + 1}]
+          Zdjęcie {activeIndex + 1} z {images.length}
         </div>
 
         <button className="absolute top-3 right-3 p-2 bg-black/80 border border-zinc-800 text-zinc-400 hover:text-white rounded-none pointer-events-none">
@@ -117,17 +117,11 @@ export default function ProductGallery({ primaryImage, name }: ProductGalleryPro
             />
             {/* Tiny numbering indicator */}
             <div className="absolute bottom-1 right-1 bg-black/85 px-1 py-0.2 text-[8px] font-mono text-zinc-500 rounded-none border border-zinc-900">
-              WMS{idx}
+              0{idx + 1}
             </div>
           </button>
         ))}
       </div>
-
-      {/* Advisory Note */}
-      <p className="text-[10px] text-zinc-500 font-mono flex items-center gap-1 mt-1 leading-normal">
-        <ShieldAlert size={10} className="text-zinc-400 flex-shrink-0" />
-        All catalog photos above reflect dynamic placeholder mappings: <code className="text-zinc-400">GET /api/products/:id/attachments</code>
-      </p>
     </div>
   );
 }

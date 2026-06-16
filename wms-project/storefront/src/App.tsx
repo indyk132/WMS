@@ -53,15 +53,15 @@ import OrderSummary from './components/OrderSummary';
 
 const mapWmsProductToStorefront = (wmsProd: any): Product => {
   return {
-    id: `{{product.id}}_${wmsProd.sku}`,
-    name: `{{product.name}} ${wmsProd.name}`,
-    description: `{{product.description}} High-quality item from our WMS catalog. SKU code ${wmsProd.sku}.`,
-    price: `{{product.price}} ${Number(wmsProd.price || 0).toFixed(2)} EUR`,
-    stock: `{{product.stock}} ${wmsProd.stock} units available in WMS`,
+    id: `${wmsProd.sku}`,
+    name: `${wmsProd.name}`,
+    description: `High-quality item from our catalog. SKU code ${wmsProd.sku}.`,
+    price: `${Number(wmsProd.price || 0).toFixed(2)} EUR`,
+    stock: `${wmsProd.stock} units available`,
     image: wmsProd.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800',
-    category: `{{product.category}} ${wmsProd.category || 'General'}`,
-    sku: `{{product.sku}} ${wmsProd.sku}`,
-    rating: `{{product.rating}} 4.8 / 5.0 (12 reviews)`,
+    category: `${wmsProd.category || 'General'}`,
+    sku: `${wmsProd.sku}`,
+    rating: `4.8 / 5.0 (12 reviews)`,
     specifications: {
       'SKU Code': wmsProd.sku,
       'Category': wmsProd.category || 'General',
@@ -96,7 +96,7 @@ export default function App() {
   const [isGridView, setIsGridView] = useState(true);
 
   // Active Variant configuration inside Product detail modal / page
-  const [selectedColor, setSelectedColor] = useState('Silver');
+  const [selectedColor, setSelectedColor] = useState('Srebrny');
   const [selectedSize, setSelectedSize] = useState('38mm');
 
   // Checkout information state (Prepopulated with user and developer metadata)
@@ -194,7 +194,7 @@ export default function App() {
       updatedCart = [
         ...cart,
         {
-          id: `{{cartItem.id}}_${product.id}_${Date.now()}`,
+          id: `cart_${product.id}_${Date.now()}`,
           product,
           quantity: 1,
           selectedColor: color,
@@ -225,8 +225,8 @@ export default function App() {
 
     // Map storefront order items to WMS order items format
     const wmsOrderItems = cart.map(item => {
-      const cleanName = item.product.name.replace(/{{product\.name}}\s*/, '').trim();
-      const cleanSku = item.product.sku.replace(/{{product\.sku}}\s*/, '').trim();
+      const cleanName = item.product.name.trim();
+      const cleanSku = item.product.sku.trim();
       return {
         name: cleanName,
         sku: cleanSku,
@@ -291,7 +291,7 @@ export default function App() {
     }
 
     cart.forEach(item => {
-      const cleanSku = item.product.sku.replace(/{{product\.sku}}\s*/, '').trim();
+      const cleanSku = item.product.sku.trim();
       const wmsProd = existingWmsProducts.find(p => p.sku === cleanSku);
       if (wmsProd) {
         wmsProd.stock = Math.max(0, wmsProd.stock - item.quantity);
@@ -379,11 +379,11 @@ export default function App() {
   const allCategories = [
     ...TEMPLATE_CATEGORIES,
     ...dynamicCategories.map((cat: any) => ({
-      id: `{{category.id}}_${cat.toLowerCase()}`,
-      name: `{{category.name}} ${cat}`,
+      id: `cat_${cat.toLowerCase()}`,
+      name: `${cat}`,
       image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
-      productCount: `{{category.productCount}} ${wmsProducts.filter(p => p.category === cat).length} products`,
-      description: `{{category.description}} Products from WMS catalog in category ${cat}.`
+      productCount: `${wmsProducts.filter(p => p.category === cat).length} products`,
+      description: `Products from our catalog in category ${cat}.`
     }))
   ];
 
@@ -398,7 +398,7 @@ export default function App() {
     const uniqueProducts: Product[] = [];
     const seenSkus = new Set();
     for (const p of combinedProducts) {
-      const cleanSku = p.sku.replace(/{{product\.sku}}\s*/, '').trim();
+      const cleanSku = p.sku.trim();
       if (!seenSkus.has(cleanSku)) {
         seenSkus.add(cleanSku);
         uniqueProducts.push(p);
@@ -408,7 +408,7 @@ export default function App() {
     return uniqueProducts.filter(p => {
       // Filter by category
       if (selectedCategory) {
-        const cleanCat = p.category.replace(/{{product\.category}}\s*/, '').trim().toLowerCase();
+        const cleanCat = p.category.trim().toLowerCase();
         if (cleanCat !== selectedCategory.toLowerCase()) return false;
       }
       // Filter by stock
@@ -450,56 +450,28 @@ export default function App() {
   return (
     <div className="min-h-screen bg-black text-zinc-100 font-sans flex flex-col selection:bg-zinc-800 selection:text-white" id="main-blueprint-app">
       
-      {/* 100k+ EUR Principal Grade Enterprise Header Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-900 px-4 py-4" id="global-nav">
+      {/* Premium Shop Header Bar */}
+      <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-900 px-4 py-4" id="global-nav">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          {/* Logo & Platform Info */}
-          <div className="flex items-center gap-3.5">
-            <div className="h-9 w-9 bg-white flex items-center justify-center text-black font-bold font-display" title="High-End Monolith Engine">
-              W
+          {/* Logo & Shop Info */}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-white text-black flex items-center justify-center font-black rounded-full shadow-lg">
+              <ShoppingBag size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-semibold uppercase tracking-wider font-display">
-                  WMS Omnichannel Front-End Suite
-                </h1>
-                <span className="text-[9px] font-mono bg-zinc-900 text-zinc-400 border border-zinc-800 px-1.5 py-0.2">
-                  v15.0-STAGE
-                </span>
-              </div>
-              <p className="text-[10px] text-zinc-500 font-mono">
-                Principal-Grade Architecture & Active Product Sandbox
+              <h1 className="text-base font-extrabold uppercase tracking-widest font-display text-white">
+                Apex Premium Store
+              </h1>
+              <p className="text-[10px] text-zinc-400 tracking-wider font-medium">
+                Premium Electronics & Lifestyle Accessories
               </p>
             </div>
           </div>
 
-          {/* Master View Mode Selector Hub */}
-          <div className="flex items-center gap-2 bg-zinc-900/60 p-1 border border-zinc-850 rounded-none w-full md:w-auto">
-            <button
-              id="mode-btn-sandbox"
-              onClick={() => setViewMode('sandbox')}
-              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-xs font-mono font-medium transition-all cursor-pointer ${
-                viewMode === 'sandbox'
-                  ? 'bg-white text-zinc-950 font-bold shadow-sm'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40'
-              }`}
-            >
-              <Layout size={13} />
-              Interactive Storefront
-            </button>
-            <button
-              id="mode-btn-blueprint"
-              onClick={() => setViewMode('blueprint')}
-              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 text-xs font-mono font-medium transition-all cursor-pointer ${
-                viewMode === 'blueprint'
-                  ? 'bg-white text-zinc-950 font-bold shadow-sm'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40'
-              }`}
-            >
-              <FileText size={13} />
-              Technical Blueprints
-            </button>
+          {/* Quick Info / User Status */}
+          <div className="flex items-center gap-3 text-xs font-mono text-zinc-400">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <span>Online Catalog Connected</span>
           </div>
         </div>
       </header>
@@ -707,7 +679,7 @@ export default function App() {
                 {/* Local Navigation menu for the shop views */}
                 <div className="bg-zinc-950 border border-zinc-900 p-4 space-y-3">
                   <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest font-bold">
-                    System Navigation
+                    Nawigacja
                   </h3>
                   <div className="space-y-1">
                     <button
@@ -719,7 +691,7 @@ export default function App() {
                       }`}
                     >
                       <Layout size={13} />
-                      Display Home
+                      Strona główna
                     </button>
                     
                     <button
@@ -731,7 +703,7 @@ export default function App() {
                       }`}
                     >
                       <span className="flex items-center gap-2.5">
-                        <Grid size={13} /> All Categories
+                        <Grid size={13} /> Kategorie
                       </span>
                       {selectedCategory && (
                         <span className="text-[9px] px-1 bg-zinc-800 text-zinc-300">
@@ -749,11 +721,11 @@ export default function App() {
                       }`}
                     >
                       <span className="flex items-center gap-2.5">
-                        <CreditCard size={13} /> Safe Checkout
+                        <CreditCard size={13} /> Bezpieczna kasa
                       </span>
                       {cart.length > 0 && (
                         <span className="text-[9px] bg-emerald-950 border border-emerald-900 text-emerald-400 px-1 rounded-none font-bold">
-                          {cart.reduce((a, b) => a + b.quantity, 0)} items
+                          {cart.reduce((a, b) => a + b.quantity, 0)} szt.
                         </span>
                       )}
                     </button>
@@ -767,54 +739,8 @@ export default function App() {
                       }`}
                     >
                       <User size={13} />
-                      Customer Dashboard/RMA
+                      Panel klienta / RMA
                     </button>
-                  </div>
-                </div>
-
-                {/* Filter and variables tracker panel */}
-                <div className="bg-zinc-950 border border-zinc-900 p-4 space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
-                    <h3 className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                      WMS API Parameters
-                    </h3>
-                    <Database size={12} className="text-zinc-600 animate-pulse" />
-                  </div>
-
-                  {/* Schema Inspector on selected object */}
-                  <div className="space-y-3">
-                    <p className="text-[10px] text-zinc-500 font-mono leading-relaxed">
-                      All catalog details are rendered directly via JSON WMS fields:
-                    </p>
-                    
-                    <div className="bg-black/80 border border-zinc-900 p-2 text-[10px] font-mono space-y-1.5 overflow-hidden">
-                      <div className="text-zinc-500">{'/* Product map */'}</div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-500">Title:</span>
-                        <span className="text-white">{'{{product.name}}'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-500">Retail:</span>
-                        <span className="text-white">{'{{product.price}}'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-500">Storage:</span>
-                        <span className="text-white">{'{{product.stock}}'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-500">Picture:</span>
-                        <span className="text-white">{'{{product.image}}'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-zinc-500">Category:</span>
-                        <span className="text-white">{'{{product.category}}'}</span>
-                      </div>
-                    </div>
-
-                    <div className="p-2.5 bg-zinc-900/40 text-[10px] font-mono text-zinc-400 border border-zinc-900 leading-normal">
-                      <span className="font-bold block text-zinc-300 uppercase mb-1">Logistics Note:</span>
-                      Selecting size or colors triggers a strict WMS SKU look-up dynamically. Try selecting products to check.
-                    </div>
                   </div>
                 </div>
               </div>
@@ -832,7 +758,7 @@ export default function App() {
                       className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-mono px-4 py-2.5 flex items-center gap-2 border border-zinc-850 cursor-pointer"
                     >
                       <ShoppingBag size={14} />
-                      Cart Drawer ({cart.reduce((a, b) => a + b.quantity, 0)})
+                      Koszyk ({cart.reduce((a, b) => a + b.quantity, 0)})
                     </button>
                   </div>
                 </div>
@@ -853,7 +779,7 @@ export default function App() {
                         onClick={() => setSelectedProduct(null)}
                         className="text-xs font-mono text-zinc-400 hover:text-white flex items-center gap-1.5 cursor-pointer"
                       >
-                        ← Back to lists
+                        ← Powrót do listy
                       </button>
 
                       {/* Product layout: Gallery left, Options right */}
@@ -888,7 +814,7 @@ export default function App() {
 
                           <div className="border-t border-b border-zinc-900 py-4 flex items-center justify-between">
                             <div>
-                              <div className="text-[10px] font-mono text-zinc-500 uppercase">WMS Retail gross price</div>
+                              <div className="text-[10px] font-mono text-zinc-500 uppercase">WMS Cena detaliczna brutto</div>
                               <div className="text-lg font-bold font-mono text-white mt-0.5">
                                 {selectedProduct.price}
                               </div>
@@ -905,10 +831,10 @@ export default function App() {
                             {/* Color Selector */}
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                                Variant Color: {selectedColor}
+                                Kolor wariantu: {selectedColor}
                               </label>
                               <div className="flex gap-2">
-                                {['Silver', 'SpaceGray', 'Champagne'].map((c) => (
+                                {['Srebrny', 'Gwiezdna szarość', 'Szampański'].map((c) => (
                                   <button
                                     key={c}
                                     onClick={() => setSelectedColor(c)}
@@ -927,10 +853,10 @@ export default function App() {
                             {/* Size selector */}
                             <div className="space-y-1.5">
                               <label className="text-[10px] font-mono uppercase tracking-wider text-zinc-400">
-                                Dimension / Size: {selectedSize}
+                                Wymiary / Rozmiar: {selectedSize}
                               </label>
                               <div className="flex gap-2">
-                                {['38mm', '42mm', 'ErgoX', 'LargeSize'].map((sz) => (
+                                {['38mm', '42mm', 'ErgoX', 'Duży rozmiar'].map((sz) => (
                                   <button
                                     key={sz}
                                     onClick={() => setSelectedSize(sz)}
@@ -953,7 +879,7 @@ export default function App() {
                             onClick={() => handleAddToCart(selectedProduct, selectedSize, selectedColor)}
                             className="w-full bg-white text-black hover:bg-zinc-200 py-3.5 text-xs font-mono font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
                           >
-                            <ShoppingBag size={14} /> Add to WMS Cart Drawer
+                            <ShoppingBag size={14} /> Dodaj do koszyka
                           </button>
                         </div>
                       </div>
@@ -961,7 +887,7 @@ export default function App() {
                       {/* Specifications Grid */}
                       <div className="pt-6 border-t border-zinc-900 space-y-4">
                         <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                          Technical Specification Sheet
+                          Karta specyfikacji technicznej
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {Object.entries(selectedProduct.specifications).map(([key, value]) => (
@@ -976,7 +902,7 @@ export default function App() {
                       {/* Reviews module */}
                       <div className="pt-6 border-t border-zinc-900 space-y-4">
                         <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                          Customer Reviews (WMS-Verified Transactions)
+                          Opinie klientów (Transakcje zweryfikowane przez WMS)
                         </h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1002,7 +928,7 @@ export default function App() {
                       {/* Up-sell Recommendations */}
                       <div className="pt-8 border-t border-zinc-900 space-y-4">
                         <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                          WMS Connected Up-sell / Cross-sell Products
+                          Polecane produkty powiązane z WMS
                         </h3>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1048,7 +974,7 @@ export default function App() {
                         <div className="relative max-w-lg space-y-5 z-10">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[9px] font-mono uppercase tracking-widest bg-emerald-950 text-emerald-400 border border-emerald-900">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Live Best-Seller Synced From WMS
+                            Bestseller zsynchronizowany z WMS
                           </span>
 
                           <h2 className="text-2xl md:text-3xl font-bold font-display tracking-tight text-white leading-tight">
@@ -1060,7 +986,7 @@ export default function App() {
                           </p>
 
                           <div className="pt-2 flex items-baseline gap-2">
-                            <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">MAPPED WMS price</span>
+                            <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">Cena zsynchronizowana z WMS</span>
                             <span className="text-xl font-bold font-mono text-white">
                               {TEMPLATE_PRODUCTS[0].price}
                             </span>
@@ -1072,13 +998,13 @@ export default function App() {
                               onClick={() => handleAddToCart(TEMPLATE_PRODUCTS[0])}
                               className="bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs font-mono font-bold uppercase tracking-widest cursor-pointer transition-colors"
                             >
-                              Add to cart 🛒
+                              Dodaj do koszyka 🛒
                             </button>
                             <button
                               onClick={() => handleSelectProduct(TEMPLATE_PRODUCTS[0])}
                               className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 px-5 py-2.5 text-xs font-mono font-medium border border-zinc-800 cursor-pointer transition-colors"
                             >
-                              Inspect Variables
+                              Szczegóły
                             </button>
                           </div>
                         </div>
@@ -1088,7 +1014,7 @@ export default function App() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
                           <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">
-                            Featured Categories
+                            Polecane kategorie
                           </h3>
                           <span className="text-[10px] font-mono text-zinc-600">GET /api/categories</span>
                         </div>
@@ -1109,28 +1035,28 @@ export default function App() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
                           <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <Truck size={14} className="text-zinc-400" /> Dispatch in 24 hrs
+                            <Truck size={14} className="text-zinc-400" /> Wysyłka w 24h
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Simultaneous API connection guarantees that as soon as your cart is processed, logistics labels are printed instantly.
+                            Równoległe połączenie API gwarantuje, że etykiety logistyczne są drukowane natychmiast po przetworzeniu koszyka.
                           </p>
                         </div>
                         
                         <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
                           <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <SlidersHorizontal size={14} className="text-zinc-400" /> Live Inventory Sync
+                            <SlidersHorizontal size={14} className="text-zinc-400" /> Synchronizacja zapasów
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            No speculative pre-sales. Real-time WMS stock balancing means 100% fulfill rates.
+                            Brak spekulacyjnej przedsprzedaży. Bilansowanie zapasów WMS w czasie rzeczywistym gwarantuje 100% realizacji.
                           </p>
                         </div>
 
                         <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
                           <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <ClipboardCheck size={14} className="text-zinc-400" /> Digital RMA Board
+                            <ClipboardCheck size={14} className="text-zinc-400" /> Cyfrowy panel RMA
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Register product returns with automated validation checks straight from your private log cabinet.
+                            Zarejestruj zwroty produktów z automatyczną walidacją bezpośrednio ze swojego panelu.
                           </p>
                         </div>
                       </div>
@@ -1139,7 +1065,7 @@ export default function App() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
                           <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">
-                            Dynamic Best-sellers matrix
+                            Najczęściej kupowane
                           </h3>
                           <span className="text-[10px] font-mono text-zinc-650">GET /api/products?limit=4</span>
                         </div>
@@ -1169,7 +1095,7 @@ export default function App() {
                       {/* Breadcrumb line & category header */}
                       <div className="flex items-center justify-between">
                         <div className="text-xs font-mono text-zinc-500">
-                          Home / Products {selectedCategory ? `/ ${selectedCategory}` : '/ All'}
+                          Strona główna / Produkty {selectedCategory ? `/ ${selectedCategory}` : '/ Wszystkie'}
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -1196,23 +1122,23 @@ export default function App() {
                         {/* Sidebar Filters */}
                         <div className="md:col-span-3 space-y-4 bg-zinc-950 border border-zinc-900 p-4 h-fit">
                           <div className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300 pb-2 border-b border-zinc-900">
-                            Filter Matrix
+                            Filtry
                           </div>
 
                           {/* Category select links */}
                           <div className="space-y-1">
-                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-1.5">Collection</span>
+                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-1.5">Kolekcja</span>
                             <button
                               onClick={() => setSelectedCategory(null)}
                               className={`w-full text-left px-2 py-1.5 text-xs font-mono flex items-center justify-between cursor-pointer ${
                                 !selectedCategory ? 'text-white font-bold bg-zinc-900/60' : 'text-zinc-400 hover:text-zinc-200'
                               }`}
                             >
-                              <span>Show All</span>
+                              <span>Pokaż wszystkie</span>
                               {!selectedCategory && <Check size={11} />}
                             </button>
                             {allCategories.map(cat => {
-                              const cleanName = cat.name.replace(/{{category\.name}}\s*/, '').trim();
+                              const cleanName = cat.name.trim();
                               const isSelected = selectedCategory === cleanName;
                               return (
                                 <button
@@ -1231,7 +1157,7 @@ export default function App() {
 
                           {/* Availability checkbox */}
                           <div className="pt-2 border-t border-zinc-900">
-                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-2">Availability</span>
+                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-2">Dostępność</span>
                             <label className="flex items-center gap-2 text-xs font-mono text-zinc-300 cursor-pointer select-none">
                               <input
                                 type="checkbox"
@@ -1239,14 +1165,14 @@ export default function App() {
                                 onChange={(e) => setFilterInStockOnly(e.target.checked)}
                                 className="bg-black border border-zinc-805 accent-white h-3.5 w-3.5 rounded-none"
                               />
-                              In Stock Only
+                              Tylko dostępne w magazynie
                             </label>
                           </div>
 
                           {/* Price range filter */}
                           <div className="pt-2 border-t border-zinc-900 space-y-1.5">
                             <div className="flex justify-between text-[10px] font-mono uppercase text-zinc-500">
-                              <span>Max Price</span>
+                              <span>Cena maksymalna</span>
                               <span className="text-white">{priceRange} EUR</span>
                             </div>
                             <input
@@ -1262,15 +1188,15 @@ export default function App() {
 
                           {/* Sort Selector */}
                           <div className="pt-2 border-t border-zinc-900 space-y-1.5">
-                            <span className="text-[10px] font-mono uppercase text-zinc-500 block">Sort By Order</span>
+                            <span className="text-[10px] font-mono uppercase text-zinc-500 block">Sortowanie</span>
                             <select
                               value={sortBy}
                               onChange={(e) => setSortBy(e.target.value as any)}
                               className="w-full bg-black border border-zinc-800 text-xs text-white font-mono rounded-none py-1.5 px-2 focus:outline-none focus:border-zinc-500"
                             >
-                              <option value="default">Release Default</option>
-                              <option value="low-high">Price: Low to High</option>
-                              <option value="high-low">Price: High to Low</option>
+                              <option value="default">Domyślnie</option>
+                              <option value="low-high">Cena: od najniższej</option>
+                              <option value="high-low">Cena: od najwyższej</option>
                             </select>
                           </div>
                         </div>
@@ -1278,19 +1204,19 @@ export default function App() {
                         {/* Product lists display area */}
                         <div className="md:col-span-9 space-y-4">
                           <div className="p-3 bg-zinc-900/10 border border-zinc-900 flex justify-between items-center text-xs font-mono">
-                            <span className="text-zinc-400">Showing {filteredSandboxProducts.length} items from database</span>
+                            <span className="text-zinc-400">Wyświetlanie {filteredSandboxProducts.length} produktów z bazy danych</span>
                             <span className="text-[10px] text-zinc-600">GET /api/products?filtered=true</span>
                           </div>
 
                           {filteredSandboxProducts.length === 0 ? (
                             <div className="border border-zinc-900 py-16 text-center space-y-2">
                               <SlidersHorizontal size={24} className="text-zinc-700 mx-auto" />
-                              <p className="text-sm font-medium text-zinc-400">No products match your active filters.</p>
+                              <p className="text-sm font-medium text-zinc-400">Brak produktów pasujących do wybranych filtrów.</p>
                               <button
                                 onClick={() => { setFilterInStockOnly(false); setPriceRange(1300); setSelectedCategory(null); }}
                                 className="text-xs text-zinc-300 underline font-mono hover:text-white cursor-pointer"
                               >
-                                Clear all filters
+                                Wyczyść wszystkie filtry
                               </button>
                             </div>
                           ) : isGridView ? (
@@ -1323,7 +1249,7 @@ export default function App() {
                                   
                                   <div className="flex items-center gap-6 self-stretch sm:self-auto justify-between border-t border-zinc-900 sm:border-t-0 pt-3 sm:pt-0">
                                     <div className="text-right">
-                                      <div className="text-[9px] font-mono text-zinc-500">Retail price</div>
+                                      <div className="text-[9px] font-mono text-zinc-500">Cena detaliczna</div>
                                       <div className="text-xs font-bold font-mono text-zinc-200">{p.price}</div>
                                     </div>
                                     <button
@@ -1331,7 +1257,7 @@ export default function App() {
                                       onClick={() => handleAddToCart(p)}
                                       className="bg-zinc-100 text-black hover:bg-zinc-300 px-4 py-2 text-xs font-mono font-bold cursor-pointer transition-colors"
                                     >
-                                      Add +
+                                      Dodaj +
                                     </button>
                                   </div>
                                 </div>
@@ -1353,9 +1279,9 @@ export default function App() {
                     >
                       <div className="pb-3 border-b border-zinc-900 flex justify-between items-center">
                         <h2 className="text-base font-semibold font-display uppercase tracking-tight text-white">
-                          🔒 Secure Integrated Single-Page Checkout
+                          🔒 Bezpieczna kasa jednostronicowa
                         </h2>
-                        <span className="text-xs font-mono text-emerald-400">Enterprise Standard TLS 1.3</span>
+                        <span className="text-xs font-mono text-emerald-400">Standard TLS 1.3</span>
                       </div>
 
                       {orderComplete && submittedOrder ? (
@@ -1366,20 +1292,20 @@ export default function App() {
                           </div>
                           
                           <div className="space-y-2">
-                            <h3 className="text-lg font-bold font-display text-white">Order Synced and Dispatched to WMS</h3>
+                            <h3 className="text-lg font-bold font-display text-white">Zamówienie zsynchronizowane i wysłane do WMS</h3>
                             <p className="text-xs text-zinc-400 font-mono">
-                              Unique Transaction Reference: <span className="text-white font-bold">{submittedOrder.order_id}</span>
+                              Unikalny identyfikator transakcji: <span className="text-white font-bold">{submittedOrder.order_id}</span>
                             </p>
                             <p className="text-[11px] text-zinc-500 leading-normal max-w-md mx-auto">
-                              The inventory units have been reserved in the logistics database, and shipping orders have been forwarded to the local WMS scanner node.
+                              Jednostki magazynowe zostały zarezerwowane w bazie danych logistyki, a zlecenia wysyłki zostały przekazane do lokalnego skanera WMS.
                             </p>
                           </div>
 
                           {/* Raw API Response Log payload */}
                           <div className="bg-black border border-zinc-900 p-4 text-left space-y-2">
                             <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest flex items-center justify-between pb-1 border-b border-zinc-950">
-                              <span>Forwarded API Payload (POST /api/order)</span>
-                              <span className="text-emerald-400">201 CREATED</span>
+                              <span>Przekazany ładunek API (POST /api/order)</span>
+                              <span className="text-emerald-400">201 UTWORZONO</span>
                             </div>
                             <pre className="text-[10px] text-emerald-400 font-mono overflow-x-auto whitespace-pre leading-relaxed p-1.5 max-h-[220px]">
                               {JSON.stringify(submittedOrder, null, 2)}
@@ -1391,13 +1317,13 @@ export default function App() {
                               onClick={() => { setOrderComplete(false); setShopView('home'); }}
                               className="bg-zinc-100 text-black hover:bg-zinc-300 font-mono text-xs px-5 py-2.5 font-bold uppercase tracking-wider cursor-pointer transition-colors"
                             >
-                              Continue Shopping
+                              Kontynuuj zakupy
                             </button>
                             <button
                               onClick={() => setShopView('account')}
                               className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-mono text-xs px-5 py-2.5 hover:text-white border border-zinc-800 cursor-pointer transition-colors"
                             >
-                              Track in Dashboard
+                              Śledź w panelu
                             </button>
                           </div>
                         </div>
@@ -1410,10 +1336,10 @@ export default function App() {
                             <div className="bg-zinc-950 border border-zinc-905 p-5 space-y-4">
                               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
                                 <span className="h-5 w-5 bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-white font-bold border border-zinc-800">1</span>
-                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Customer Identity</h3>
+                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Tożsamość klienta</h3>
                               </div>
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-mono uppercase text-zinc-400 block">Email Address (WMS Sync ID)</label>
+                                <label className="text-[10px] font-mono uppercase text-zinc-400 block">Adres e-mail (ID synchronizacji WMS)</label>
                                 <input
                                   type="email"
                                   required
@@ -1421,7 +1347,7 @@ export default function App() {
                                   onChange={(e) => setCustomerEmail(e.target.value)}
                                   className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2.5 rounded-none focus:outline-none focus:border-zinc-500 font-mono"
                                 />
-                                <span className="text-[9px] text-zinc-500 font-mono block">Prepopulated via local customer context.</span>
+                                <span className="text-[9px] text-zinc-500 font-mono block">Uzupełnione automatycznie na podstawie danych klienta.</span>
                               </div>
                             </div>
 
@@ -1429,38 +1355,38 @@ export default function App() {
                             <div className="bg-zinc-950 border border-zinc-905 p-5 space-y-4">
                               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
                                 <span className="h-5 w-5 bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-white font-bold border border-zinc-800">2</span>
-                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Delivery Postal Address</h3>
+                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Adres dostawy</h3>
                               </div>
                               
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-mono uppercase text-zinc-500">First Name</label>
+                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Imię</label>
                                   <input type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full bg-black border border-zinc-850 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Last Name</label>
+                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Nazwisko</label>
                                   <input type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full bg-black border border-zinc-850 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                                 </div>
                               </div>
 
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-mono uppercase text-zinc-500">Street Address & Apartment</label>
+                                <label className="text-[10px] font-mono uppercase text-zinc-500">Ulica i numer mieszkania</label>
                                 <input type="text" required value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2.5 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                               </div>
 
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Postal Code (CEP / ZIP)</label>
+                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Kod pocztowy</label>
                                   <input type="text" required value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-mono uppercase text-zinc-500">City</label>
+                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Miasto</label>
                                   <input type="text" required value={city} onChange={(e) => setCity(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                                 </div>
                               </div>
 
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-mono uppercase text-zinc-500">Phone Connection</label>
+                                <label className="text-[10px] font-mono uppercase text-zinc-500">Telefon kontaktowy</label>
                                 <input type="text" required value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                               </div>
                             </div>
@@ -1469,7 +1395,7 @@ export default function App() {
                             <div className="bg-zinc-950 border border-zinc-905 p-5 space-y-4">
                               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
                                 <span className="h-5 w-5 bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-white font-bold border border-zinc-800">3</span>
-                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Logistics & Carrying Cost</h3>
+                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Logistyka i koszt transportu</h3>
                               </div>
 
                               <div className="space-y-2">
@@ -1482,9 +1408,9 @@ export default function App() {
                                       onChange={() => setShippingMethod('express')}
                                       className="accent-white h-3.5 w-3.5"
                                     />
-                                    <span>WMS Express Cargo (Next Day Door-to-Door)</span>
+                                    <span>WMS Express Cargo (Dostawa następnego dnia)</span>
                                   </span>
-                                  <span className="text-emerald-400 font-bold">FREE</span>
+                                  <span className="text-emerald-400 font-bold">DARMOWA</span>
                                 </label>
 
                                 <label className="flex items-center justify-between p-3 border border-zinc-850 hover:border-zinc-700 bg-black/60 cursor-pointer text-xs font-mono select-none">
@@ -1496,7 +1422,7 @@ export default function App() {
                                       onChange={() => setShippingMethod('air')}
                                       className="accent-white h-3.5 w-3.5"
                                     />
-                                    <span>WMS Priority Air Cargo</span>
+                                    <span>WMS Priorytetowa przesyłka lotnicza</span>
                                   </span>
                                   <span className="text-zinc-300 font-bold">45.00 EUR</span>
                                 </label>
@@ -1507,16 +1433,16 @@ export default function App() {
                             <div className="bg-zinc-950 border border-zinc-905 p-5 space-y-4">
                               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
                                 <span className="h-5 w-5 bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-white font-bold border border-zinc-800">4</span>
-                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Secured Payment Pipeline</h3>
+                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Bezpieczny kanał płatności</h3>
                               </div>
                               
                               <p className="text-[11px] text-zinc-400 font-mono leading-normal bg-zinc-900/40 p-2.5 border border-zinc-900">
-                                Simulated payment gateway pipeline. Standard credit card fields are integrated with our sandbox order processor.
+                                Symulowana bramka płatności. Standardowe pola kart kredytowych są zintegrowane z naszym procesorem zamówień sandbox.
                               </p>
 
                               <div className="space-y-3 font-mono">
                                 <div className="space-y-1">
-                                  <label className="text-[9px] uppercase tracking-wider text-zinc-500">Security Number (Mocked Credit Card)</label>
+                                  <label className="text-[9px] uppercase tracking-wider text-zinc-500">Numer karty (Karta testowa)</label>
                                   <input type="text" placeholder="xxxx xxxx xxxx 2411" disabled className="w-full bg-black border border-zinc-850 p-2.5 text-xs text-zinc-500 placeholder-zinc-700 cursor-not-allowed rounded-none" />
                                 </div>
                               </div>
@@ -1526,7 +1452,7 @@ export default function App() {
                                 disabled={cart.length === 0}
                                 className="w-full bg-emerald-500 text-black hover:bg-emerald-400 py-3.5 text-xs font-mono font-bold uppercase tracking-widest text-center transition-colors shadow-lg disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
                               >
-                                Place order & dispatch to WMS 🚀
+                                Złóż zamówienie i wyślij do WMS 🚀
                               </button>
                             </div>
 
@@ -1535,11 +1461,11 @@ export default function App() {
                           {/* Order summaries ledger */}
                           <div className="lg:col-span-5 space-y-4">
                             <div className="bg-zinc-950 border border-zinc-900 p-4 space-y-3">
-                              <span className="text-[10px] font-mono uppercase text-zinc-500 block">Promo Voucher Code</span>
+                              <span className="text-[10px] font-mono uppercase text-zinc-500 block">Kod kuponu promocyjnego</span>
                               <div className="flex gap-2">
                                 <input
                                   type="text"
-                                  placeholder="Voucher (Try WMS10)"
+                                  placeholder="Kupon (Spróbuj WMS10)"
                                   value={promoCode}
                                   onChange={(e) => setPromoCode(e.target.value)}
                                   className="bg-black border border-zinc-850 text-xs px-3 py-2 text-white w-full rounded-none font-mono focus:outline-none focus:border-zinc-500 uppercase"
@@ -1549,11 +1475,11 @@ export default function App() {
                                   onClick={handleApplyPromo}
                                   className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-4 py-2 font-mono text-xs cursor-pointer tracking-wider font-bold"
                                 >
-                                  Apply
+                                  Zastosuj
                                 </button>
                               </div>
                               {appliedPromoPct > 0 && (
-                                <p className="text-[10px] font-mono text-emerald-400">Coupon successfully applied! 10% discount subtracted.</p>
+                                <p className="text-[10px] font-mono text-emerald-400">Kupon został pomyślnie dodany! Odliczono 10% rabatu.</p>
                               )}
                             </div>
 
@@ -1587,15 +1513,15 @@ export default function App() {
                       <div className="pb-3 border-b border-zinc-900 flex justify-between items-center sm:flex-row flex-col gap-2 align-middle">
                         <div>
                           <h2 className="text-base font-semibold font-display tracking-tight text-white uppercase">
-                            Customer Logistics Console
+                            Panel Logistyczny Klienta
                           </h2>
-                          <p className="text-xs text-zinc-500 font-mono mt-0.5">Logged session context: <code className="text-zinc-400">indyks132@gmail.com</code></p>
+                          <p className="text-xs text-zinc-500 font-mono mt-0.5">Zalogowana sesja: <code className="text-zinc-400">indyks132@gmail.com</code></p>
                         </div>
                         <button
                           onClick={() => { setShopView('home'); }}
                           className="text-[10px] font-mono text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer border border-zinc-850 p-2 uppercase hover:bg-zinc-900"
                         >
-                          <LogOut size={12} /> Exit Session
+                          <LogOut size={12} /> Wyjdź
                         </button>
                       </div>
 
@@ -1605,20 +1531,20 @@ export default function App() {
                         <div className="lg:col-span-4 space-y-4">
                           <div className="bg-black/40 border border-zinc-900 p-4 space-y-4 font-mono">
                             <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block pb-1 border-b border-zinc-950">
-                              Registered Coordinates
+                              Zarejestrowane Dane
                             </span>
                             
                             <div className="space-y-2 text-xs">
                               <div>
-                                <div className="text-zinc-650">Customer Email:</div>
+                                <div className="text-zinc-650">E-mail klienta:</div>
                                 <div className="text-zinc-200">indyks132@gmail.com</div>
                               </div>
                               <div>
-                                <div className="text-zinc-650">Contact Full Name:</div>
+                                <div className="text-zinc-650">Imię i nazwisko:</div>
                                 <div className="text-zinc-200">Alexander Kowalski</div>
                               </div>
                               <div>
-                                <div className="text-zinc-650">Default Postal:</div>
+                                <div className="text-zinc-650">Adres domyślny:</div>
                                 <div className="text-zinc-200">Marszalkowska 104 m. 12, 00-017 Warszawa</div>
                               </div>
                             </div>
@@ -1630,10 +1556,10 @@ export default function App() {
                                    {/* Live Dispatch tracker timeline */}
                           <div className="border border-zinc-900 bg-black/30 p-5 space-y-5">
                             <div className="flex items-center justify-between text-xs font-mono">
-                              <span className="text-emerald-400 font-bold uppercase">Active Logistics order Track</span>
+                              <span className="text-emerald-400 font-bold uppercase">Śledzenie aktywnego zamówienia</span>
                               {activeTrackedOrder ? (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-zinc-500">Order:</span>
+                                  <span className="text-zinc-500">Zamówienie:</span>
                                   <select
                                     value={selectedTrackedOrderId || activeTrackedOrder.id}
                                     onChange={(e) => setSelectedTrackedOrderId(e.target.value)}
@@ -1656,18 +1582,18 @@ export default function App() {
                               <div className={`absolute top-0 transform -translate-y-1.5 h-3 w-3 ${isDispatched ? 'bg-emerald-400' : 'bg-zinc-800'} left-[83.3%] border-2 border-black rounded-full`} />
                               
                               <div className="space-y-1">
-                                <div className={`text-xs font-bold ${activeTrackedOrder ? 'text-emerald-400' : 'text-zinc-500'} font-mono`}>1. RECEIVED</div>
-                                <p className="text-[9px] text-zinc-500 font-mono">{activeTrackedOrder ? `Status: ${activeTrackedOrder.status}` : 'Pushed to WMS stack'}</p>
+                                <div className={`text-xs font-bold ${activeTrackedOrder ? 'text-emerald-400' : 'text-zinc-500'} font-mono`}>1. PRZYJĘTE</div>
+                                <p className="text-[9px] text-zinc-500 font-mono">{activeTrackedOrder ? `Status: ${activeTrackedOrder.status}` : 'Wprowadzone do WMS'}</p>
                               </div>
 
                               <div className="space-y-1">
-                                <div className={`text-xs font-bold ${isAssembly ? 'text-emerald-400' : 'text-zinc-500'} font-mono`}>2. ASSEMBLY</div>
-                                <p className="text-[9px] text-zinc-500 font-mono">Picking index queue</p>
+                                <div className={`text-xs font-bold ${isAssembly ? 'text-emerald-400' : 'text-zinc-500'} font-mono`}>2. KOMPLETACJA</div>
+                                <p className="text-[9px] text-zinc-500 font-mono">Kolejka kompletowania</p>
                               </div>
 
                               <div className="space-y-1">
-                                <div className={`text-xs font-bold ${isDispatched ? 'text-emerald-400' : 'text-zinc-550'} font-mono`}>3. DISPATCHED</div>
-                                <p className="text-[9px] text-zinc-650 font-mono">{activeTrackedOrder?.binId ? `Pojemnik: ${activeTrackedOrder.binId}` : 'Courier pickup track'}</p>
+                                <div className={`text-xs font-bold ${isDispatched ? 'text-emerald-400' : 'text-zinc-550'} font-mono`}>3. WYSŁANE</div>
+                                <p className="text-[9px] text-zinc-650 font-mono">{activeTrackedOrder?.binId ? `Pojemnik: ${activeTrackedOrder.binId}` : 'Odbiór przez kuriera'}</p>
                               </div>
                             </div>
                           </div>
@@ -1675,30 +1601,30 @@ export default function App() {
                           {/* Modular interactive Dynamic RMA claim section (requested in section 10) */}
                           <div className="border border-zinc-900 bg-zinc-950 p-5 space-y-4">
                             <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300 block">
-                              Automated WMS Return and RMA Portal
+                              Automatyczny portal zwrotów i RMA
                             </span>
 
                             <p className="text-[11px] text-zinc-500 font-mono leading-normal">
-                              To register a dynamic return of any purchased inventory items directly with WMS storage receptors, fill out the RMA ticket. No call required:
+                              Aby zarejestrować zwrot zakupionych produktów bezpośrednio w systemie WMS, wypełnij poniższy formularz RMA. Kontakt telefoniczny nie jest wymagany:
                             </p>
 
                             {registeredRma ? (
                               <div className="p-3 bg-emerald-950/20 border border-emerald-900 text-xs font-mono text-emerald-400 space-y-2">
                                 <h5 className="font-bold uppercase flex items-center gap-1.5">
-                                  <ClipboardCheck size={14} /> RMA Claim Successfully Logged
+                                  <ClipboardCheck size={14} /> Zgłoszenie RMA zostało zarejestrowane
                                 </h5>
                                 <p className="text-[11px]">
-                                  RMA Reference: <strong className="text-white">{registeredRma}</strong>
+                                  Numer referencyjny RMA: <strong className="text-white">{registeredRma}</strong>
                                 </p>
                                 <p className="text-[10px] text-zinc-300">
-                                  Your return authorization label has been generated. When physical items arrive at warehouse index node [WMS-IN-03], stock balances will adapt automatically.
+                                  Etykieta zwrotna została wygenerowana. Po fizycznym dotarciu produktów do punktu przyjęć [WMS-IN-03] stany magazynowe zostaną zaktualizowane automatycznie.
                                 </p>
                               </div>
                             ) : (
                               <div className="space-y-3 font-mono text-xs">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div className="space-y-1">
-                                    <label className="text-[10px] uppercase text-zinc-500 font-mono">Select Order</label>
+                                    <label className="text-[10px] uppercase text-zinc-500 font-mono">Wybierz zamówienie</label>
                                     <select className="bg-black border border-zinc-800 text-xs text-zinc-300 p-2 w-full rounded-none focus:outline-none">
                                       {customerWmsOrders.length > 0 ? (
                                         customerWmsOrders.map(o => (
@@ -1706,15 +1632,15 @@ export default function App() {
                                         ))
                                       ) : (
                                         <>
-                                          <option>Ref: WMS-98124 (Amount: 899.00 EUR)</option>
-                                          <option>Ref: WMS-45123 (Amount: 1,250.00 EUR)</option>
+                                          <option>Ref: WMS-98124 (Kwota: 899.00 EUR)</option>
+                                          <option>Ref: WMS-45123 (Kwota: 1,250.00 EUR)</option>
                                         </>
                                       )}
                                     </select>
                                   </div>
                                   
                                   <div className="space-y-1">
-                                    <label className="text-[10px] uppercase text-zinc-500 font-mono">Return Claim Reason</label>
+                                    <label className="text-[10px] uppercase text-zinc-500 font-mono">Powód zwrotu</label>
                                     <input
                                       type="text"
                                       value={rmaReason}
@@ -1729,7 +1655,7 @@ export default function App() {
                                   onClick={() => setRegisteredRma(`RMA-${Date.now().toString().slice(-6)}-WMS`)}
                                   className="bg-white text-black hover:bg-zinc-200 font-mono text-[11px] font-bold px-4 py-2 uppercase tracking-wide cursor-pointer transition-colors"
                                 >
-                                  Register RMA in WMS Server
+                                  Zarejestruj RMA w systemie WMS
                                 </button>
                               </div>
                             )}
@@ -1763,11 +1689,11 @@ export default function App() {
       <footer className="bg-zinc-950 border-t border-zinc-900 py-6 px-4 mt-12" id="global-footer">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-zinc-500">
           <div>
-            &copy; 2026 WMS Omnichannel Front-End Portal. All rights reserved.
+            &copy; 2026 Portal WMS Omnichannel. Wszelkie prawa zastrzeżone.
           </div>
           <div className="flex gap-4">
             <span className="text-[10px]" title="System synchronization lock stats">
-              WMS Sync Endpoint Status: <span className="text-emerald-400">● ONLINE</span>
+              Status synchronizacji z WMS: <span className="text-emerald-400">● POŁĄCZONO</span>
             </span>
           </div>
         </div>
