@@ -272,19 +272,142 @@ export default function App() {
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
     const [usersSync, setUsersSync] = useState({ isLoading: false, error: '' });
 
-    const defaultProducts: Product[] = [
-        { productId: 1, sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Artykuły chemiczne', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, locationCode: 'C-03-01-01', zoneGroup: 'General', primaryLocationId: 1, locations: ['C-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 1, locationId: 1, locationCode: 'C-03-01-01', zoneGroup: 'General', quantity: 120 }] },
-        { productId: 2, sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, locationCode: 'A-01-01-02', zoneGroup: 'General', primaryLocationId: 2, locations: ['A-01-01-02'], zoneGroups: ['General'], stockEntries: [{ stockId: 2, locationId: 2, locationCode: 'A-01-01-02', zoneGroup: 'General', quantity: 15 }] },
-        { productId: 3, sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99, locationCode: 'A-02-01-01', zoneGroup: 'General', primaryLocationId: 3, locations: [], zoneGroups: ['General'], stockEntries: [] },
-        { productId: 4, sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Artykuły chemiczne', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99, locationCode: 'C-02-03-01', zoneGroup: 'General', primaryLocationId: 4, locations: ['C-02-03-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 4, locationId: 4, locationCode: 'C-02-03-01', zoneGroup: 'General', quantity: 8 }] },
-        { productId: 5, sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99, locationCode: 'A-03-01-01', zoneGroup: 'General', primaryLocationId: 5, locations: ['A-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 5, locationId: 5, locationCode: 'A-03-01-01', zoneGroup: 'General', quantity: 245 }] },
-        { productId: 6, sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, locationCode: 'B-02-01-03', zoneGroup: 'General', primaryLocationId: 6, locations: ['B-02-01-03'], zoneGroups: ['General'], stockEntries: [{ stockId: 6, locationId: 6, locationCode: 'B-02-01-03', zoneGroup: 'General', quantity: 85 }] }
-    ];
+    const generateDefaultProducts = (): Product[] => {
+        const CATEGORY_PREFIXES: Record<string, string> = {
+            'Części samochodowe': 'AUTO-PARTS',
+            'Chemia samochodowa': 'AUTO-CHEM',
+            'Elektronika': 'ELEC-GEN',
+            'Artykuły spożywcze': 'FOOD-GROC',
+            'Biuro': 'BIUR-OFF',
+            'BHP': 'BHP-SAFE'
+        };
+
+        const PRODUCT_TEMPLATES: Record<string, string[]> = {
+            'Części samochodowe': [
+                'Filtr oleju Carbon', 'Filtr powietrza Active', 'Świeca zapłonowa Laser', 'Kabel zapłonowy Volt',
+                'Pasek klinowy Torque', 'Tarcza hamulcowa RotMax', 'Amortyzator GasPro', 'Sprężyna zawieszenia',
+                'Łącznik stabilizatora', 'Końcówka drążka', 'Wahacz zawieszenia', 'Przegub napędowy',
+                'Termostat silnika', 'Uszczelka głowicy', 'Pompa wody Flow', 'Sonda lambda Sens',
+                'Filtr paliwa Diesel', 'Filtr kabinowy Carbon', 'Żarówka reflektora H4', 'Żarówka kierunkowskazu'
+            ],
+            'Chemia samochodowa': [
+                'Szampon samochodowy Shine', 'Wosk hydrofobowy Coat', 'Płyn do spryskiwaczy Letni', 'Odmrażacz do szyb DeIce',
+                'Preparat do kokpitu Matte', 'Środek do czyszczenia felg', 'Płyn do chłodnic Glycol', 'Środek do usuwania owadów',
+                'Pasta polerska Scratch', 'Preparat do uszczelek', 'Płyn do mycia szyb Streakless', 'Zapach samochodowy Pine',
+                'Odtłuszczacz do hamulców', 'Smar silikonowy spray', 'Środek do konserwacji skóry', 'Penetrant wielofunkcyjny'
+            ],
+            'Elektronika': [
+                'Zasilacz stabilizowany', 'Przewód USB-C nylonowy', 'Ładowarka sieciowa Multi', 'Adapter HDMI-DVI',
+                'Kabel ethernet Cat6', 'Bateria akumulatorowa', 'Karta pamięci microSD', 'Czytnik kart pamięci',
+                'Rozdzielacz USB Hub', 'Przejściówka jack', 'Bezpiecznik elektryczny', 'Taśma izolacyjna PVC'
+            ],
+            'Artykuły spożywcze': [
+                'Kawa ziarnista Arabica', 'Herbata czarna Ceylon', 'Czekolada gorzka 70%', 'Płatki owsiane górskie',
+                'Sok pomarańczowy 100%', 'Woda mineralna gazowana', 'Makaron penne semolina', 'Ryż basmati długoziarnisty',
+                'Dżem truskawkowy słodki', 'Miód wielokwiatowy', 'Oliwa z oliwek Extra', 'Orzechy nerkowca 200g',
+                'Przyprawa pieprz czarny', 'Sól morska jodowana', 'Herbatniki maślane', 'Napój izotoniczny Active'
+            ],
+            'Biuro': [
+                'Segregator biurowy A4', 'Notatnik w linie Grid', 'Długopis żelowy czarny', 'Etykiety samoprzylepne',
+                'Zakreślacz neonowy yellow', 'Zszywacz biurowy', 'Zszywki metalowe', 'Spinacze biurowe 100szt',
+                'Korektor w taśmie', 'Nożyczki biurowe', 'Taśma klejąca transparent', 'Teczka z gumką A4'
+            ],
+            'BHP': [
+                'Rękawice robocze powlekane', 'Maska ochronna FFP2', 'Kask budowlany z atestem', 'Okulary ochronne przezroczyste',
+                'Kamizelka ostrzegawcza', 'Nauszniki przeciwhałasowe', 'Apteczka pierwszej pomocy', 'Buty robocze ochronne',
+                'Taśma ostrzegawcza biało-czerwona', 'Półmaska lakiernicza', 'Taśma antypoślizgowa'
+            ]
+        };
+
+        const ZONES: Record<string, string> = {
+            'Części samochodowe': 'C-01-01',
+            'Chemia samochodowa': 'C-01-02',
+            'Elektronika': 'B-02-01',
+            'Artykuły spożywcze': 'A-01-01',
+            'Biuro': 'B-02-02',
+            'BHP': 'C-01-01'
+        };
+
+        const ZONE_GROUPS: Record<string, string> = {
+            'Części samochodowe': 'Motoryzacja, chemia i BHP',
+            'Chemia samochodowa': 'Motoryzacja, chemia i BHP',
+            'Elektronika': 'Elektronika i biuro',
+            'Artykuły spożywcze': 'Zywnosc',
+            'Biuro': 'Elektronika i biuro',
+            'BHP': 'Motoryzacja, chemia i BHP'
+        };
+
+        const list: Product[] = [];
+        const categories = Object.keys(PRODUCT_TEMPLATES);
+        let barcodeCounter = 5900000000001;
+
+        // Dodaj 6 podstawowych produktów testowych
+        list.push(
+            { productId: 1001, sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Chemia samochodowa', stock: 120, reorderThreshold: 100, zone: 'C3', status: 'In Stock', price: 34.99, locationCode: 'C-03-01-01', zoneGroup: 'General', primaryLocationId: 1, locations: ['C-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 1, locationId: 1, locationCode: 'C-03-01-01', zoneGroup: 'General', quantity: 120 }] },
+            { productId: 1002, sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, zone: 'A1', status: 'Low Stock', price: 289.00, locationCode: 'A-01-01-02', zoneGroup: 'General', primaryLocationId: 2, locations: ['A-01-01-02'], zoneGroups: ['General'], stockEntries: [{ stockId: 2, locationId: 2, locationCode: 'A-01-01-02', zoneGroup: 'General', quantity: 15 }] },
+            { productId: 1003, sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, zone: 'A2', status: 'Out of Stock', price: 449.99, locationCode: 'A-02-01-01', zoneGroup: 'General', primaryLocationId: 3, locations: [], zoneGroups: ['General'], stockEntries: [] },
+            { productId: 1004, sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Chemia samochodowa', stock: 8, reorderThreshold: 20, zone: 'C2', status: 'Low Stock', price: 179.99, locationCode: 'C-02-03-01', zoneGroup: 'General', primaryLocationId: 4, locations: ['C-02-03-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 4, locationId: 4, locationCode: 'C-02-03-01', zoneGroup: 'General', quantity: 8 }] },
+            { productId: 1005, sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, zone: 'A3', status: 'In Stock', price: 134.99, locationCode: 'A-03-01-01', zoneGroup: 'General', primaryLocationId: 5, locations: ['A-03-01-01'], zoneGroups: ['General'], stockEntries: [{ stockId: 5, locationId: 5, locationCode: 'A-03-01-01', zoneGroup: 'General', quantity: 245 }] },
+            { productId: 1006, sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, zone: 'B2', status: 'In Stock', price: 249.00, locationCode: 'B-02-01-03', zoneGroup: 'General', primaryLocationId: 6, locations: ['B-02-01-03'], zoneGroups: ['General'], stockEntries: [{ stockId: 6, locationId: 6, locationCode: 'B-02-01-03', zoneGroup: 'General', quantity: 85 }] }
+        );
+
+        for (let i = 1; i <= 200; i++) {
+            const category = categories[i % categories.length];
+            const templates = PRODUCT_TEMPLATES[category];
+            const baseName = templates[i % templates.length];
+            
+            const prefix = CATEGORY_PREFIXES[category];
+            const sku = `${prefix}-${String(i).padStart(4, '0')}`;
+            const barcode = String(barcodeCounter++);
+            
+            const name = `${baseName} Model-${i}`;
+            
+            let price = 0;
+            if (category === 'Artykuły spożywcze') {
+                price = Number((2.50 + (i % 5) * 3.5).toFixed(2));
+            } else if (category === 'Części samochodowe') {
+                price = Number((40 + (i % 8) * 45).toFixed(2));
+            } else {
+                price = Number((10 + (i % 6) * 15).toFixed(2));
+            }
+
+            const reorderThreshold = 15 + (i % 10);
+            const stock = 20 + (i % 50);
+            const locationCode = ZONES[category];
+            const zoneGroup = ZONE_GROUPS[category];
+            const status = stock === 0 ? 'Out of Stock' : (stock < reorderThreshold ? 'Low Stock' : 'In Stock');
+
+            list.push({
+                productId: i,
+                sku,
+                barcode,
+                name,
+                category,
+                stock,
+                reorderThreshold,
+                zone: locationCode.split('-')[0] + locationCode.split('-')[1],
+                status,
+                price,
+                locationCode,
+                zoneGroup,
+                primaryLocationId: i,
+                locations: [locationCode],
+                zoneGroups: [zoneGroup],
+                stockEntries: [{ stockId: i, locationId: i, locationCode, zoneGroup, quantity: stock }]
+            });
+        }
+        return list;
+    };
+
+    const defaultProducts: Product[] = generateDefaultProducts();
 
     const [products, setProducts] = useState<Product[]>(() => {
         try {
             const stored = window.localStorage.getItem('wms-products');
-            if (stored) return JSON.parse(stored);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.length >= 200) return parsed;
+            }
         } catch (e) {
             console.error("Failed to parse stored products:", e);
         }

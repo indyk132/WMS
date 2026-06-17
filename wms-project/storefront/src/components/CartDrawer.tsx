@@ -204,7 +204,7 @@ export default function CartDrawer({
                       <div className="flex">
                         <input
                           type="text"
-                          placeholder="np. WMS10"
+                          placeholder="np. APEX10"
                           value={coupon}
                           onChange={(e) => setCoupon(e.target.value)}
                           className="bg-black border border-zinc-800 text-[11px] text-white px-2 py-1 w-full rounded-none focus:outline-none focus:border-zinc-500 font-mono"

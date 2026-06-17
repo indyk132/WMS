@@ -14,11 +14,11 @@ export const TEMPLATE_PRODUCTS: Product[] = [
     stock: 'Dostępne: 14 szt.',
     image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800',
     category: 'Akcesoria',
-    sku: 'WMS-ACC-W01',
+    sku: 'APX-ACC-W01',
     rating: '4.8 / 5.0 (24 opinie)',
     specifications: {
       'Koperta': 'Tytan klasy 5',
-      'Mechanizm': 'Automatyczny WMS-Calibre 9012',
+      'Mechanizm': 'Automatyczny Calibre 9012',
       'Wodoodporność': '50 metrów (5 ATM)',
       'Szkiełko': 'Zakrzywione podwójne szafirowe'
     }
@@ -31,7 +31,7 @@ export const TEMPLATE_PRODUCTS: Product[] = [
     stock: 'Dostępne: 8 szt.',
     image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800',
     category: 'Dom i Wnętrze',
-    sku: 'WMS-FURN-C12',
+    sku: 'APX-FURN-C12',
     rating: '4.9 / 5.0 (52 opinie)',
     specifications: {
       'Materiał': 'Anodowane aluminium węglowe',
@@ -48,7 +48,7 @@ export const TEMPLATE_PRODUCTS: Product[] = [
     stock: 'Dostępne: 31 szt.',
     image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&q=80&w=800',
     category: 'Sprzęt Audio',
-    sku: 'WMS-AUD-H03',
+    sku: 'APX-AUD-H03',
     rating: '4.7 / 5.0 (18 opinii)',
     specifications: {
       'Przetworniki': 'Dynamiczne 40mm z magnesami Tesla',
@@ -65,12 +65,199 @@ export const TEMPLATE_PRODUCTS: Product[] = [
     stock: 'Dostępne: 75 szt.',
     image: 'https://images.unsplash.com/photo-1581404917879-17e19d71a950?auto=format&fit=crop&q=80&w=800',
     category: 'Akcesoria',
-    sku: 'WMS-ACC-O45',
+    sku: 'APX-ACC-O45',
     rating: '4.5 / 5.0 (9 opinii)',
     specifications: {
       'Materiały': 'Ręcznie wykonana ceramika i lity dąb',
       'Segmenty': '3 modułowe segmenty',
       'Wykończenie': 'Matowo-satynowe, nietoksyczne'
+    }
+  },
+  {
+    id: 'prod_wms_001',
+    name: 'Płyn hamulcowy DOT-4',
+    description: 'Wysokowydajny płyn hamulcowy przeznaczony do hydraulicznych układów hamulcowych i sprzęgieł w mocno obciążonych pojazdach. Spełnia rygorystyczne normy bezpieczeństwa.',
+    price: '34.99 EUR',
+    stock: 'Dostępne: 120 szt.',
+    image: 'https://images.unsplash.com/photo-1517524006129-1a341fc113fc?auto=format&fit=crop&q=80&w=800',
+    category: 'Chemia samochodowa',
+    sku: 'SKU-10492',
+    rating: '4.8 / 5.0 (14 opinii)',
+    specifications: {
+      'Klasyfikacja': 'DOT-4',
+      'Pojemność': '1 litr',
+      'Temp. wrzenia': '260°C',
+      'Zastosowanie': 'Układy hamulcowe i sprzęgłowe'
+    }
+  },
+  {
+    id: 'prod_wms_002',
+    name: 'Reflektor LED H7 SuperVolt',
+    description: 'Nowoczesny reflektor LED H7 o jasności 6000 lumenów. Zapewnia doskonałą widoczność na drodze, minimalne zużycie prądu i wyjątkowo długą żywotność.',
+    price: '289.00 EUR',
+    stock: 'Dostępne: 15 szt.',
+    image: 'https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&q=80&w=800',
+    category: 'Części samochodowe',
+    sku: 'SKU-20391',
+    rating: '4.9 / 5.0 (28 opinii)',
+    specifications: {
+      'Typ żarówki': 'LED H7',
+      'Moc światła': '6000 lm',
+      'Barwa światła': '6000K (Zimna biel)',
+      'Żywotność': '50 000 godzin'
+    }
+  },
+  {
+    id: 'prod_wms_003',
+    name: 'Akumulator VoltPro 74Ah 12V',
+    description: 'Niezawodny akumulator kwasowo-ołowiowy o pojemności 74Ah i wysokim prądzie rozruchowym 680A. Idealny do silników benzynowych i wysokoprężnych.',
+    price: '449.99 EUR',
+    stock: 'Brak na stanie',
+    image: 'https://images.unsplash.com/photo-1620980424564-9b1686950293?auto=format&fit=crop&q=80&w=800',
+    category: 'Części samochodowe',
+    sku: 'SKU-94021',
+    rating: '4.7 / 5.0 (42 opinie)',
+    specifications: {
+      'Pojemność': '74 Ah',
+      'Napięcie': '12 V',
+      'Prąd rozruchu': '680 A (EN)',
+      'Polaryzacja': 'Prawy plus (P+)'
+    }
+  },
+  {
+    id: 'prod_wms_004',
+    name: 'Olej silnikowy Syntetic 5W30',
+    description: 'W pełni syntetyczny, wielosezonowy olej silnikowy klasy premium. Opracowany w technologii Low-SAPS, chroni filtry cząstek stałych i redukuje zużycie paliwa.',
+    price: '179.99 EUR',
+    stock: 'Dostępne: 8 szt.',
+    image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&q=80&w=800',
+    category: 'Chemia samochodowa',
+    sku: 'SKU-50493',
+    rating: '4.8 / 5.0 (31 opinii)',
+    specifications: {
+      'Lepkość': '5W-30',
+      'Pojemność': '5 litrów',
+      'Klasyfikacja': 'ACEA C3, API SN/CF',
+      'Zalecenia': 'MB 229.51, VW 504.00/507.00'
+    }
+  },
+  {
+    id: 'prod_wms_005',
+    name: 'Klocki hamulcowe CarbonPremium',
+    description: 'Ceramiczno-karbonowe klocki hamulcowe zaprojektowane dla wymagających kierowców. Charakteryzują się wysokim współczynnikiem tarcia i minimalnym pyleniem.',
+    price: '134.99 EUR',
+    stock: 'Dostępne: 245 szt.',
+    image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&q=80&w=800',
+    category: 'Części samochodowe',
+    sku: 'SKU-73012',
+    rating: '4.6 / 5.0 (19 opinii)',
+    specifications: {
+      'Materiał': 'Ceramiczno-karbonowy',
+      'Oś montażu': 'Przednia',
+      'Wyciszenie': 'Podkładki akustyczne',
+      'Homologacja': 'ECE R90'
+    }
+  },
+  {
+    id: 'prod_wms_006',
+    name: 'Prostownik mikroprocesorowy 12V',
+    description: 'Inteligentna ładowarka mikroprocesorowa do akumulatorów 6V i 12V. Wyposażona w tryb automatycznej diagnostyki, odsiarczania oraz podtrzymania ładowania.',
+    price: '249.00 EUR',
+    stock: 'Dostępne: 85 szt.',
+    image: 'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&q=80&w=800',
+    category: 'Elektronika',
+    sku: 'SKU-39402',
+    rating: '4.9 / 5.0 (33 opinie)',
+    specifications: {
+      'Napięcie': '6V / 12V',
+      'Prąd ładowania': 'Maks. 8A',
+      'Obsługa typów': 'WET, GEL, AGM, LiFePO4',
+      'Ochrona': 'Przeciążeniowa i zwarciowa'
+    }
+  },
+  {
+    id: 'prod_db_001',
+    name: 'Kawa Ziarnista Arabica 1kg',
+    description: 'Aromatyczna, 100% kawa ziarnista Single Origin Arabica z plantacji wysokogórskich. Charakteryzuje się zbalansowanym smakiem z nutami czekolady i cytrusów.',
+    price: '59.99 EUR',
+    stock: 'Dostępne: 25 szt.',
+    image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=800',
+    category: 'Artykuły spożywcze',
+    sku: '5901234567890',
+    rating: '4.9 / 5.0 (47 opinii)',
+    specifications: {
+      'Gatunek': '100% Arabica',
+      'Palenie': 'Średni',
+      'Waga': '1 kg',
+      'Kraj pochodzenia': 'Kolumbia / Etiopia'
+    }
+  },
+  {
+    id: 'prod_db_002',
+    name: 'Mleko UHT 3.2% 1L',
+    description: 'Świeże, pełnotłuste mleko krowie UHT o zawartości tłuszczu 3.2%. Idealne do kawy, płatków śniadaniowych, wypieków i codziennego spożycia.',
+    price: '3.49 EUR',
+    stock: 'Dostępne: 48 szt.',
+    image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=800',
+    category: 'Artykuły spożywcze',
+    sku: '5909876543210',
+    rating: '4.5 / 5.0 (19 opinii)',
+    specifications: {
+      'Tłuszcz': '3.2%',
+      'Pojemność': '1 litr',
+      'Technologia': 'UHT',
+      'Temperatura': 'Pokojowa (do otwarcia)'
+    }
+  },
+  {
+    id: 'prod_db_003',
+    name: 'Czekolada Gorzka 70% 100g',
+    description: 'Klasyczna czekolada gorzka z 70% zawartością kakao z ziaren pochodzących z Ghany. Intensywny, głęboki smak z aksamitnym finiszem.',
+    price: '4.50 EUR',
+    stock: 'Dostępne: 100 szt.',
+    image: 'https://images.unsplash.com/photo-1511381939415-e44015466834?auto=format&fit=crop&q=80&w=800',
+    category: 'Artykuły spożywcze',
+    sku: '5905556667771',
+    rating: '4.8 / 5.0 (38 opinii)',
+    specifications: {
+      'Masa kakaowa': 'Min. 70%',
+      'Waga': '100 g',
+      'Kraj': 'Ghana',
+      'Skład': 'Miazga kakaowa, masło kakaowe'
+    }
+  },
+  {
+    id: 'prod_db_004',
+    name: 'Płatki Owsiane Górskie 500g',
+    description: 'Naturalne, pełnoziarniste płatki owsiane górskie. Bogate w błonnik, białko i cenne minerały, idealne na pożywną owsiankę lub do wypieków.',
+    price: '2.99 EUR',
+    stock: 'Dostępne: 50 szt.',
+    image: 'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?auto=format&fit=crop&q=80&w=800',
+    category: 'Artykuły spożywcze',
+    sku: '5904443332220',
+    rating: '4.7 / 5.0 (25 opinii)',
+    specifications: {
+      'Typ': 'Górskie',
+      'Waga': '500 g',
+      'Błonnik': '10g / 100g',
+      'Kraj pochodzenia': 'Polska'
+    }
+  },
+  {
+    id: 'prod_db_005',
+    name: 'Sok Pomarańczowy 1L',
+    description: '100% tłoczony sok pomarańczowy z kawałkami miąższu. Pasteryzowany w niskiej temperaturze, aby zachować pełnię witaminy C.',
+    price: '5.20 EUR',
+    stock: 'Dostępne: 5 szt.',
+    image: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&q=80&w=800',
+    category: 'Artykuły spożywcze',
+    sku: '5901112223334',
+    rating: '4.8 / 5.0 (31 opinii)',
+    specifications: {
+      'Skład': '100% sok z pomarańczy',
+      'Pojemność': '1 litr',
+      'Dodatki': 'Brak sztucznego cukru',
+      'Miąższ': 'Tak'
     }
   }
 ];
@@ -80,22 +267,64 @@ export const TEMPLATE_CATEGORIES: Category[] = [
     id: 'cat_acc',
     name: 'Akcesoria',
     image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
-    productCount: '24 produkty',
+    productCount: '2 produkty',
     description: 'Wysokiej klasy minimalistyczne akcesoria uzupełniające stanowisko pracy.'
   },
   {
     id: 'cat_liv',
     name: 'Dom i Wnętrze',
     image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&q=80&w=800',
-    productCount: '12 produktów',
+    productCount: '1 produkt',
     description: 'Ergonomiczne meble i designerskie dodatki do przestrzeni mieszkalnych.'
   },
   {
     id: 'cat_aud',
     name: 'Sprzęt Audio',
     image: 'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&q=80&w=800',
-    productCount: '18 produktów',
+    productCount: '1 produkt',
     description: 'Urządzenia audio wysokiej wierności wykonane z najlepszych materiałów.'
+  },
+  {
+    id: 'cat_parts',
+    name: 'Części samochodowe',
+    image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&q=80&w=800',
+    productCount: '3 produkty',
+    description: 'Wysokiej rozdzielczości komponenty mechaniczne i oryginalne części zamienne.'
+  },
+  {
+    id: 'cat_chem',
+    name: 'Chemia samochodowa',
+    image: 'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&q=80&w=800',
+    productCount: '2 produkty',
+    description: 'Specjalistyczne oleje syntetyczne i certyfikowane płyny eksploatacyjne.'
+  },
+  {
+    id: 'cat_elec',
+    name: 'Elektronika',
+    image: 'https://images.unsplash.com/photo-1588508065123-287b28e013da?auto=format&fit=crop&q=80&w=800',
+    productCount: '1 produkt',
+    description: 'Inteligentne prostowniki mikroprocesorowe i sprzęt zasilający.'
+  },
+  {
+    id: 'cat_groc',
+    name: 'Artykuły spożywcze',
+    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800',
+    productCount: '5 produktów',
+    description: 'Świeża kawa ziarnista Arabica, nabiał, soki i wyroby cukiernicze.'
+  },
+  {
+    id: 'cat_office',
+    name: 'Biuro',
+    image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=800',
+    productCount: '12 produktów',
+    description: 'Artykuły biurowe, notatniki, segregatory oraz inne materiały biurowe najwyższej jakości.'
+  },
+  {
+    id: 'cat_bhp',
+    name: 'BHP',
+    image: 'https://images.unsplash.com/photo-1590402494587-44b71d5b3000?auto=format&fit=crop&q=80&w=800',
+    productCount: '11 produktów',
+    description: 'Atestowane kaski, rękawice ochronne, odzież robocza oraz środki ochrony indywidualnej.'
   }
 ];
 
@@ -567,12 +796,12 @@ export const WIREFRAMES_ASCII = [
 │ │                                                  │ │ [Color: Silver] [SpaceGray] │
 │ ├──────────────────────────────────────────────────┤ │ Size: [ 38mm ]  [ 42mm ]    │
 │ │ [Thumb 1] [Thumb 2] [Thumb 3] [Thumb 4]          │ │ ─────────────────────────── │
-│ └──────────────────────────────────────────────────┘ │ [ ADD TO CART (WMS Sync) 🛒]│
+│ └──────────────────────────────────────────────────┘ │ [ ADD TO CART             🛒]│
 ├──────────────────────────────────────────────────────┴─────────────────────────────┤
 │ INTERACTIVE TECHNICAL SPECIFICATIONS SHEET                                         │
 │ ┌────────────────────────────────────┬───────────────────────────────────────────┐ │
 │ │ Casing                             │ Grade 5 Custom Titanium                   │ │
-│ │ Movement                           │ WMS-Calibre 9012 Automatic                │ │
+│ │ Movement                           │ Calibre 9012 Automatic                    │ │
 │ │ Water Resistance                   │ 50 meters (5 ATM)                         │ │
 │ └────────────────────────────────────┴───────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────────────────┘
@@ -586,7 +815,7 @@ export const WIREFRAMES_ASCII = [
 │  Secure Checkout (Shopify Plus / Stripe Style)               [🔒 End-to-End SSL]   │
 ├──────────────────────────────────────────────────────┬─────────────────────────────┤
 │ 1. CUSTOMER INFORMATION                              │ ORDER SUMMARY & TOTAL       │
-│ Email: [ indyks132@gmail.com                     ]   │ ┌─────────────────────────┐ │
+│ Email: [ klient@apexstore.pl                     ]   │ ┌─────────────────────────┐ │
 │ [ ] Subscribe to dynamic newsletter bulletins        │ │ {{product.name}} x 1    │ │
 │                                                      │ │ Price: 899.00 EUR       │ │
 │ 2. DELIVERY ADDRESS                                  │ │                         │ │
@@ -596,12 +825,12 @@ export const WIREFRAMES_ASCII = [
 │ Phone Number: [ +48 500 600 700                  ]   │ └─────────────────────────┘ │
 │                                                      │ [PROMO CODE]                │
 │ 3. SHIPPING LOGISTICS                                │ [ Enter Code ] [ Apply ]    │
-│ (o) WMS Express Cargo (Next Day - 0.00 EUR)          │                             │
-│ ( ) WMS Standard Air Mail (3 Days - 0.00 EUR)        │                             │
+│ (o) Express Cargo (Next Day - 0.00 EUR)              │                             │
+│ ( ) Standard Air Mail (3 Days - 0.00 EUR)            │                             │
 │                                                      │                             │
 │ 4. PAYMENT PROCESS (Stripe Gateway Mock)             │                             │
 │ [ Credit Card (Mock) ]   [ BLIK ]   [ Bank Transfer] │                             │
-│ [ PLACE ORDER & DISPATCH TO WMS 🚀 ]                 │                             │
+│ [ PLACE ORDER & PAY 🚀 ]                             │                             │
 └──────────────────────────────────────────────────────┴─────────────────────────────┘
 `
   },
@@ -614,14 +843,14 @@ export const WIREFRAMES_ASCII = [
 ├──────────────────────┬─────────────────────────────────────────────────────────────┤
 │ NAVIGATION           │ ACTIVE ORDER PROGRESS & HISTORY                             │
 │ ┌──────────────────┐ │ Active Order Tracking Ref: {{order.orderNumber}}            │
-│ │ ▸ Dashboard      │ │ Current Warehouse Status: [ RECEIVED IN WMS ]               │
+│ │ ▸ Dashboard      │ │ Current Status: [ ORDER RECEIVED ]                          │
 │ │ ▸ Order History  │ │ ┌─────────────────────────────────────────────────────────┐ │
 │ │ ▸ Returns / RMA  │ │ │  (●) Received  ── ( ) Assembly ── ( ) Dispatched 🚀     │ │
 │ │ ▸ Saved Profile  │ │ └─────────────────────────────────────────────────────────┘ │
 │ └──────────────────┘ │                                                             │
 │                      │ PREVIOUS COMPLETED DELIVERIES                               │
 │                      │ ┌─────────────────────────────────────────────────────────┐ │
-│                      │ │ Order ID: WMS-98124  │ Date: 2026-06-11 │ Total: 899 EUR │ │
+│                      │ │ Order ID: APX-98124  │ Date: 2026-06-11 │ Total: 899 EUR │ │
 │                      │ │ Items: {{product.name}} x 1  │ Status: [ DELIVERED ]     │ │
 │                      │ │ [ Order Details ] [ Register Return / Dynamic RMA ]      │ │
 │                      │ └─────────────────────────────────────────────────────────┘ │

@@ -32,7 +32,11 @@ import {
   Tag,
   LogOut,
   Sparkles,
-  ClipboardCheck
+  ClipboardCheck,
+  LogIn,
+  Lock,
+  Mail,
+  UserPlus
 } from 'lucide-react';
 
 import { Product, Category, CartItem, Order, Address } from './types';
@@ -52,23 +56,155 @@ import ProductGallery from './components/ProductGallery';
 import OrderSummary from './components/OrderSummary';
 
 const mapWmsProductToStorefront = (wmsProd: any): Product => {
+  const cleanWmsSku = (wmsProd.sku || '').trim().toLowerCase();
+  const templateMatch = TEMPLATE_PRODUCTS.find(
+    (t) => (t.sku || '').trim().toLowerCase() === cleanWmsSku
+  );
+
   return {
     id: `${wmsProd.sku}`,
-    name: `${wmsProd.name}`,
-    description: `High-quality item from our catalog. SKU code ${wmsProd.sku}.`,
+    name: templateMatch ? templateMatch.name : `${wmsProd.name}`,
+    description: templateMatch ? templateMatch.description : `Wysokiej jakości produkt z naszego katalogu. Kod SKU: ${wmsProd.sku}.`,
     price: `${Number(wmsProd.price || 0).toFixed(2)} EUR`,
-    stock: `${wmsProd.stock} units available`,
-    image: wmsProd.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800',
-    category: `${wmsProd.category || 'General'}`,
+    stock: `${wmsProd.stock} szt.`,
+    image: wmsProd.image || (templateMatch ? templateMatch.image : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800'),
+    category: templateMatch ? templateMatch.category : `${wmsProd.category || 'Ogólna'}`,
     sku: `${wmsProd.sku}`,
-    rating: `4.8 / 5.0 (12 reviews)`,
-    specifications: {
-      'SKU Code': wmsProd.sku,
-      'Category': wmsProd.category || 'General',
-      'Stock Level': `${wmsProd.stock} units`,
-      'Warehouse Location': wmsProd.zone || 'Zone A'
+    rating: templateMatch ? templateMatch.rating : `4.8 / 5.0 (12 reviews)`,
+    specifications: templateMatch ? templateMatch.specifications : {
+      'Kod SKU': wmsProd.sku,
+      'Kategoria': wmsProd.category || 'Ogólna',
+      'Dostępność': `Dostępne (${wmsProd.stock} szt.)`,
+      'Dostawa': 'Wysyłka w 24 godziny'
     }
   };
+};
+
+const generateDefaultWmsProducts = (): any[] => {
+  const CATEGORY_PREFIXES: Record<string, string> = {
+    'Części samochodowe': 'AUTO-PARTS',
+    'Chemia samochodowa': 'AUTO-CHEM',
+    'Elektronika': 'ELEC-GEN',
+    'Artykuły spożywcze': 'FOOD-GROC',
+    'Biuro': 'BIUR-OFF',
+    'BHP': 'BHP-SAFE'
+  };
+
+  const PRODUCT_TEMPLATES: Record<string, string[]> = {
+    'Części samochodowe': [
+      'Filtr oleju Carbon', 'Filtr powietrza Active', 'Świeca zapłonowa Laser', 'Kabel zapłonowy Volt',
+      'Pasek klinowy Torque', 'Tarcza hamulcowa RotMax', 'Amortyzator GasPro', 'Sprężyna zawieszenia',
+      'Łącznik stabilizatora', 'Końcówka drążka', 'Wahacz zawieszenia', 'Przegub napędowy',
+      'Termostat silnika', 'Uszczelka głowicy', 'Pompa wody Flow', 'Sonda lambda Sens',
+      'Filtr paliwa Diesel', 'Filtr kabinowy Carbon', 'Żarówka reflektora H4', 'Żarówka kierunkowskazu'
+    ],
+    'Chemia samochodowa': [
+      'Szampon samochodowy Shine', 'Wosk hydrofobowy Coat', 'Płyn do spryskiwaczy Letni', 'Odmrażacz do szyb DeIce',
+      'Preparat do kokpitu Matte', 'Środek do czyszczenia felg', 'Płyn do chłodnic Glycol', 'Środek do usuwania owadów',
+      'Pasta polerska Scratch', 'Preparat do uszczelek', 'Płyn do mycia szyb Streakless', 'Zapach samochodowy Pine',
+      'Odtłuszczacz do hamulców', 'Smar silikonowy spray', 'Środek do konserwacji skóry', 'Penetrant wielofunkcyjny'
+    ],
+    'Elektronika': [
+      'Zasilacz stabilizowany', 'Przewód USB-C nylonowy', 'Ładowarka sieciowa Multi', 'Adapter HDMI-DVI',
+      'Kabel ethernet Cat6', 'Bateria akumulatorowa', 'Karta pamięci microSD', 'Czytnik kart pamięci',
+      'Rozdzielacz USB Hub', 'Przejściówka jack', 'Bezpiecznik elektryczny', 'Taśma izolacyjna PVC'
+    ],
+    'Artykuły spożywcze': [
+      'Kawa ziarnista Arabica', 'Herbata czarna Ceylon', 'Czekolada gorzka 70%', 'Płatki owsiane górskie',
+      'Sok pomarańczowy 100%', 'Woda mineralna gazowana', 'Makaron penne semolina', 'Ryż basmati długoziarnisty',
+      'Dżem truskawkowy słodki', 'Miód wielokwiatowy', 'Oliwa z oliwek Extra', 'Orzechy nerkowca 200g',
+      'Przyprawa pieprz czarny', 'Sól morska jodowana', 'Herbatniki maślane', 'Napój izotoniczny Active'
+    ],
+    'Biuro': [
+      'Segregator biurowy A4', 'Notatnik w linie Grid', 'Długopis żelowy czarny', 'Etykiety samoprzylepne',
+      'Zakreślacz neonowy yellow', 'Zszywacz biurowy', 'Zszywki metalowe', 'Spinacze biurowe 100szt',
+      'Korektor w taśmie', 'Nożyczki biurowe', 'Taśma klejąca transparent', 'Teczka z gumką A4'
+    ],
+    'BHP': [
+      'Rękawice robocze powlekane', 'Maska ochronna FFP2', 'Kask budowlany z atestem', 'Okulary ochronne przezroczyste',
+      'Kamizelka ostrzegawcza', 'Nauszniki przeciwhałasowe', 'Apteczka pierwszej pomocy', 'Buty robocze ochronne',
+      'Taśma ostrzegawcza biało-czerwona', 'Półmaska lakiernicza', 'Taśma antypoślizgowa'
+    ]
+  };
+
+  const ZONES: Record<string, string> = {
+    'Części samochodowe': 'C-01-01',
+    'Chemia samochodowa': 'C-01-02',
+    'Elektronika': 'B-02-01',
+    'Artykuły spożywcze': 'A-01-01',
+    'Biuro': 'B-02-02',
+    'BHP': 'C-01-01'
+  };
+
+  const ZONE_GROUPS: Record<string, string> = {
+    'Części samochodowe': 'Motoryzacja, chemia i BHP',
+    'Chemia samochodowa': 'Motoryzacja, chemia i BHP',
+    'Elektronika': 'Elektronika i biuro',
+    'Artykuły spożywcze': 'Zywnosc',
+    'Biuro': 'Elektronika i biuro',
+    'BHP': 'Motoryzacja, chemia i BHP'
+  };
+
+  const list: any[] = [];
+  const categories = Object.keys(PRODUCT_TEMPLATES);
+  let barcodeCounter = 5900000000001;
+
+  // Add the 6 core WMS test products
+  list.push(
+    { productId: 1001, sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Chemia samochodowa', stock: 120, reorderThreshold: 100, price: 34.99, barcode: '590000001001' },
+    { productId: 1002, sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, price: 289.00, barcode: '590000001002' },
+    { productId: 1003, sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, price: 449.99, barcode: '590000001003' },
+    { productId: 1004, sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Chemia samochodowa', stock: 8, reorderThreshold: 20, price: 179.99, barcode: '590000001004' },
+    { productId: 1005, sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, price: 134.99, barcode: '590000001005' },
+    { productId: 1006, sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, price: 249.00, barcode: '590000001006' }
+  );
+
+  for (let i = 1; i <= 200; i++) {
+    const category = categories[i % categories.length];
+    const templates = PRODUCT_TEMPLATES[category];
+    const baseName = templates[i % templates.length];
+    
+    const prefix = CATEGORY_PREFIXES[category];
+    const sku = `${prefix}-${String(i).padStart(4, '0')}`;
+    const barcode = String(barcodeCounter++);
+    
+    const name = `${baseName} Model-${i}`;
+    
+    let price = 0;
+    if (category === 'Artykuły spożywcze') {
+      price = Number((2.50 + (i % 5) * 3.5).toFixed(2));
+    } else if (category === 'Części samochodowe') {
+      price = Number((40 + (i % 8) * 45).toFixed(2));
+    } else {
+      price = Number((10 + (i % 6) * 15).toFixed(2));
+    }
+
+    const reorderThreshold = 15 + (i % 10);
+    const stock = 20 + (i % 50);
+    const locationCode = ZONES[category];
+    const zoneGroup = ZONE_GROUPS[category];
+    const status = stock === 0 ? 'Out of Stock' : (stock < reorderThreshold ? 'Low Stock' : 'In Stock');
+
+    list.push({
+      productId: i,
+      sku,
+      barcode,
+      name,
+      category,
+      stock,
+      reorderThreshold,
+      zone: locationCode.split('-')[0] + (locationCode.split('-')[1] || ''),
+      status,
+      price,
+      locationCode,
+      zoneGroup,
+      primaryLocationId: i,
+      locations: [locationCode],
+      zoneGroups: [zoneGroup],
+      stockEntries: [{ stockId: i, locationId: i, locationCode, zoneGroup, quantity: stock }]
+    });
+  }
+  return list;
 };
 
 export default function App() {
@@ -86,8 +222,8 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Shopping Page Tab internally inside Sandbox: 'home' | 'category' | 'checkout' | 'account'
-  const [shopView, setShopView] = useState<'home' | 'category' | 'checkout' | 'account'>('home');
+  // Shopping Page Tab internally inside Sandbox: 'home' | 'category' | 'checkout' | 'account' | 'login' | 'register'
+  const [shopView, setShopView] = useState<'home' | 'category' | 'checkout' | 'account' | 'login' | 'register'>('home');
 
   // Filters state inside Category Page
   const [filterInStockOnly, setFilterInStockOnly] = useState(false);
@@ -99,17 +235,55 @@ export default function App() {
   const [selectedColor, setSelectedColor] = useState('Srebrny');
   const [selectedSize, setSelectedSize] = useState('38mm');
 
+  // Active User session state
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('wms_customer_email');
+  });
+
+  const [customerEmail, setCustomerEmail] = useState(() => {
+    return localStorage.getItem('wms_customer_email') || '';
+  });
+
+  const getLoggedInUserDetail = (key: string, defaultValue: string) => {
+    const loggedInEmail = localStorage.getItem('wms_customer_email');
+    if (!loggedInEmail) return defaultValue;
+    const usersJson = localStorage.getItem('wms_store_users');
+    if (!usersJson) return defaultValue;
+    try {
+      const users = JSON.parse(usersJson);
+      const user = users.find((u: any) => u.email === loggedInEmail);
+      return user ? user[key] || defaultValue : defaultValue;
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
   // Checkout information state (Prepopulated with user and developer metadata)
-  const [customerEmail, setCustomerEmail] = useState('indyks132@gmail.com');
-  const [firstName, setFirstName] = useState('Alexander');
-  const [lastName, setLastName] = useState('Kowalski');
-  const [streetAddress, setStreetAddress] = useState('Marszalkowska 104 m. 12');
-  const [postalCode, setPostalCode] = useState('00-017');
-  const [city, setCity] = useState('Warszawa');
-  const [phone, setPhone] = useState('+48 500 600 700');
+  const [firstName, setFirstName] = useState(() => getLoggedInUserDetail('firstName', ''));
+  const [lastName, setLastName] = useState(() => getLoggedInUserDetail('lastName', ''));
+  const [streetAddress, setStreetAddress] = useState(() => getLoggedInUserDetail('streetAddress', ''));
+  const [postalCode, setPostalCode] = useState(() => getLoggedInUserDetail('postalCode', ''));
+  const [city, setCity] = useState(() => getLoggedInUserDetail('city', ''));
+  const [phone, setPhone] = useState(() => getLoggedInUserDetail('phone', ''));
   const [shippingMethod, setShippingMethod] = useState<'express' | 'air'>('express');
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromoPct, setAppliedPromoPct] = useState(0);
+
+  // Login Form State
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Register Form State
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
+  const [regStreetAddress, setRegStreetAddress] = useState('');
+  const [regPostalCode, setRegPostalCode] = useState('');
+  const [regCity, setRegCity] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regError, setRegError] = useState('');
 
   // Order submission payload state
   const [submittedOrder, setSubmittedOrder] = useState<any>(null);
@@ -117,18 +291,158 @@ export default function App() {
   const [registeredRma, setRegisteredRma] = useState<string | null>(null);
   const [rmaReason, setRmaReason] = useState('Damaged casing');
 
+  // Seed default user account if not exists
+  useEffect(() => {
+    const usersJson = localStorage.getItem('wms_store_users');
+    if (!usersJson) {
+      const defaultUsers = [
+        {
+          email: 'klient@apexstore.pl',
+          password: 'haslo',
+          firstName: 'Alexander',
+          lastName: 'Kowalski',
+          streetAddress: 'Marszalkowska 104 m. 12',
+          postalCode: '00-017',
+          city: 'Warszawa',
+          phone: '+48 500 600 700'
+        }
+      ];
+      localStorage.setItem('wms_store_users', JSON.stringify(defaultUsers));
+    }
+  }, []);
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    const usersJson = localStorage.getItem('wms_store_users');
+    if (!usersJson) {
+      setLoginError('Błąd bazy danych użytkowników.');
+      return;
+    }
+    try {
+      const users = JSON.parse(usersJson);
+      const matchedUser = users.find(
+        (u: any) => u.email.toLowerCase() === loginEmail.toLowerCase() && u.password === loginPassword
+      );
+      if (matchedUser) {
+        // Successful login
+        setIsLoggedIn(true);
+        setCustomerEmail(matchedUser.email);
+        setFirstName(matchedUser.firstName);
+        setLastName(matchedUser.lastName);
+        setStreetAddress(matchedUser.streetAddress);
+        setPostalCode(matchedUser.postalCode);
+        setCity(matchedUser.city);
+        setPhone(matchedUser.phone);
+        
+        localStorage.setItem('wms_customer_email', matchedUser.email);
+        setShopView('home');
+        
+        // Reset fields
+        setLoginEmail('');
+        setLoginPassword('');
+      } else {
+        setLoginError('Nieprawidłowy e-mail lub hasło.');
+      }
+    } catch (err) {
+      setLoginError('Błąd podczas logowania.');
+    }
+  };
+
+  const handleRegisterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError('');
+    
+    if (!regEmail || !regPassword || !regFirstName || !regLastName) {
+      setRegError('Proszę wypełnić wszystkie wymagane pola.');
+      return;
+    }
+
+    const usersJson = localStorage.getItem('wms_store_users') || '[]';
+    try {
+      const users = JSON.parse(usersJson);
+      const exists = users.some((u: any) => u.email.toLowerCase() === regEmail.toLowerCase());
+      if (exists) {
+        setRegError('Użytkownik o takim adresie e-mail już istnieje.');
+        return;
+      }
+
+      const newUser = {
+        email: regEmail,
+        password: regPassword,
+        firstName: regFirstName,
+        lastName: regLastName,
+        streetAddress: regStreetAddress,
+        postalCode: regPostalCode,
+        city: regCity,
+        phone: regPhone
+      };
+
+      const updatedUsers = [...users, newUser];
+      localStorage.setItem('wms_store_users', JSON.stringify(updatedUsers));
+
+      // Auto login
+      setIsLoggedIn(true);
+      setCustomerEmail(newUser.email);
+      setFirstName(newUser.firstName);
+      setLastName(newUser.lastName);
+      setStreetAddress(newUser.streetAddress);
+      setPostalCode(newUser.postalCode);
+      setCity(newUser.city);
+      setPhone(newUser.phone);
+
+      localStorage.setItem('wms_customer_email', newUser.email);
+      setShopView('home');
+
+      // Reset fields
+      setRegEmail('');
+      setRegPassword('');
+      setRegFirstName('');
+      setRegLastName('');
+      setRegStreetAddress('');
+      setRegPostalCode('');
+      setRegCity('');
+      setRegPhone('');
+    } catch (err) {
+      setRegError('Błąd podczas rejestracji.');
+    }
+  };
+
   // Real WMS integration states
-  const [wmsProducts, setWmsProducts] = useState<any[]>([]);
+  const [wmsProducts, setWmsProducts] = useState<any[]>(() => {
+    try {
+      const stored = localStorage.getItem('wms-products');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.length >= 200) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to parse stored products in storefront initializer:", e);
+    }
+    const defaults = generateDefaultWmsProducts();
+    try {
+      localStorage.setItem('wms-products', JSON.stringify(defaults));
+    } catch (e) {
+      console.error(e);
+    }
+    return defaults;
+  });
   const [wmsOrders, setWmsOrders] = useState<any[]>([]);
   const [selectedTrackedOrderId, setSelectedTrackedOrderId] = useState<string>('');
 
-  // Load real WMS products and orders from localStorage
+  // Load real WMS products and orders from localStorage and live API
   useEffect(() => {
-    const loadWmsData = () => {
+    const loadWmsData = async () => {
+      // 1. Try local storage first
       try {
         const storedProds = localStorage.getItem('wms-products');
         if (storedProds) {
-          setWmsProducts(JSON.parse(storedProds));
+          const parsed = JSON.parse(storedProds);
+          if (parsed.length >= 200) {
+            setWmsProducts(parsed);
+          }
         }
         const storedOrders = localStorage.getItem('wms-orders');
         if (storedOrders) {
@@ -136,6 +450,79 @@ export default function App() {
         }
       } catch (err) {
         console.error("Failed to load WMS data in storefront:", err);
+      }
+
+      // 2. Fetch directly from WMS Backend API for live database synchronization
+      try {
+        let response;
+        try {
+          response = await fetch('/api/inventory');
+        } catch {
+          // If relative fails (e.g. running on port 5174 without proxy), try absolute localhost:3001
+          response = await fetch('http://localhost:3001/api/inventory');
+        }
+
+        if (response && response.ok) {
+          const data = await response.json();
+          const prodMap = new Map<string, any>();
+          
+          for (const row of data) {
+            const sku = row.sku || `PROD-${row.products_id}`;
+            const qty = Number(row.quantity || 0);
+            if (prodMap.has(sku)) {
+              const existing = prodMap.get(sku);
+              existing.stock += qty;
+              if (row.location_code && !existing.locations.includes(row.location_code)) {
+                existing.locations.push(row.location_code);
+              }
+              if (row.zone_group && !existing.zoneGroups.includes(row.zone_group)) {
+                existing.zoneGroups.push(row.zone_group);
+              }
+              existing.stockEntries.push({
+                stockId: row.id,
+                locationId: row.location_id,
+                locationCode: row.location_code,
+                zoneGroup: row.zone_group,
+                quantity: qty
+              });
+            } else {
+              const stock = qty;
+              const reorderThreshold = Number(row.reorder_threshold || 20);
+              const status = stock === 0 ? 'Out of Stock' : (stock < reorderThreshold ? 'Low Stock' : 'In Stock');
+              prodMap.set(sku, {
+                productId: row.products_id,
+                sku: sku,
+                barcode: row.barcode || '',
+                name: row.product_name || row.name || 'Produkt',
+                category: row.category || 'Towar magazynowy',
+                stock: stock,
+                reorderThreshold: reorderThreshold,
+                zone: row.location_code ? (row.location_code.split('-')[0] + (row.location_code.split('-')[1] || '')) : 'UNASSIGNED',
+                status: status,
+                price: Number(row.price || 0),
+                locationCode: row.location_code || 'UNASSIGNED',
+                zoneGroup: row.zone_group || 'General',
+                primaryLocationId: row.location_id,
+                locations: row.location_code ? [row.location_code] : [],
+                zoneGroups: row.zone_group ? [row.zone_group] : [],
+                stockEntries: [{
+                  stockId: row.id,
+                  locationId: row.location_id,
+                  locationCode: row.location_code,
+                  zoneGroup: row.zone_group,
+                  quantity: qty
+                }]
+              });
+            }
+          }
+          const fetchedProducts = Array.from(prodMap.values());
+          if (fetchedProducts.length > 0) {
+            setWmsProducts(fetchedProducts);
+            localStorage.setItem('wms-products', JSON.stringify(fetchedProducts));
+          }
+        }
+      } catch (err) {
+        console.warn("WMS database API connection unavailable, using local cache:", err);
       }
     };
     loadWmsData();
@@ -270,7 +657,7 @@ export default function App() {
       shipmentDate: shipmentDate,
       items: wmsOrderItems,
       warehouseCode: 'HUB-PL-01',
-      internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}. Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'WMS Express Cargo' : 'WMS Air Mail'}`,
+      internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}. Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'}`,
       internalNotesActor: 'Sklep Internetowy',
       isPacked: false
     };
@@ -302,7 +689,7 @@ export default function App() {
     // Package storefront UI transaction payload
     const transactionPayload = {
       order_id: newOrderId,
-      order_number: `WMS-${Date.now().toString().slice(-6)}`,
+      order_number: `APX-${Date.now().toString().slice(-6)}`,
       customer: {
         email: customerEmail,
         firstName,
@@ -316,7 +703,7 @@ export default function App() {
         country: 'Poland'
       },
       logistics: {
-        method: shippingMethod === 'express' ? 'WMS Express Cargo' : 'WMS Air Mail',
+        method: shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail',
         cost_eur: shippingMethod === 'express' ? 0 : 45
       },
       financials: {
@@ -364,7 +751,7 @@ export default function App() {
 
   const handleApplyPromo = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (promoCode.toUpperCase() === 'WMS10') {
+    if (promoCode.toUpperCase() === 'APEX10') {
       setAppliedPromoPct(0.1);
     } else {
       setAppliedPromoPct(0);
@@ -413,10 +800,11 @@ export default function App() {
       }
       // Filter by stock
       if (filterInStockOnly) {
-        if (!p.stock.includes('available')) return false;
-        // Also check if stock number is > 0
-        const match = p.stock.match(/(\d+)\s+units/);
-        if (match && parseInt(match[1]) <= 0) return false;
+        const lowerStock = p.stock.toLowerCase();
+        if (lowerStock.includes('brak') || lowerStock.includes('out of stock')) return false;
+        
+        const match = lowerStock.match(/(\d+)/);
+        if (match && parseInt(match[1], 10) <= 0) return false;
       }
       // Filter by pricing
       const match = p.price.match(/[\d.,]+/);
@@ -468,10 +856,45 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quick Info / User Status */}
-          <div className="flex items-center gap-3 text-xs font-mono text-zinc-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-            <span>Online Catalog Connected</span>
+          {/* Quick Info / User Status / Login Buttons */}
+          <div className="flex items-center gap-4 text-xs font-mono">
+            {isLoggedIn ? (
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-400">Witaj, <strong className="text-white">{customerEmail}</strong></span>
+                <button
+                  onClick={() => {
+                    setIsLoggedIn(false);
+                    setCustomerEmail('');
+                    localStorage.removeItem('wms_customer_email');
+                    setFirstName('');
+                    setLastName('');
+                    setStreetAddress('');
+                    setPostalCode('');
+                    setCity('');
+                    setPhone('');
+                    setShopView('home');
+                  }}
+                  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 border border-zinc-800 cursor-pointer transition-colors"
+                >
+                  Wyloguj się
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShopView('login')}
+                  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 border border-zinc-800 cursor-pointer transition-colors"
+                >
+                  Zaloguj się
+                </button>
+                <button
+                  onClick={() => setShopView('register')}
+                  className="bg-white text-black hover:bg-zinc-200 px-3 py-1.5 font-bold cursor-pointer transition-colors"
+                >
+                  Utwórz konto
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -731,7 +1154,14 @@ export default function App() {
                     </button>
 
                     <button
-                      onClick={() => { setShopView('account'); setSelectedProduct(null); }}
+                      onClick={() => {
+                        if (isLoggedIn) {
+                          setShopView('account');
+                        } else {
+                          setShopView('login');
+                        }
+                        setSelectedProduct(null);
+                      }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-mono transition-colors cursor-pointer ${
                         shopView === 'account'
                           ? 'bg-zinc-900 text-white font-bold'
@@ -814,7 +1244,7 @@ export default function App() {
 
                           <div className="border-t border-b border-zinc-900 py-4 flex items-center justify-between">
                             <div>
-                              <div className="text-[10px] font-mono text-zinc-500 uppercase">WMS Cena detaliczna brutto</div>
+                              <div className="text-[10px] font-mono text-zinc-500 uppercase">Cena detaliczna brutto</div>
                               <div className="text-lg font-bold font-mono text-white mt-0.5">
                                 {selectedProduct.price}
                               </div>
@@ -887,7 +1317,7 @@ export default function App() {
                       {/* Specifications Grid */}
                       <div className="pt-6 border-t border-zinc-900 space-y-4">
                         <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                          Karta specyfikacji technicznej
+                          Specyfikacja produktu
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {Object.entries(selectedProduct.specifications).map(([key, value]) => (
@@ -902,7 +1332,7 @@ export default function App() {
                       {/* Reviews module */}
                       <div className="pt-6 border-t border-zinc-900 space-y-4">
                         <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                          Opinie klientów (Transakcje zweryfikowane przez WMS)
+                          Opinie klientów (Zweryfikowane transakcje)
                         </h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -928,7 +1358,7 @@ export default function App() {
                       {/* Up-sell Recommendations */}
                       <div className="pt-8 border-t border-zinc-900 space-y-4">
                         <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest font-bold">
-                          Polecane produkty powiązane z WMS
+                          Polecane produkty
                         </h3>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -974,7 +1404,7 @@ export default function App() {
                         <div className="relative max-w-lg space-y-5 z-10">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[9px] font-mono uppercase tracking-widest bg-emerald-950 text-emerald-400 border border-emerald-900">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Bestseller zsynchronizowany z WMS
+                            Bestseller
                           </span>
 
                           <h2 className="text-2xl md:text-3xl font-bold font-display tracking-tight text-white leading-tight">
@@ -986,7 +1416,7 @@ export default function App() {
                           </p>
 
                           <div className="pt-2 flex items-baseline gap-2">
-                            <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">Cena zsynchronizowana z WMS</span>
+                            <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">Cena detaliczna</span>
                             <span className="text-xl font-bold font-mono text-white">
                               {TEMPLATE_PRODUCTS[0].price}
                             </span>
@@ -1016,7 +1446,7 @@ export default function App() {
                           <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">
                             Polecane kategorie
                           </h3>
-                          <span className="text-[10px] font-mono text-zinc-600">GET /api/categories</span>
+                          <span className="text-[10px] font-mono text-zinc-650"></span>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1038,7 +1468,7 @@ export default function App() {
                             <Truck size={14} className="text-zinc-400" /> Wysyłka w 24h
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Równoległe połączenie API gwarantuje, że etykiety logistyczne są drukowane natychmiast po przetworzeniu koszyka.
+                            Błyskawiczne nadanie zamówienia. Wszystkie paczki przygotowujemy i wysyłamy w ciągu doby.
                           </p>
                         </div>
                         
@@ -1047,16 +1477,16 @@ export default function App() {
                             <SlidersHorizontal size={14} className="text-zinc-400" /> Synchronizacja zapasów
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Brak spekulacyjnej przedsprzedaży. Bilansowanie zapasów WMS w czasie rzeczywistym gwarantuje 100% realizacji.
+                            Gwarancja stanów magazynowych. Oferujemy wyłącznie te produkty, które fizycznie znajdują się w naszym magazynie.
                           </p>
                         </div>
 
                         <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
                           <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <ClipboardCheck size={14} className="text-zinc-400" /> Cyfrowy panel RMA
+                            <ClipboardCheck size={14} className="text-zinc-400" /> Wygodne zwroty (RMA)
                           </div>
                           <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Zarejestruj zwroty produktów z automatyczną walidacją bezpośrednio ze swojego panelu.
+                            Zgłoś zwrot bezpośrednio z panelu klienta w kilka sekund bez konieczności dzwonienia.
                           </p>
                         </div>
                       </div>
@@ -1067,7 +1497,7 @@ export default function App() {
                           <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">
                             Najczęściej kupowane
                           </h3>
-                          <span className="text-[10px] font-mono text-zinc-650">GET /api/products?limit=4</span>
+                          <span className="text-[10px] font-mono text-zinc-650"></span>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -1165,7 +1595,7 @@ export default function App() {
                                 onChange={(e) => setFilterInStockOnly(e.target.checked)}
                                 className="bg-black border border-zinc-805 accent-white h-3.5 w-3.5 rounded-none"
                               />
-                              Tylko dostępne w magazynie
+                              Tylko dostępne
                             </label>
                           </div>
 
@@ -1292,24 +1722,13 @@ export default function App() {
                           </div>
                           
                           <div className="space-y-2">
-                            <h3 className="text-lg font-bold font-display text-white">Zamówienie zsynchronizowane i wysłane do WMS</h3>
+                            <h3 className="text-lg font-bold font-display text-white">Dziękujemy! Twoje zamówienie zostało złożone</h3>
                             <p className="text-xs text-zinc-400 font-mono">
-                              Unikalny identyfikator transakcji: <span className="text-white font-bold">{submittedOrder.order_id}</span>
+                              Numer zamówienia: <span className="text-white font-bold">{submittedOrder.order_id}</span>
                             </p>
                             <p className="text-[11px] text-zinc-500 leading-normal max-w-md mx-auto">
-                              Jednostki magazynowe zostały zarezerwowane w bazie danych logistyki, a zlecenia wysyłki zostały przekazane do lokalnego skanera WMS.
+                              Twoje zamówienie zostało pomyślnie zarejestrowane w naszym systemie i przekazane do realizacji.
                             </p>
-                          </div>
-
-                          {/* Raw API Response Log payload */}
-                          <div className="bg-black border border-zinc-900 p-4 text-left space-y-2">
-                            <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest flex items-center justify-between pb-1 border-b border-zinc-950">
-                              <span>Przekazany ładunek API (POST /api/order)</span>
-                              <span className="text-emerald-400">201 UTWORZONO</span>
-                            </div>
-                            <pre className="text-[10px] text-emerald-400 font-mono overflow-x-auto whitespace-pre leading-relaxed p-1.5 max-h-[220px]">
-                              {JSON.stringify(submittedOrder, null, 2)}
-                            </pre>
                           </div>
 
                           <div className="flex gap-3 justify-center pt-3">
@@ -1339,7 +1758,7 @@ export default function App() {
                                 <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">Tożsamość klienta</h3>
                               </div>
                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-mono uppercase text-zinc-400 block">Adres e-mail (ID synchronizacji WMS)</label>
+                                <label className="text-[10px] font-mono uppercase text-zinc-400 block">Adres e-mail</label>
                                 <input
                                   type="email"
                                   required
@@ -1408,7 +1827,7 @@ export default function App() {
                                       onChange={() => setShippingMethod('express')}
                                       className="accent-white h-3.5 w-3.5"
                                     />
-                                    <span>WMS Express Cargo (Dostawa następnego dnia)</span>
+                                    <span>Przesyłka kurierska Express (Dostawa następnego dnia)</span>
                                   </span>
                                   <span className="text-emerald-400 font-bold">DARMOWA</span>
                                 </label>
@@ -1422,7 +1841,7 @@ export default function App() {
                                       onChange={() => setShippingMethod('air')}
                                       className="accent-white h-3.5 w-3.5"
                                     />
-                                    <span>WMS Priorytetowa przesyłka lotnicza</span>
+                                    <span>Priorytetowa przesyłka lotnicza</span>
                                   </span>
                                   <span className="text-zinc-300 font-bold">45.00 EUR</span>
                                 </label>
@@ -1452,7 +1871,7 @@ export default function App() {
                                 disabled={cart.length === 0}
                                 className="w-full bg-emerald-500 text-black hover:bg-emerald-400 py-3.5 text-xs font-mono font-bold uppercase tracking-widest text-center transition-colors shadow-lg disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
                               >
-                                Złóż zamówienie i wyślij do WMS 🚀
+                                Kupuję i płacę 🚀
                               </button>
                             </div>
 
@@ -1500,6 +1919,229 @@ export default function App() {
                         </form>
                       )}
                     </motion.div>
+                  ) : shopView === 'login' ? (
+                    
+                    /* LOGIN VIEW */
+                    <motion.div
+                      key="login-screen"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="bg-zinc-950 border border-zinc-900 p-6 space-y-6 max-w-md mx-auto"
+                    >
+                      <div className="pb-3 border-b border-zinc-900 text-center">
+                        <div className="h-10 w-10 bg-white text-black flex items-center justify-center font-black rounded-full shadow-lg mx-auto mb-3">
+                          <LogIn size={20} />
+                        </div>
+                        <h2 className="text-base font-semibold font-display uppercase tracking-tight text-white">
+                          Zaloguj się do konta
+                        </h2>
+                        <p className="text-[10px] text-zinc-500 font-mono mt-1">Podaj dane logowania, aby kontynuować zakupy</p>
+                      </div>
+
+                      {loginError && (
+                        <div className="bg-red-950/20 border border-red-900 text-red-400 p-3 text-xs font-mono text-center">
+                          {loginError}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs font-mono">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase text-zinc-400 block">Adres E-mail</label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3.5 text-zinc-650"><Mail size={13} /></span>
+                            <input
+                              type="email"
+                              required
+                              value={loginEmail}
+                              onChange={(e) => setLoginEmail(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white pl-10 pr-3 py-2.5 rounded-none focus:outline-none focus:border-zinc-500 font-mono"
+                              placeholder="klient@apexstore.pl"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase text-zinc-400 block">Hasło</label>
+                          <div className="relative flex items-center">
+                            <span className="absolute left-3.5 text-zinc-650"><Lock size={13} /></span>
+                            <input
+                              type="password"
+                              required
+                              value={loginPassword}
+                              onChange={(e) => setLoginPassword(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white pl-10 pr-3 py-2.5 rounded-none focus:outline-none focus:border-zinc-500 font-mono"
+                              placeholder="••••••••"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full bg-white text-black hover:bg-zinc-200 py-3 text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Zaloguj się
+                        </button>
+                      </form>
+
+                      <div className="text-center pt-2 border-t border-zinc-900">
+                        <p className="text-[10px] text-zinc-500">
+                          Nie masz jeszcze konta?{' '}
+                          <button
+                            onClick={() => {
+                              setLoginError('');
+                              setShopView('register');
+                            }}
+                            className="text-white hover:underline font-bold bg-transparent border-none p-0 cursor-pointer"
+                          >
+                            Utwórz konto
+                          </button>
+                        </p>
+                      </div>
+                    </motion.div>
+                  ) : shopView === 'register' ? (
+
+                    /* REGISTER VIEW */
+                    <motion.div
+                      key="register-screen"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="bg-zinc-950 border border-zinc-900 p-6 space-y-6 max-w-lg mx-auto"
+                    >
+                      <div className="pb-3 border-b border-zinc-900 text-center">
+                        <div className="h-10 w-10 bg-white text-black flex items-center justify-center font-black rounded-full shadow-lg mx-auto mb-3">
+                          <UserPlus size={20} />
+                        </div>
+                        <h2 className="text-base font-semibold font-display uppercase tracking-tight text-white">
+                          Utwórz nowe konto
+                        </h2>
+                        <p className="text-[10px] text-zinc-500 font-mono mt-1">Zarejestruj się, aby dokonywać zakupów i śledzić dostawy</p>
+                      </div>
+
+                      {regError && (
+                        <div className="bg-red-950/20 border border-red-900 text-red-400 p-3 text-xs font-mono text-center">
+                          {regError}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleRegisterSubmit} className="space-y-4 text-xs font-mono">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase text-zinc-400 block">Adres E-mail *</label>
+                            <input
+                              type="email"
+                              required
+                              value={regEmail}
+                              onChange={(e) => setRegEmail(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2.5 rounded-none focus:outline-none focus:border-zinc-500 font-mono"
+                              placeholder="np. jan@domena.pl"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase text-zinc-400 block">Hasło *</label>
+                            <input
+                              type="password"
+                              required
+                              value={regPassword}
+                              onChange={(e) => setRegPassword(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2.5 rounded-none focus:outline-none focus:border-zinc-500 font-mono"
+                              placeholder="Hasło zabezpieczające"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase text-zinc-400 block">Imię *</label>
+                            <input
+                              type="text"
+                              required
+                              value={regFirstName}
+                              onChange={(e) => setRegFirstName(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] uppercase text-zinc-400 block">Nazwisko *</label>
+                            <input
+                              type="text"
+                              required
+                              value={regLastName}
+                              onChange={(e) => setRegLastName(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase text-zinc-400 block">Ulica i numer mieszkania</label>
+                          <input
+                            type="text"
+                            value={regStreetAddress}
+                            onChange={(e) => setRegStreetAddress(e.target.value)}
+                            className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2.5 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="space-y-1.5 sm:col-span-1">
+                            <label className="text-[10px] uppercase text-zinc-400 block">Kod pocztowy</label>
+                            <input
+                              type="text"
+                              value={regPostalCode}
+                              onChange={(e) => setRegPostalCode(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+                              placeholder="np. 00-001"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <label className="text-[10px] uppercase text-zinc-400 block">Miasto</label>
+                            <input
+                              type="text"
+                              value={regCity}
+                              onChange={(e) => setRegCity(e.target.value)}
+                              className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase text-zinc-400 block">Telefon kontaktowy</label>
+                          <input
+                            type="text"
+                            value={regPhone}
+                            onChange={(e) => setRegPhone(e.target.value)}
+                            className="w-full bg-black border border-zinc-805 text-xs text-white px-3 py-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full bg-white text-black hover:bg-zinc-200 py-3 text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          Zarejestruj się i zaloguj
+                        </button>
+                      </form>
+
+                      <div className="text-center pt-2 border-t border-zinc-900">
+                        <p className="text-[10px] text-zinc-500">
+                          Masz już konto?{' '}
+                          <button
+                            onClick={() => {
+                              setRegError('');
+                              setShopView('login');
+                            }}
+                            className="text-white hover:underline font-bold bg-transparent border-none p-0 cursor-pointer"
+                          >
+                            Zaloguj się
+                          </button>
+                        </p>
+                      </div>
+                    </motion.div>
                   ) : (
                     
                     /* CUSTOMER PORTAL / ACCOUNT DASHBOARD VIEW */
@@ -1515,7 +2157,7 @@ export default function App() {
                           <h2 className="text-base font-semibold font-display tracking-tight text-white uppercase">
                             Panel Logistyczny Klienta
                           </h2>
-                          <p className="text-xs text-zinc-500 font-mono mt-0.5">Zalogowana sesja: <code className="text-zinc-400">indyks132@gmail.com</code></p>
+                          <p className="text-xs text-zinc-500 font-mono mt-0.5">Zalogowana sesja: <code className="text-zinc-400">{customerEmail}</code></p>
                         </div>
                         <button
                           onClick={() => { setShopView('home'); }}
@@ -1537,15 +2179,17 @@ export default function App() {
                             <div className="space-y-2 text-xs">
                               <div>
                                 <div className="text-zinc-650">E-mail klienta:</div>
-                                <div className="text-zinc-200">indyks132@gmail.com</div>
+                                <div className="text-zinc-200">{customerEmail}</div>
                               </div>
                               <div>
                                 <div className="text-zinc-650">Imię i nazwisko:</div>
-                                <div className="text-zinc-200">Alexander Kowalski</div>
+                                <div className="text-zinc-200">{firstName} {lastName}</div>
                               </div>
                               <div>
                                 <div className="text-zinc-650">Adres domyślny:</div>
-                                <div className="text-zinc-200">Marszalkowska 104 m. 12, 00-017 Warszawa</div>
+                                <div className="text-zinc-200">
+                                  {streetAddress ? `${streetAddress}, ${postalCode} ${city}` : 'Brak adresu'}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1583,7 +2227,7 @@ export default function App() {
                               
                               <div className="space-y-1">
                                 <div className={`text-xs font-bold ${activeTrackedOrder ? 'text-emerald-400' : 'text-zinc-500'} font-mono`}>1. PRZYJĘTE</div>
-                                <p className="text-[9px] text-zinc-500 font-mono">{activeTrackedOrder ? `Status: ${activeTrackedOrder.status}` : 'Wprowadzone do WMS'}</p>
+                                <p className="text-[9px] text-zinc-500 font-mono">{activeTrackedOrder ? `Status: ${activeTrackedOrder.status}` : 'Zarejestrowane w systemie'}</p>
                               </div>
 
                               <div className="space-y-1">
@@ -1593,7 +2237,7 @@ export default function App() {
 
                               <div className="space-y-1">
                                 <div className={`text-xs font-bold ${isDispatched ? 'text-emerald-400' : 'text-zinc-550'} font-mono`}>3. WYSŁANE</div>
-                                <p className="text-[9px] text-zinc-650 font-mono">{activeTrackedOrder?.binId ? `Pojemnik: ${activeTrackedOrder.binId}` : 'Odbiór przez kuriera'}</p>
+                                <p className="text-[9px] text-zinc-650 font-mono">Przekazano przewoźnikowi</p>
                               </div>
                             </div>
                           </div>
@@ -1605,7 +2249,7 @@ export default function App() {
                             </span>
 
                             <p className="text-[11px] text-zinc-500 font-mono leading-normal">
-                              Aby zarejestrować zwrot zakupionych produktów bezpośrednio w systemie WMS, wypełnij poniższy formularz RMA. Kontakt telefoniczny nie jest wymagany:
+                              Aby zarejestrować zwrot zakupionych produktów, wypełnij poniższy formularz RMA. Kontakt telefoniczny nie jest wymagany:
                             </p>
 
                             {registeredRma ? (
@@ -1617,7 +2261,7 @@ export default function App() {
                                   Numer referencyjny RMA: <strong className="text-white">{registeredRma}</strong>
                                 </p>
                                 <p className="text-[10px] text-zinc-300">
-                                  Etykieta zwrotna została wygenerowana. Po fizycznym dotarciu produktów do punktu przyjęć [WMS-IN-03] stany magazynowe zostaną zaktualizowane automatycznie.
+                                  Etykieta zwrotna została wygenerowana. Po otrzymaniu przesyłki przez nasz magazyn zwrot zostanie automatycznie przetworzony.
                                 </p>
                               </div>
                             ) : (
@@ -1652,10 +2296,10 @@ export default function App() {
 
                                 <button
                                   type="button"
-                                  onClick={() => setRegisteredRma(`RMA-${Date.now().toString().slice(-6)}-WMS`)}
+                                  onClick={() => setRegisteredRma(`RMA-${Date.now().toString().slice(-6)}`)}
                                   className="bg-white text-black hover:bg-zinc-200 font-mono text-[11px] font-bold px-4 py-2 uppercase tracking-wide cursor-pointer transition-colors"
                                 >
-                                  Zarejestruj RMA w systemie WMS
+                                  Zarejestruj zwrot (RMA)
                                 </button>
                               </div>
                             )}
@@ -1689,11 +2333,11 @@ export default function App() {
       <footer className="bg-zinc-950 border-t border-zinc-900 py-6 px-4 mt-12" id="global-footer">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-zinc-500">
           <div>
-            &copy; 2026 Portal WMS Omnichannel. Wszelkie prawa zastrzeżone.
+            &copy; 2026 Apex Premium Store. Wszelkie prawa zastrzeżone.
           </div>
           <div className="flex gap-4">
             <span className="text-[10px]" title="System synchronization lock stats">
-              Status synchronizacji z WMS: <span className="text-emerald-400">● POŁĄCZONO</span>
+              Połączenie: <span className="text-emerald-400">● ZABEZPIECZONE</span>
             </span>
           </div>
         </div>

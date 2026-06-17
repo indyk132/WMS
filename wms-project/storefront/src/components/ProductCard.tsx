@@ -39,7 +39,7 @@ export default function ProductCard({ product, onAddToCart, onViewDetails }: Pro
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 pointer-events-none">
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-mono uppercase bg-black/90 text-emerald-400 border border-emerald-500/20 shadow-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            W magazynie
+            Dostępne
           </span>
         </div>
 

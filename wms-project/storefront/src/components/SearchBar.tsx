@@ -138,9 +138,6 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
                 {filtered.length === 0 ? (
                   <div className="p-6 text-center text-zinc-500">
                     <p className="text-xs">Brak produktów pasujących do zapytania.</p>
-                    <p className="text-[10px] font-mono text-zinc-600 mt-1">
-                      Zapytanie API: <code className="text-zinc-500">GET /api/search?q={query}</code>
-                    </p>
                   </div>
                 ) : (
                   filtered.map((product) => (
@@ -172,7 +169,7 @@ export default function SearchBar({ products, onSelectProduct }: SearchBarProps)
                             {product.sku}
                           </span>
                           <span className="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-1 py-0.2 rounded-none font-mono uppercase tracking-widest scale-90">
-                            {product.stock.match(/\d+/) ? 'W MAGAZYNIE' : 'DOSTĘPNY'}
+                            {product.stock.match(/\d+/) ? 'DOSTĘPNE' : 'DOSTĘPNY'}
                           </span>
                         </div>
                       </div>
