@@ -36,7 +36,11 @@ import {
   LogIn,
   Lock,
   Mail,
-  UserPlus
+  UserPlus,
+  Menu,
+  ChevronDown,
+  Settings,
+  X
 } from 'lucide-react';
 
 import { Product, Category, CartItem, Order, Address } from './types';
@@ -218,6 +222,10 @@ export default function App() {
   // Sandbox storefront state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCategoriesDropdownOpen, setIsCategoriesDropdownOpen] = useState(false);
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMenuDrawerOpen, setIsMenuDrawerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -290,6 +298,7 @@ export default function App() {
   const [orderComplete, setOrderComplete] = useState(false);
   const [registeredRma, setRegisteredRma] = useState<string | null>(null);
   const [rmaReason, setRmaReason] = useState('Damaged casing');
+  const [selectedRmaOrderId, setSelectedRmaOrderId] = useState('');
 
   // Seed default user account if not exists
   useEffect(() => {
@@ -434,7 +443,37 @@ export default function App() {
 
   // Load real WMS products and orders from localStorage and live API
   useEffect(() => {
+    const syncLocalOrdersWithBackend = async (localOrders: any[]) => {
+      const unsyncedOrders = localOrders.filter(o => !o.synced);
+      if (unsyncedOrders.length === 0) return;
+
+      console.log(`Found ${unsyncedOrders.length} unsynced orders. Attempting to sync...`);
+      let updatedAny = false;
+
+      for (const ord of unsyncedOrders) {
+        try {
+          const response = await fetch('http://localhost:3001/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ord)
+          });
+          if (response.ok) {
+            ord.synced = true;
+            updatedAny = true;
+            console.log(`Synced order ${ord.id} to WMS DB.`);
+          }
+        } catch (err) {
+          console.warn(`Failed to sync order ${ord.id}:`, err);
+        }
+      }
+
+      if (updatedAny) {
+        localStorage.setItem('wms-orders', JSON.stringify(localOrders));
+      }
+    };
+
     const loadWmsData = async () => {
+      let localOrders: any[] = [];
       // 1. Try local storage first
       try {
         const storedProds = localStorage.getItem('wms-products');
@@ -446,7 +485,8 @@ export default function App() {
         }
         const storedOrders = localStorage.getItem('wms-orders');
         if (storedOrders) {
-          setWmsOrders(JSON.parse(storedOrders));
+          localOrders = JSON.parse(storedOrders);
+          setWmsOrders(localOrders);
         }
       } catch (err) {
         console.error("Failed to load WMS data in storefront:", err);
@@ -523,6 +563,38 @@ export default function App() {
         }
       } catch (err) {
         console.warn("WMS database API connection unavailable, using local cache:", err);
+      }
+
+      // 3. Fetch orders directly from WMS Backend API
+      try {
+        let ordersResponse;
+        try {
+          ordersResponse = await fetch('/api/orders');
+        } catch {
+          ordersResponse = await fetch('http://localhost:3001/api/orders');
+        }
+
+        if (ordersResponse && ordersResponse.ok) {
+          const dbOrders = await ordersResponse.json();
+          if (dbOrders) {
+            // Merge database orders with local storage orders
+            const merged = [...dbOrders];
+            for (const localOrd of localOrders) {
+              if (!merged.some(o => o.id === localOrd.id)) {
+                merged.push(localOrd);
+              }
+            }
+            setWmsOrders(merged);
+            localStorage.setItem('wms-orders', JSON.stringify(merged));
+          }
+        }
+      } catch (err) {
+        console.warn("WMS database API for orders unavailable, using local cache:", err);
+      }
+
+      // 4. Sync unsynced local orders
+      if (localOrders.length > 0) {
+        await syncLocalOrdersWithBackend(localOrders);
       }
     };
     loadWmsData();
@@ -607,7 +679,7 @@ export default function App() {
     saveCartToStorage(updated);
   };
 
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Map storefront order items to WMS order items format
@@ -659,12 +731,33 @@ export default function App() {
       warehouseCode: 'HUB-PL-01',
       internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}. Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'}`,
       internalNotesActor: 'Sklep Internetowy',
-      isPacked: false
+      isPacked: false,
+      synced: false
     };
 
     // Save to WMS orders list
     existingWmsOrders.push(newWmsOrder);
     localStorage.setItem('wms-orders', JSON.stringify(existingWmsOrders));
+
+    // Try to sync with backend immediately
+    try {
+      const response = await fetch('http://localhost:3001/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWmsOrder)
+      });
+      if (response.ok) {
+        newWmsOrder.synced = true;
+        const idx = existingWmsOrders.findIndex(o => o.id === newOrderId);
+        if (idx !== -1) {
+          existingWmsOrders[idx].synced = true;
+          localStorage.setItem('wms-orders', JSON.stringify(existingWmsOrders));
+        }
+        console.log(`Successfully synced order ${newOrderId} with backend WMS.`);
+      }
+    } catch (err) {
+      console.warn("WMS backend not available during checkout, order saved locally:", err);
+    }
 
     // Deduct stock in WMS products list
     let existingWmsProducts: any[] = [];
@@ -758,18 +851,52 @@ export default function App() {
     }
   };
 
+  const handleRmaSubmit = async () => {
+    const targetOrderId = selectedRmaOrderId || (customerWmsOrders[0] ? customerWmsOrders[0].id : '');
+    if (!targetOrderId) return;
+
+    const rmaCode = `RMA-${Date.now().toString().slice(-6)}`;
+    setRegisteredRma(rmaCode);
+
+    const updatedWmsOrders = [...wmsOrders];
+    const orderIndex = updatedWmsOrders.findIndex(o => o.id === targetOrderId);
+    if (orderIndex !== -1) {
+      const order = updatedWmsOrders[orderIndex];
+      const appendNotes = `\n[RMA]: Klient zgłosił chęć zwrotu. Kod RMA: ${rmaCode}. Powód: ${rmaReason}`;
+      order.internalNotes = (order.internalNotes || '') + appendNotes;
+      
+      localStorage.setItem('wms-orders', JSON.stringify(updatedWmsOrders));
+      setWmsOrders(updatedWmsOrders);
+
+      window.dispatchEvent(new Event('storage'));
+
+      try {
+        await fetch(`http://localhost:3001/api/orders/${targetOrderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes: order.internalNotes
+          })
+        });
+        console.log(`Successfully registered RMA return request for order ${targetOrderId} in backend.`);
+      } catch (err) {
+        console.warn("WMS backend not available to register RMA return request:", err);
+      }
+    }
+  };
+
   // We can dynamically derive extra categories from wmsProducts
   const dynamicCategories = Array.from(
-    new Set(wmsProducts.map((p) => p.category).filter(Boolean))
-  ).filter((cat: any) => !TEMPLATE_CATEGORIES.some(t => t.name.includes(cat)));
+    new Set(wmsProducts.map((p) => (p.category || '').trim()).filter(Boolean))
+  ).filter((cat: any) => !TEMPLATE_CATEGORIES.some(t => t.name.trim().toLowerCase() === cat.toLowerCase()));
 
   const allCategories = [
     ...TEMPLATE_CATEGORIES,
     ...dynamicCategories.map((cat: any) => ({
-      id: `cat_${cat.toLowerCase()}`,
+      id: `cat_${cat.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
       name: `${cat}`,
       image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
-      productCount: `${wmsProducts.filter(p => p.category === cat).length} products`,
+      productCount: `${wmsProducts.filter(p => (p.category || '').trim().toLowerCase() === cat.toLowerCase()).length} products`,
       description: `Products from our catalog in category ${cat}.`
     }))
   ];
@@ -838,64 +965,514 @@ export default function App() {
   return (
     <div className="min-h-screen bg-black text-zinc-100 font-sans flex flex-col selection:bg-zinc-800 selection:text-white" id="main-blueprint-app">
       
-      {/* Premium Shop Header Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-900 px-4 py-4" id="global-nav">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* Logo & Shop Info */}
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-white text-black flex items-center justify-center font-black rounded-full shadow-lg">
-              <ShoppingBag size={20} />
-            </div>
-            <div>
-              <h1 className="text-base font-extrabold uppercase tracking-widest font-display text-white">
-                Apex Premium Store
-              </h1>
-              <p className="text-[10px] text-zinc-400 tracking-wider font-medium">
-                Premium Electronics & Lifestyle Accessories
-              </p>
-            </div>
-          </div>
+      {/* Premium Side Drawer Menu */}
+      <AnimatePresence>
+        {isMenuDrawerOpen && (
+          <>
+            {/* Backdrop Blur Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMenuDrawerOpen(false)}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            />
 
-          {/* Quick Info / User Status / Login Buttons */}
-          <div className="flex items-center gap-4 text-xs font-mono">
-            {isLoggedIn ? (
-              <div className="flex items-center gap-3">
-                <span className="text-zinc-400">Witaj, <strong className="text-white">{customerEmail}</strong></span>
+            {/* Side Drawer Content */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 bottom-0 left-0 w-80 max-w-[85vw] bg-zinc-950 border-r border-zinc-900 shadow-2xl p-6 z-55 flex flex-col justify-between font-sans"
+            >
+              <div className="space-y-6">
+                {/* Header: Title and Close button */}
+                <div className="flex items-center justify-between pb-4 border-b border-zinc-900">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-black uppercase tracking-[0.2em] text-white">APEX STORE</span>
+                    <span className="text-[8px] text-zinc-500 uppercase tracking-widest font-mono mt-0.5">Nawigacja</span>
+                  </div>
+                  <button
+                    onClick={() => setIsMenuDrawerOpen(false)}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Primary Navigation Links */}
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => {
+                      setShopView('home');
+                      setSelectedProduct(null);
+                      setSelectedCategory(null);
+                      setIsMenuDrawerOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-mono tracking-wide transition-all cursor-pointer ${
+                      shopView === 'home' && !selectedProduct
+                        ? 'bg-white text-black font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'
+                    }`}
+                  >
+                    <Layout size={14} />
+                    Strona główna
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShopView('category');
+                      setSelectedProduct(null);
+                      setSelectedCategory(null);
+                      setIsMenuDrawerOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono tracking-wide transition-all cursor-pointer ${
+                      shopView === 'category' && !selectedCategory && !selectedProduct
+                        ? 'bg-white text-black font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <Grid size={14} />
+                      Wszystkie produkty
+                    </span>
+                  </button>
+
+                  <div className="pl-4 py-1.5 space-y-1 border-l border-zinc-900">
+                    <span className="text-[9px] uppercase tracking-wider text-zinc-650 block pl-2 mb-1">Kategorie</span>
+                    {allCategories.map(cat => {
+                      const cleanName = cat.name.trim();
+                      const isSelected = selectedCategory === cleanName;
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => {
+                            setShopView('category');
+                            setSelectedCategory(cleanName);
+                            setSelectedProduct(null);
+                            setIsMenuDrawerOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-md text-[11px] font-mono transition-all cursor-pointer flex justify-between items-center ${
+                            isSelected && shopView === 'category'
+                              ? 'text-white bg-zinc-900 font-bold'
+                              : 'text-zinc-450 hover:text-white hover:bg-zinc-900/30'
+                          }`}
+                        >
+                          <span>{cleanName}</span>
+                          {isSelected && <span className="h-1 w-1 rounded-full bg-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShopView('checkout');
+                      setSelectedProduct(null);
+                      setIsMenuDrawerOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono tracking-wide transition-all cursor-pointer ${
+                      shopView === 'checkout'
+                        ? 'bg-white text-black font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <CreditCard size={14} />
+                      Bezpieczna kasa
+                    </span>
+                    {cart.length > 0 && (
+                      <span className="text-[9px] bg-emerald-950 border border-emerald-900 text-emerald-400 px-1.5 py-0.25 font-bold font-mono">
+                        {cart.reduce((a, b) => a + b.quantity, 0)} szt.
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (isLoggedIn) {
+                        setShopView('account');
+                      } else {
+                        setShopView('login');
+                      }
+                      setSelectedProduct(null);
+                      setIsMenuDrawerOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-mono tracking-wide transition-all cursor-pointer ${
+                      shopView === 'account'
+                        ? 'bg-white text-black font-bold'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'
+                    }`}
+                  >
+                    <User size={14} />
+                    Panel klienta / RMA
+                  </button>
+                </div>
+              </div>
+
+              {/* Footer inside Drawer: Session Info and WMS status */}
+              <div className="pt-4 border-t border-zinc-900 space-y-4">
+                {isLoggedIn ? (
+                  <div className="space-y-2 text-xs font-mono">
+                    <div className="text-[10px] text-zinc-550">ZALOGOWANY JAKO</div>
+                    <div className="text-white truncate font-bold">{customerEmail}</div>
+                    <button
+                      onClick={() => {
+                        setIsLoggedIn(false);
+                        setCustomerEmail('');
+                        localStorage.removeItem('wms_customer_email');
+                        setFirstName('');
+                        setLastName('');
+                        setStreetAddress('');
+                        setPostalCode('');
+                        setCity('');
+                        setPhone('');
+                        setShopView('home');
+                        setIsMenuDrawerOpen(false);
+                      }}
+                      className="text-[10px] text-red-400 hover:underline uppercase tracking-wider font-bold transition-colors cursor-pointer text-left block"
+                    >
+                      Wyloguj się
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <button
+                      onClick={() => {
+                        setShopView('login');
+                        setIsMenuDrawerOpen(false);
+                      }}
+                      className="px-2 py-2 text-center bg-zinc-900 hover:bg-zinc-850 text-zinc-200 border border-zinc-800 transition-colors cursor-pointer"
+                    >
+                      Logowanie
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShopView('register');
+                        setIsMenuDrawerOpen(false);
+                      }}
+                      className="px-2 py-2 text-center bg-white text-black hover:bg-zinc-200 transition-colors cursor-pointer"
+                    >
+                      Rejestracja
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-[9px] font-mono text-zinc-600">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    WMS LIVE SYNC
+                  </div>
+                  <span>v1.2.0</span>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      
+      {/* Premium Shop Header Bar */}
+      <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-900 px-6 py-4" id="global-nav">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          
+          {/* Left Side: Burger Menu & Nav Links */}
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setIsMenuDrawerOpen(!isMenuDrawerOpen)}
+              className="text-white hover:text-zinc-300 cursor-pointer flex items-center gap-2"
+              title="Otwórz menu nawigacji"
+            >
+              <Menu size={18} />
+            </button>
+            
+            <nav className="hidden md:flex items-center gap-5 text-xs font-medium uppercase tracking-wider text-zinc-400 font-sans">
+              <div 
+                className="relative group py-2"
+                onMouseEnter={() => setIsCategoriesDropdownOpen(true)}
+                onMouseLeave={() => setIsCategoriesDropdownOpen(false)}
+              >
                 <button
                   onClick={() => {
-                    setIsLoggedIn(false);
-                    setCustomerEmail('');
-                    localStorage.removeItem('wms_customer_email');
-                    setFirstName('');
-                    setLastName('');
-                    setStreetAddress('');
-                    setPostalCode('');
-                    setCity('');
-                    setPhone('');
-                    setShopView('home');
+                    setShopView('category');
+                    setSelectedCategory(null);
+                    setSelectedProduct(null);
+                    setIsCategoriesDropdownOpen(false);
                   }}
-                  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 border border-zinc-800 cursor-pointer transition-colors"
+                  className="hover:text-white cursor-pointer transition-colors flex items-center gap-1.5 uppercase font-sans text-xs tracking-wider"
                 >
-                  Wyloguj się
+                  <Grid size={13} className="text-zinc-400 group-hover:text-white transition-colors" />
+                  Kategorie
+                  <ChevronDown size={12} className="text-zinc-500 group-hover:text-white transition-transform duration-200 group-hover:rotate-180" />
                 </button>
+
+                <AnimatePresence>
+                  {isCategoriesDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full left-0 mt-1 w-64 bg-zinc-950/98 border border-zinc-900 shadow-2xl backdrop-blur-md p-3 space-y-1 z-50 text-left normal-case tracking-normal font-mono"
+                    >
+                      <div className="text-[10px] font-mono uppercase text-zinc-500 px-2 py-1.5 border-b border-zinc-900 mb-1.5 flex items-center gap-1.5">
+                        <Grid size={10} />
+                        Kolekcje
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setShopView('category');
+                          setSelectedCategory(null);
+                          setSelectedProduct(null);
+                          setIsCategoriesDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 text-xs font-mono flex items-center justify-between cursor-pointer transition-all hover:bg-zinc-900/60 hover:text-white ${
+                          !selectedCategory ? 'text-white font-bold bg-zinc-900/40 border-l-2 border-white' : 'text-zinc-400 border-l-2 border-transparent'
+                        }`}
+                      >
+                        <span>Pokaż wszystkie</span>
+                        {!selectedCategory && <Check size={11} />}
+                      </button>
+
+                      {allCategories.map(cat => {
+                        const cleanName = cat.name.trim();
+                        const isSelected = selectedCategory === cleanName;
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => {
+                              setShopView('category');
+                              setSelectedCategory(cleanName);
+                              setSelectedProduct(null);
+                              setIsCategoriesDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-2.5 py-2 text-xs font-mono flex items-center justify-between cursor-pointer transition-all hover:bg-zinc-900/60 hover:text-white ${
+                              isSelected ? 'text-white font-bold bg-zinc-900/40 border-l-2 border-white' : 'text-zinc-400 border-l-2 border-transparent'
+                            }`}
+                          >
+                            <span>{cleanName}</span>
+                            {isSelected && <Check size={11} />}
+                          </button>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShopView('login')}
-                  className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white px-3 py-1.5 border border-zinc-800 cursor-pointer transition-colors"
-                >
-                  Zaloguj się
-                </button>
-                <button
-                  onClick={() => setShopView('register')}
-                  className="bg-white text-black hover:bg-zinc-200 px-3 py-1.5 font-bold cursor-pointer transition-colors"
-                >
-                  Utwórz konto
-                </button>
-              </div>
-            )}
+              <button
+                onClick={() => {
+                  setShopView('category');
+                  setSelectedCategory('Elektronika');
+                  setSelectedProduct(null);
+                }}
+                className="hover:text-white cursor-pointer transition-colors"
+              >
+                Nowości
+              </button>
+              <button
+                onClick={() => {
+                  setShopView('category');
+                  setSelectedCategory('Artykuły spożywcze');
+                  setSelectedProduct(null);
+                }}
+                className="hover:text-white cursor-pointer transition-colors"
+              >
+                Wyprzedaż
+              </button>
+              <span className="text-zinc-600 cursor-default select-none">|</span>
+              <span className="text-zinc-500 cursor-default select-none">O nas</span>
+              <span className="text-zinc-500 cursor-default select-none">Kontakt</span>
+            </nav>
           </div>
+
+          {/* Center Side: Logo */}
+          <div
+            onClick={() => {
+              setShopView('home');
+              setSelectedProduct(null);
+              setSelectedCategory(null);
+            }}
+            className="flex flex-col items-center cursor-pointer select-none text-center"
+          >
+            <h1 className="text-xl font-black uppercase tracking-[0.25em] font-sans text-white leading-none">
+              APEX
+            </h1>
+            <p className="text-[9px] text-zinc-400 tracking-[0.3em] font-medium mt-1 uppercase">
+              Premium Store
+            </p>
+          </div>
+
+          {/* Right Side: Search, Account & Cart */}
+          <div className="flex items-center gap-4">
+            
+            {/* Search toggler/indicator */}
+            <button
+              onClick={() => {
+                setShopView('category');
+                setSelectedProduct(null);
+              }}
+              className="text-zinc-400 hover:text-white cursor-pointer transition-colors"
+              title="Szukaj"
+            >
+              <Search size={18} />
+            </button>
+            
+            {/* Account authentication profile links */}
+            <div className="hidden sm:flex items-center gap-2 border-r border-zinc-800 pr-4 mr-2">
+              {isLoggedIn ? (
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <span className="text-zinc-400 max-w-[120px] truncate">
+                    Witaj, <strong className="text-white">{customerEmail.split('@')[0]}</strong>
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsLoggedIn(false);
+                      setCustomerEmail('');
+                      localStorage.removeItem('wms_customer_email');
+                      setFirstName('');
+                      setLastName('');
+                      setStreetAddress('');
+                      setPostalCode('');
+                      setCity('');
+                      setPhone('');
+                      setShopView('home');
+                    }}
+                    className="text-[10px] text-zinc-500 hover:text-white uppercase tracking-wider font-bold transition-colors cursor-pointer"
+                  >
+                    Wyloguj
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <button
+                    onClick={() => setShopView('login')}
+                    className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Zaloguj się
+                  </button>
+                  <span className="text-zinc-700">/</span>
+                  <button
+                    onClick={() => setShopView('register')}
+                    className="text-white hover:text-zinc-300 font-bold transition-colors cursor-pointer"
+                  >
+                    Utwórz konto
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Cart Icon with red badge */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative p-1 text-zinc-400 hover:text-white cursor-pointer transition-colors"
+              id="btn-cart-nav"
+              title="Koszyk"
+            >
+              <ShoppingBag size={18} />
+              {cart.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-650 text-[8px] font-bold text-white ring-2 ring-zinc-950">
+                  {cart.reduce((a, b) => a + b.quantity, 0)}
+                </span>
+              )}
+            </button>
+
+            {/* Settings Option */}
+            <div className="relative">
+              <button
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className="text-zinc-400 hover:text-white cursor-pointer transition-colors p-1 flex items-center justify-center"
+                title="Ustawienia integracji WMS"
+              >
+                <Settings size={18} className={isSettingsOpen ? 'rotate-45 transition-transform duration-300 text-white' : 'transition-transform duration-300'} />
+              </button>
+
+              <AnimatePresence>
+                {isSettingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 mt-2 w-72 bg-zinc-950/98 border border-zinc-900 shadow-2xl p-4 space-y-4 z-50 text-left normal-case tracking-normal font-mono rounded-xl"
+                  >
+                    <div className="text-[10px] font-mono uppercase text-zinc-500 border-b border-zinc-900 pb-2 flex items-center justify-between">
+                      <span>Panel Ustawień</span>
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" title="Synchronizacja aktywna" />
+                    </div>
+
+                    {/* View Mode toggle */}
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] text-zinc-500 uppercase">Tryb aplikacji</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setViewMode('sandbox');
+                            setIsSettingsOpen(false);
+                          }}
+                          className={`px-2 py-1.5 text-[10px] text-center border font-bold cursor-pointer transition-all ${
+                            viewMode === 'sandbox'
+                              ? 'bg-white text-black border-white'
+                              : 'bg-transparent text-zinc-400 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          SKLEP
+                        </button>
+                        <button
+                          onClick={() => {
+                            setViewMode('blueprint');
+                            setIsSettingsOpen(false);
+                          }}
+                          className={`px-2 py-1.5 text-[10px] text-center border font-bold cursor-pointer transition-all ${
+                            viewMode === 'blueprint'
+                              ? 'bg-white text-black border-white'
+                              : 'bg-transparent text-zinc-400 border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          BLUEPRINT
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* API and Integration Status */}
+                    <div className="space-y-1.5 text-[10px] text-zinc-400">
+                      <div className="flex justify-between border-b border-zinc-900/60 pb-1">
+                        <span className="text-zinc-500">Baza danych:</span>
+                        <span className="text-white">WMS (LocalStorage)</span>
+                      </div>
+                      <div className="flex justify-between border-b border-zinc-900/60 pb-1">
+                        <span className="text-zinc-500">API Endpoint:</span>
+                        <span className="text-white">localhost:3001</span>
+                      </div>
+                      <div className="flex justify-between pb-1">
+                        <span className="text-zinc-500">Produkty:</span>
+                        <span className="text-white">{wmsProducts.length} SKU</span>
+                      </div>
+                    </div>
+
+                    {/* Reset button */}
+                    <button
+                      onClick={() => {
+                        if (confirm('Czy na pewno chcesz zresetować koszyk i pamięć sesji sklepu?')) {
+                          setCart([]);
+                          localStorage.removeItem('wms_customer_email');
+                          setIsLoggedIn(false);
+                          setCustomerEmail('');
+                          setIsSettingsOpen(false);
+                          window.location.reload();
+                        }
+                      }}
+                      className="w-full bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-900/60 text-[10px] py-1.5 font-bold transition-colors cursor-pointer text-center"
+                    >
+                      RESETUJ SESJĘ I KOSZYK
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            
+          </div>
+
         </div>
       </header>
 
@@ -1093,17 +1670,358 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+              className="w-full space-y-6"
             >
-              
-              {/* Category selector & state navigation sidebar */}
-              <div className="lg:col-span-3 space-y-4">
-                
-                {/* Local Navigation menu for the shop views */}
-                <div className="bg-zinc-950 border border-zinc-900 p-4 space-y-3">
-                  <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest font-bold">
-                    Nawigacja
-                  </h3>
+              {shopView === 'home' && !selectedProduct ? (
+                /* FULL WIDTH HOME PAGE VIEW */
+                <motion.div
+                  key="home-screen"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-8"
+                >
+                  {/* Premium Hero Spotlight */}
+                  <div className="relative bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden min-h-[380px] grid grid-cols-1 md:grid-cols-12 items-center">
+                    {/* Left Column: Image on wrist */}
+                    <div className="md:col-span-6 h-full min-h-[300px] md:min-h-[380px] relative">
+                      <img
+                        src={TEMPLATE_PRODUCTS[0].image}
+                        alt={TEMPLATE_PRODUCTS[0].name}
+                        className="absolute inset-0 w-full h-full object-cover filter brightness-[0.7] contrast-[1.1]"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-zinc-950/80 md:to-zinc-950" />
+                    </div>
+
+                    {/* Right Column: Text and CTA buttons */}
+                    <div className="md:col-span-6 p-8 md:p-12 space-y-6 bg-zinc-950">
+                      <span className="inline-block px-3 py-1 text-[10px] font-mono tracking-widest bg-zinc-900 text-zinc-350 rounded-full font-bold">
+                        BEST SELLER
+                      </span>
+                      
+                      <h2 className="text-3xl md:text-4xl font-extrabold text-white leading-tight font-sans tracking-tight">
+                        {TEMPLATE_PRODUCTS[0].name}
+                      </h2>
+                      
+                      <p className="text-sm text-zinc-400 font-sans leading-relaxed">
+                        {TEMPLATE_PRODUCTS[0].description}
+                      </p>
+
+                      <div className="pt-2 flex flex-wrap gap-3">
+                        <button
+                          id="btn-hero-add"
+                          onClick={() => handleAddToCart(TEMPLATE_PRODUCTS[0])}
+                          className="bg-white text-black hover:bg-zinc-200 px-6 py-3 text-xs font-sans font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer rounded-none"
+                        >
+                          DODAJ DO KOSZYKA
+                        </button>
+                        <button
+                          onClick={() => handleSelectProduct(TEMPLATE_PRODUCTS[0])}
+                          className="bg-transparent hover:bg-zinc-900/60 text-white border border-zinc-750 px-6 py-3 text-xs font-sans font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer rounded-none"
+                        >
+                          SZCZEGÓŁY
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Featured Categories list section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-350">
+                        Polecane kategorie
+                      </h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {allCategories.slice(0, 3).map((cat) => (
+                        <CategoryCard
+                          key={cat.id}
+                          category={cat}
+                          onSelect={handleCategorySelect}
+                          isSelected={selectedCategory === cat.name}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bento Grid layout of Logistics features */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2 rounded-xl">
+                      <div className="text-xs font-mono font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
+                        <Truck size={14} className="text-zinc-400" /> Wysyłka w 24h
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
+                        Błyskawiczne nadanie zamówienia. Wszystkie paczki przygotowujemy i wysyłamy w ciągu doby.
+                      </p>
+                    </div>
+                    
+                    <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2 rounded-xl">
+                      <div className="text-xs font-mono font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
+                        <SlidersHorizontal size={14} className="text-zinc-400" /> Synchronizacja zapasów
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
+                        Gwarancja stanów magazynowych. Oferujemy wyłącznie te produkty, które fizycznie znajdują się w naszym magazynie.
+                      </p>
+                    </div>
+
+                    <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2 rounded-xl">
+                      <div className="text-xs font-mono font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
+                        <ClipboardCheck size={14} className="text-zinc-400" /> Wygodne zwroty (RMA)
+                      </div>
+                      <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
+                        Zgłoś zwrot bezpośrednio z panelu klienta w kilka sekund bez konieczności dzwonienia.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Best Seller Showcase list */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
+                      <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-350">
+                        Najczęściej kupowane
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      {TEMPLATE_PRODUCTS.slice(0, 4).map((prod) => (
+                        <ProductCard
+                          key={prod.id}
+                          product={prod}
+                          onAddToCart={handleAddToCart}
+                          onViewDetails={handleSelectProduct}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              ) : shopView === 'category' && !selectedProduct ? (
+                /* FULL WIDTH CATEGORY VIEW */
+                <motion.div
+                  key="category-screen-full"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6 w-full animate-fadeIn"
+                >
+                  {/* Breadcrumb line & category header */}
+                  <div className="text-xs font-mono text-zinc-500">
+                    Strona główna / Produkty {selectedCategory ? `/ ${selectedCategory}` : '/ Wszystkie'}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                    {/* Sidebar Filters */}
+                    <div className="md:col-span-3 space-y-6 bg-zinc-950/60 border border-zinc-900/80 p-5 rounded-2xl">
+                      <div className="flex justify-between items-center pb-2.5 border-b border-zinc-900">
+                        <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-350">
+                          Filtry
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+                          className="text-zinc-500 hover:text-white transition-colors cursor-pointer text-[10px] font-bold"
+                        >
+                          {isFiltersExpanded ? '▲' : '▼'}
+                        </button>
+                      </div>
+
+                      {isFiltersExpanded && (
+                        <div className="space-y-6 animate-fadeIn">
+                          {/* Availability checkbox */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs font-mono text-zinc-350 select-none py-1">
+                              <span>Tylko dostępne</span>
+                              <button
+                                type="button"
+                                onClick={() => setFilterInStockOnly(!filterInStockOnly)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-zinc-800 transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  filterInStockOnly ? 'bg-white' : 'bg-black'
+                                }`}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-3.8 w-3.8 transform rounded-full shadow-lg transition duration-200 ease-in-out ${
+                                    filterInStockOnly ? 'translate-x-4.2 bg-black' : 'translate-x-0.2 bg-white'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Price range filter */}
+                          <div className="pt-4 border-t border-zinc-900 space-y-2.5">
+                            <div className="flex justify-between text-[10px] font-mono uppercase text-zinc-500">
+                              <span>Cena maksymalna</span>
+                              <span className="text-white font-bold">{priceRange} EUR</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="100"
+                              max="1300"
+                              step="50"
+                              value={priceRange}
+                              onChange={(e) => setPriceRange(parseInt(e.target.value))}
+                              className="w-full accent-white bg-zinc-900 cursor-pointer h-1 rounded-lg appearance-none"
+                            />
+                          </div>
+
+                          {/* Sort Selector */}
+                          <div className="pt-4 border-t border-zinc-900 space-y-2">
+                            <span className="text-[10px] font-mono uppercase text-zinc-500 block">Sortowanie</span>
+                            <select
+                              value={sortBy}
+                              onChange={(e) => setSortBy(e.target.value as any)}
+                              className="w-full bg-black border border-zinc-900 text-xs text-white font-mono rounded-lg py-2 px-2.5 focus:outline-none focus:border-zinc-700"
+                            >
+                              <option value="default">Domyślnie</option>
+                              <option value="low-high">Cena: od najniższej</option>
+                              <option value="high-low">Cena: od najwyższej</option>
+                            </select>
+                          </div>
+
+                          {/* Category Filter list */}
+                          <div className="pt-4 border-t border-zinc-900 space-y-2">
+                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-1">Kategoria</span>
+                            <div className="space-y-1">
+                              <button
+                                type="button"
+                                onClick={() => handleCategorySelect(null)}
+                                className={`w-full text-left px-2.5 py-1.5 text-xs font-mono flex items-center justify-between cursor-pointer rounded-lg transition-colors ${
+                                  !selectedCategory
+                                    ? 'text-white font-bold bg-zinc-900/60 border-l-2 border-white pl-2'
+                                    : 'text-zinc-400 hover:text-zinc-200 border-l-2 border-transparent'
+                                }`}
+                              >
+                                <span>Pokaż wszystkie</span>
+                                {!selectedCategory && <Check size={11} />}
+                              </button>
+                              {allCategories.map((cat) => {
+                                const cleanName = cat.name.trim();
+                                const isSelected = selectedCategory === cleanName;
+                                return (
+                                  <button
+                                    key={cat.id}
+                                    type="button"
+                                    onClick={() => handleCategorySelect(cleanName)}
+                                    className={`w-full text-left px-2.5 py-1.5 text-xs font-mono flex items-center justify-between cursor-pointer rounded-lg transition-colors ${
+                                      isSelected
+                                        ? 'text-white font-bold bg-zinc-900/60 border-l-2 border-white pl-2'
+                                        : 'text-zinc-400 hover:text-zinc-200 border-l-2 border-transparent'
+                                    }`}
+                                  >
+                                    <span>{cleanName}</span>
+                                    {isSelected && <Check size={11} />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Product Grid Area */}
+                    <div className="md:col-span-9 space-y-4">
+                      {/* Product display header */}
+                      <div className="flex items-center justify-between text-xs font-mono text-zinc-400 pb-2 border-b border-zinc-900/60">
+                        <div>Wyświetlanie {filteredSandboxProducts.length} produktów</div>
+                        
+                        {/* Grid/List toggles */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsGridView(true)}
+                            className={`p-1.5 border transition cursor-pointer ${
+                              isGridView ? 'bg-zinc-900 border-zinc-700 text-white' : 'border-transparent text-zinc-500 hover:text-white'
+                            }`}
+                          >
+                            <Grid size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsGridView(false)}
+                            className={`p-1.5 border transition cursor-pointer ${
+                              !isGridView ? 'bg-zinc-900 border-zinc-700 text-white' : 'border-transparent text-zinc-500 hover:text-white'
+                            }`}
+                          >
+                            <List size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {filteredSandboxProducts.length === 0 ? (
+                        <div className="border border-zinc-900 py-16 text-center space-y-2 bg-zinc-950/40 rounded-2xl">
+                          <SlidersHorizontal size={24} className="text-zinc-700 mx-auto" />
+                          <p className="text-sm font-medium text-zinc-400">Brak produktów pasujących do wybranych filtrów.</p>
+                          <button
+                            type="button"
+                            onClick={() => { setFilterInStockOnly(false); setPriceRange(1300); setSelectedCategory(null); }}
+                            className="text-xs text-zinc-300 underline font-mono hover:text-white cursor-pointer"
+                          >
+                            Wyczyść wszystkie filtry
+                          </button>
+                        </div>
+                      ) : isGridView ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-fadeIn">
+                          {filteredSandboxProducts.map((p) => (
+                            <ProductCard
+                              key={p.id}
+                              product={p}
+                              onAddToCart={handleAddToCart}
+                              onViewDetails={handleSelectProduct}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        /* LIST VIEW LAYOUT */
+                        <div className="space-y-3">
+                          {filteredSandboxProducts.map((p) => (
+                            <div
+                              key={p.id}
+                              className="bg-zinc-900/20 border border-zinc-900 p-4 rounded-xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
+                            >
+                              <div className="flex gap-4 items-center">
+                                <img src={p.image} alt={p.name} className="h-16 w-16 object-cover bg-zinc-950 rounded-lg" referrerPolicy="no-referrer" />
+                                <div>
+                                  <div className="text-[10px] font-mono text-zinc-500 uppercase">{p.category}</div>
+                                  <h4 className="text-sm font-semibold text-white mb-0.5">{p.name}</h4>
+                                  <p className="text-[11px] font-mono text-zinc-400">SKU: {p.sku}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-6 self-stretch sm:self-auto justify-between border-t border-zinc-900 sm:border-t-0 pt-3 sm:pt-0">
+                                <div className="text-right">
+                                  <div className="text-[9px] font-mono text-zinc-500">Cena</div>
+                                  <div className="text-xs font-bold font-mono text-white">{p.price}</div>
+                                </div>
+                                <button
+                                  id={`btn-list-add-${p.id}`}
+                                  type="button"
+                                  onClick={() => handleAddToCart(p)}
+                                  className="bg-white text-black hover:bg-zinc-200 px-4 py-2 text-xs font-mono font-bold cursor-pointer transition-colors rounded-lg"
+                                >
+                                  Dodaj +
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                /* GRID LAYOUT WITH SIDEBAR FOR ALL OTHER PAGES */
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Category selector & state navigation sidebar */}
+                  <div className="lg:col-span-3 space-y-4">
+                    
+                    {/* Local Navigation menu for the shop views */}
+                    <div className="bg-zinc-950 border border-zinc-900 p-4 space-y-3">
+                      <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest font-bold">
+                        Nawigacja
+                      </h3>
                   <div className="space-y-1">
                     <button
                       onClick={() => { setShopView('home'); setSelectedProduct(null); }}
@@ -1117,23 +2035,6 @@ export default function App() {
                       Strona główna
                     </button>
                     
-                    <button
-                      onClick={() => { setShopView('category'); setSelectedProduct(null); }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs font-mono transition-colors cursor-pointer ${
-                        shopView === 'category' && !selectedProduct
-                          ? 'bg-zinc-900 text-white font-bold'
-                          : 'text-zinc-400 hover:text-white hover:bg-zinc-900/30'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <Grid size={13} /> Kategorie
-                      </span>
-                      {selectedCategory && (
-                        <span className="text-[9px] px-1 bg-zinc-800 text-zinc-300">
-                          {selectedCategory}
-                        </span>
-                      )}
-                    </button>
 
                     <button
                       onClick={() => { setShopView('checkout'); setSelectedProduct(null); }}
@@ -1375,325 +2276,6 @@ export default function App() {
                               </div>
                             </div>
                           ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ) : shopView === 'home' ? (
-                    
-                    /* HOME PAGE VIEW */
-                    <motion.div
-                      key="home-screen"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="space-y-8"
-                    >
-                      {/* Premium Hero Spotlight with detailed description overlay */}
-                      <div className="relative bg-zinc-950 border border-zinc-900 overflow-hidden min-h-[340px] flex items-center p-6 md:p-8">
-                        {/* Background subtle graphical design overlay */}
-                        <div className="absolute right-0 bottom-0 top-0 w-1/2 opacity-30 select-none hidden md:block">
-                          <img
-                            src={TEMPLATE_PRODUCTS[0].image}
-                            alt="Hero Spotlight background"
-                            className="w-full h-full object-cover blur-xs contrast-125 saturate-50"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent" />
-                        </div>
-
-                        <div className="relative max-w-lg space-y-5 z-10">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[9px] font-mono uppercase tracking-widest bg-emerald-950 text-emerald-400 border border-emerald-900">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Bestseller
-                          </span>
-
-                          <h2 className="text-2xl md:text-3xl font-bold font-display tracking-tight text-white leading-tight">
-                            {TEMPLATE_PRODUCTS[0].name}
-                          </h2>
-                          
-                          <p className="text-xs text-zinc-400 font-mono leading-relaxed max-w-sm">
-                            {TEMPLATE_PRODUCTS[0].description}
-                          </p>
-
-                          <div className="pt-2 flex items-baseline gap-2">
-                            <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider">Cena detaliczna</span>
-                            <span className="text-xl font-bold font-mono text-white">
-                              {TEMPLATE_PRODUCTS[0].price}
-                            </span>
-                          </div>
-
-                          <div className="pt-2 flex flex-wrap gap-2.5">
-                            <button
-                              id="btn-hero-add"
-                              onClick={() => handleAddToCart(TEMPLATE_PRODUCTS[0])}
-                              className="bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs font-mono font-bold uppercase tracking-widest cursor-pointer transition-colors"
-                            >
-                              Dodaj do koszyka 🛒
-                            </button>
-                            <button
-                              onClick={() => handleSelectProduct(TEMPLATE_PRODUCTS[0])}
-                              className="bg-zinc-900 hover:bg-zinc-800 text-zinc-200 px-5 py-2.5 text-xs font-mono font-medium border border-zinc-800 cursor-pointer transition-colors"
-                            >
-                              Szczegóły
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Featured Categories list section */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
-                          <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">
-                            Polecane kategorie
-                          </h3>
-                          <span className="text-[10px] font-mono text-zinc-650"></span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {allCategories.map((cat) => (
-                            <CategoryCard
-                              key={cat.id}
-                              category={cat}
-                              onSelect={handleCategorySelect}
-                              isSelected={selectedCategory === cat.name}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Bento Grid layout of Logistics features */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
-                          <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <Truck size={14} className="text-zinc-400" /> Wysyłka w 24h
-                          </div>
-                          <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Błyskawiczne nadanie zamówienia. Wszystkie paczki przygotowujemy i wysyłamy w ciągu doby.
-                          </p>
-                        </div>
-                        
-                        <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
-                          <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <SlidersHorizontal size={14} className="text-zinc-400" /> Synchronizacja zapasów
-                          </div>
-                          <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Gwarancja stanów magazynowych. Oferujemy wyłącznie te produkty, które fizycznie znajdują się w naszym magazynie.
-                          </p>
-                        </div>
-
-                        <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-2">
-                          <div className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <ClipboardCheck size={14} className="text-zinc-400" /> Wygodne zwroty (RMA)
-                          </div>
-                          <p className="text-[11px] text-zinc-500 font-mono leading-relaxed">
-                            Zgłoś zwrot bezpośrednio z panelu klienta w kilka sekund bez konieczności dzwonienia.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Best Seller Showcase list */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
-                          <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">
-                            Najczęściej kupowane
-                          </h3>
-                          <span className="text-[10px] font-mono text-zinc-650"></span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                          {TEMPLATE_PRODUCTS.map((prod) => (
-                            <ProductCard
-                              key={prod.id}
-                              product={prod}
-                              onAddToCart={handleAddToCart}
-                              onViewDetails={handleSelectProduct}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ) : shopView === 'category' ? (
-                    
-                    /* CATEGORY VIEW & FILTER GRID */
-                    <motion.div
-                      key="category-screen"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="space-y-6"
-                    >
-                      {/* Breadcrumb line & category header */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-mono text-zinc-500">
-                          Strona główna / Produkty {selectedCategory ? `/ ${selectedCategory}` : '/ Wszystkie'}
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setIsGridView(true)}
-                            className={`p-1.5 border transition cursor-pointer ${
-                              isGridView ? 'bg-zinc-805 border-zinc-500 text-white' : 'border-zinc-900 text-zinc-500 hover:text-white'
-                            }`}
-                          >
-                            <Grid size={14} />
-                          </button>
-                          <button
-                            onClick={() => setIsGridView(false)}
-                            className={`p-1.5 border transition cursor-pointer ${
-                              !isGridView ? 'bg-zinc-805 border-zinc-500 text-white' : 'border-zinc-900 text-zinc-500 hover:text-white'
-                            }`}
-                          >
-                            <List size={14} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                        {/* Sidebar Filters */}
-                        <div className="md:col-span-3 space-y-4 bg-zinc-950 border border-zinc-900 p-4 h-fit">
-                          <div className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300 pb-2 border-b border-zinc-900">
-                            Filtry
-                          </div>
-
-                          {/* Category select links */}
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-1.5">Kolekcja</span>
-                            <button
-                              onClick={() => setSelectedCategory(null)}
-                              className={`w-full text-left px-2 py-1.5 text-xs font-mono flex items-center justify-between cursor-pointer ${
-                                !selectedCategory ? 'text-white font-bold bg-zinc-900/60' : 'text-zinc-400 hover:text-zinc-200'
-                              }`}
-                            >
-                              <span>Pokaż wszystkie</span>
-                              {!selectedCategory && <Check size={11} />}
-                            </button>
-                            {allCategories.map(cat => {
-                              const cleanName = cat.name.trim();
-                              const isSelected = selectedCategory === cleanName;
-                              return (
-                                <button
-                                  key={cat.id}
-                                  onClick={() => handleCategorySelect(cleanName)}
-                                  className={`w-full text-left px-2 py-1.5 text-xs font-mono flex items-center justify-between cursor-pointer ${
-                                    isSelected ? 'text-white font-bold bg-zinc-900/60' : 'text-zinc-400 hover:text-zinc-200'
-                                  }`}
-                                >
-                                  <span>{cleanName}</span>
-                                  {isSelected && <Check size={11} />}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Availability checkbox */}
-                          <div className="pt-2 border-t border-zinc-900">
-                            <span className="text-[10px] font-mono uppercase text-zinc-500 block mb-2">Dostępność</span>
-                            <label className="flex items-center gap-2 text-xs font-mono text-zinc-300 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={filterInStockOnly}
-                                onChange={(e) => setFilterInStockOnly(e.target.checked)}
-                                className="bg-black border border-zinc-805 accent-white h-3.5 w-3.5 rounded-none"
-                              />
-                              Tylko dostępne
-                            </label>
-                          </div>
-
-                          {/* Price range filter */}
-                          <div className="pt-2 border-t border-zinc-900 space-y-1.5">
-                            <div className="flex justify-between text-[10px] font-mono uppercase text-zinc-500">
-                              <span>Cena maksymalna</span>
-                              <span className="text-white">{priceRange} EUR</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="100"
-                              max="1300"
-                              step="50"
-                              value={priceRange}
-                              onChange={(e) => setPriceRange(parseInt(e.target.value))}
-                              className="w-full accent-white bg-zinc-900 cursor-pointer"
-                            />
-                          </div>
-
-                          {/* Sort Selector */}
-                          <div className="pt-2 border-t border-zinc-900 space-y-1.5">
-                            <span className="text-[10px] font-mono uppercase text-zinc-500 block">Sortowanie</span>
-                            <select
-                              value={sortBy}
-                              onChange={(e) => setSortBy(e.target.value as any)}
-                              className="w-full bg-black border border-zinc-800 text-xs text-white font-mono rounded-none py-1.5 px-2 focus:outline-none focus:border-zinc-500"
-                            >
-                              <option value="default">Domyślnie</option>
-                              <option value="low-high">Cena: od najniższej</option>
-                              <option value="high-low">Cena: od najwyższej</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Product lists display area */}
-                        <div className="md:col-span-9 space-y-4">
-                          <div className="p-3 bg-zinc-900/10 border border-zinc-900 flex justify-between items-center text-xs font-mono">
-                            <span className="text-zinc-400">Wyświetlanie {filteredSandboxProducts.length} produktów z bazy danych</span>
-                            <span className="text-[10px] text-zinc-600">GET /api/products?filtered=true</span>
-                          </div>
-
-                          {filteredSandboxProducts.length === 0 ? (
-                            <div className="border border-zinc-900 py-16 text-center space-y-2">
-                              <SlidersHorizontal size={24} className="text-zinc-700 mx-auto" />
-                              <p className="text-sm font-medium text-zinc-400">Brak produktów pasujących do wybranych filtrów.</p>
-                              <button
-                                onClick={() => { setFilterInStockOnly(false); setPriceRange(1300); setSelectedCategory(null); }}
-                                className="text-xs text-zinc-300 underline font-mono hover:text-white cursor-pointer"
-                              >
-                                Wyczyść wszystkie filtry
-                              </button>
-                            </div>
-                          ) : isGridView ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fadeIn">
-                              {filteredSandboxProducts.map((p) => (
-                                <ProductCard
-                                  key={p.id}
-                                  product={p}
-                                  onAddToCart={handleAddToCart}
-                                  onViewDetails={handleSelectProduct}
-                                />
-                              ))}
-                            </div>
-                          ) : (
-                            /* LIST VIEW LAYOUT */
-                            <div className="space-y-3">
-                              {filteredSandboxProducts.map((p) => (
-                                <div
-                                  key={p.id}
-                                  className="bg-zinc-950 border border-zinc-905 p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
-                                >
-                                  <div className="flex gap-4 items-center">
-                                    <img src={p.image} alt={p.name} className="h-16 w-16 object-cover bg-zinc-900" referrerPolicy="no-referrer" />
-                                    <div>
-                                      <div className="text-[10px] font-mono text-zinc-500 uppercase">{p.category}</div>
-                                      <h4 className="text-sm font-medium text-white mb-0.5">{p.name}</h4>
-                                      <p className="text-[11px] font-mono text-zinc-400">{p.sku}</p>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-6 self-stretch sm:self-auto justify-between border-t border-zinc-900 sm:border-t-0 pt-3 sm:pt-0">
-                                    <div className="text-right">
-                                      <div className="text-[9px] font-mono text-zinc-500">Cena detaliczna</div>
-                                      <div className="text-xs font-bold font-mono text-zinc-200">{p.price}</div>
-                                    </div>
-                                    <button
-                                      id={`btn-list-add-${p.id}`}
-                                      onClick={() => handleAddToCart(p)}
-                                      className="bg-zinc-100 text-black hover:bg-zinc-300 px-4 py-2 text-xs font-mono font-bold cursor-pointer transition-colors"
-                                    >
-                                      Dodaj +
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -2269,15 +2851,19 @@ export default function App() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div className="space-y-1">
                                     <label className="text-[10px] uppercase text-zinc-500 font-mono">Wybierz zamówienie</label>
-                                    <select className="bg-black border border-zinc-800 text-xs text-zinc-300 p-2 w-full rounded-none focus:outline-none">
+                                    <select 
+                                      value={selectedRmaOrderId}
+                                      onChange={(e) => setSelectedRmaOrderId(e.target.value)}
+                                      className="bg-black border border-zinc-800 text-xs text-zinc-300 p-2 w-full rounded-none focus:outline-none"
+                                    >
                                       {customerWmsOrders.length > 0 ? (
                                         customerWmsOrders.map(o => (
-                                          <option key={o.id}>Ref: {o.id} ({o.status})</option>
+                                          <option key={o.id} value={o.id}>Ref: {o.id} ({o.status})</option>
                                         ))
                                       ) : (
                                         <>
-                                          <option>Ref: WMS-98124 (Kwota: 899.00 EUR)</option>
-                                          <option>Ref: WMS-45123 (Kwota: 1,250.00 EUR)</option>
+                                          <option value="WMS-98124">Ref: WMS-98124 (Kwota: 899.00 EUR)</option>
+                                          <option value="WMS-45123">Ref: WMS-45123 (Kwota: 1,250.00 EUR)</option>
                                         </>
                                       )}
                                     </select>
@@ -2296,7 +2882,7 @@ export default function App() {
 
                                 <button
                                   type="button"
-                                  onClick={() => setRegisteredRma(`RMA-${Date.now().toString().slice(-6)}`)}
+                                  onClick={handleRmaSubmit}
                                   className="bg-white text-black hover:bg-zinc-200 font-mono text-[11px] font-bold px-4 py-2 uppercase tracking-wide cursor-pointer transition-colors"
                                 >
                                   Zarejestruj zwrot (RMA)
@@ -2312,7 +2898,8 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </div>
-
+            </div>
+          )}
             </motion.div>
           )}
 

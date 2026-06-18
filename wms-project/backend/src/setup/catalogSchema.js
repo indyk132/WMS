@@ -16,39 +16,90 @@ const LOCATIONS = [
     { code: 'RAMPA-PRZYJEC', group: 'Przyjecia mieszane' },
 ];
 
-const PRODUCTS = [
-    { sku: 'FOOD-KAWA-001', barcode: '5901234567890', name: 'Kawa ziarnista Arabica 1kg', category: 'Zywnosc', price: 59.99, reorderThreshold: 25, location: 'A-01-01', quantity: 35 },
-    { sku: 'FOOD-MLEKO-001', barcode: '5909876543210', name: 'Mleko UHT 3.2% 1L', category: 'Zywnosc', price: 3.49, reorderThreshold: 80, location: 'A-01-01', quantity: 160 },
-    { sku: 'FOOD-CZEK-001', barcode: '5905556667771', name: 'Czekolada gorzka 70% 100g', category: 'Zywnosc', price: 4.50, reorderThreshold: 60, location: 'A-01-02', quantity: 120 },
-    { sku: 'FOOD-PLATKI-001', barcode: '5904443332220', name: 'Platki owsiane gorskie 500g', category: 'Zywnosc', price: 2.99, reorderThreshold: 70, location: 'A-02-01', quantity: 95 },
-    { sku: 'FOOD-SOK-001', barcode: '5901112223334', name: 'Sok pomaranczowy 1L', category: 'Zywnosc', price: 5.20, reorderThreshold: 50, location: 'A-02-02', quantity: 75 },
-    { sku: 'FOOD-RYZ-001', barcode: '5902000000011', name: 'Ryz basmati 1kg', category: 'Zywnosc', price: 8.99, reorderThreshold: 40, location: 'A-03-01', quantity: 68 },
-    { sku: 'FOOD-MAK-001', barcode: '5902000000012', name: 'Makaron penne 500g', category: 'Zywnosc', price: 4.19, reorderThreshold: 45, location: 'A-03-01', quantity: 84 },
-    { sku: 'FOOD-MAKA-001', barcode: '5902000000013', name: 'Maka pszenna typ 500 1kg', category: 'Zywnosc', price: 3.29, reorderThreshold: 55, location: 'A-02-01', quantity: 110 },
+const CATEGORY_PREFIXES = {
+    'Części samochodowe': 'AUTO-PARTS',
+    'Chemia samochodowa': 'AUTO-CHEM',
+    'Elektronika': 'ELEC-GEN',
+    'Artykuły spożywcze': 'FOOD-GROC',
+    'Biuro': 'BIUR-OFF',
+    'BHP': 'BHP-SAFE'
+};
 
-    { sku: 'ELEC-SKAN-001', barcode: '5903000000011', name: 'Skaner kodow kreskowych USB', category: 'Elektronika', price: 189.00, reorderThreshold: 8, location: 'B-01-01', quantity: 16 },
-    { sku: 'ELEC-DRUK-001', barcode: '5903000000012', name: 'Drukarka etykiet termiczna', category: 'Elektronika', price: 499.00, reorderThreshold: 5, location: 'B-01-02', quantity: 9 },
-    { sku: 'ELEC-TAB-001', barcode: '5903000000013', name: 'Tablet magazynowy 10 cali', category: 'Elektronika', price: 899.00, reorderThreshold: 6, location: 'B-02-01', quantity: 11 },
-    { sku: 'ELEC-BAT-001', barcode: '5903000000014', name: 'Bateria do skanera 2600mAh', category: 'Elektronika', price: 79.00, reorderThreshold: 20, location: 'B-02-02', quantity: 34 },
+const PRODUCT_TEMPLATES = {
+    'Części samochodowe': [
+        'Filtr oleju Carbon', 'Filtr powietrza Active', 'Świeca zapłonowa Laser', 'Kabel zapłonowy Volt',
+        'Pasek klinowy Torque', 'Tarcza hamulcowa RotMax', 'Amortyzator GasPro', 'Sprężyna zawieszenia',
+        'Łącznik stabilizatora', 'Końcówka drążka', 'Wahacz zawieszenia', 'Przegub napędowy',
+        'Termostat silnika', 'Uszczelka głowicy', 'Pompa wody Flow', 'Sonda lambda Sens',
+        'Filtr paliwa Diesel', 'Filtr kabinowy Carbon', 'Żarówka reflektora H4', 'Żarówka kierunkowskazu'
+    ],
+    'Chemia samochodowa': [
+        'Szampon samochodowy Shine', 'Wosk hydrofobowy Coat', 'Płyn do spryskiwaczy Letni', 'Odmrażacz do szyb DeIce',
+        'Preparat do kokpitu Matte', 'Środek do czyszczenia felg', 'Płyn do chłodnic Glycol', 'Środek do usuwania owadów',
+        'Pasta polerska Scratch', 'Preparat do uszczelek', 'Płyn do mycia szyb Streakless', 'Zapach samochodowy Pine',
+        'Odtłuszczacz do hamulców', 'Smar silikonowy spray', 'Środek do konserwacji skóry', 'Penetrant wielofunkcyjny'
+    ],
+    'Elektronika': [
+        'Zasilacz stabilizowany', 'Przewód USB-C nylonowy', 'Ładowarka sieciowa Multi', 'Adapter HDMI-DVI',
+        'Kabel ethernet Cat6', 'Bateria akumulatorowa', 'Karta pamięci microSD', 'Czytnik kart pamięci',
+        'Rozdzielacz USB Hub', 'Przejściówka jack', 'Bezpiecznik elektryczny', 'Taśma izolacyjna PVC'
+    ],
+    'Artykuły spożywcze': [
+        'Kawa ziarnista Arabica', 'Herbata czarna Ceylon', 'Czekolada gorzka 70%', 'Płatki owsiane górskie',
+        'Sok pomarańczowy 100%', 'Woda mineralna gazowana', 'Makaron penne semolina', 'Ryż basmati długoziarnisty',
+        'Dżem truskawkowy słodki', 'Miód wielokwiatowy', 'Oliwa z oliwek Extra', 'Orzechy nerkowca 200g',
+        'Przyprawa pieprz czarny', 'Sól morska jodowana', 'Herbatniki maślane', 'Napój izotoniczny Active'
+    ],
+    'Biuro': [
+        'Segregator biurowy A4', 'Notatnik w linie Grid', 'Długopis żelowy czarny', 'Etykiety samoprzylepne',
+        'Zakreślacz neonowy yellow', 'Zszywacz biurowy', 'Zszywki metalowe', 'Spinacze biurowe 100szt',
+        'Korektor w taśmie', 'Nożyczki biurowe', 'Taśma klejąca transparent', 'Teczka z gumką A4'
+    ],
+    'BHP': [
+        'Rękawice robocze powlekane', 'Maska ochronna FFP2', 'Kask budowlany z atestem', 'Okulary ochronne przezroczyste',
+        'Kamizelka ostrzegawcza', 'Nauszniki przeciwhałasowe', 'Apteczka pierwszej pomocy', 'Buty robocze ochronne',
+        'Taśma ostrzegawcza biało-czerwona', 'Półmaska lakiernicza', 'Taśma antypoślizgowa'
+    ]
+};
 
-    { sku: 'AUTO-OLEJ-001', barcode: '5904000000011', name: 'Olej silnikowy 5W30 4L', category: 'Motoryzacja', price: 179.99, reorderThreshold: 15, location: 'C-01-01', quantity: 22 },
-    { sku: 'AUTO-HAM-001', barcode: '5904000000012', name: 'Plyn hamulcowy DOT-4 1L', category: 'Motoryzacja', price: 34.99, reorderThreshold: 25, location: 'C-01-02', quantity: 47 },
-    { sku: 'AUTO-KLOCKI-001', barcode: '5904000000013', name: 'Klocki hamulcowe przednie', category: 'Motoryzacja', price: 134.99, reorderThreshold: 18, location: 'C-02-01', quantity: 31 },
-    { sku: 'AUTO-AKU-001', barcode: '5904000000014', name: 'Akumulator 74Ah 12V', category: 'Motoryzacja', price: 449.99, reorderThreshold: 10, location: 'C-02-01', quantity: 14 },
+const ZONES = {
+    'Części samochodowe': 'C-01-01',
+    'Chemia samochodowa': 'C-01-02',
+    'Elektronika': 'B-02-01',
+    'Artykuły spożywcze': 'A-01-01',
+    'Biuro': 'B-02-02',
+    'BHP': 'C-01-01'
+};
 
-    { sku: 'CHEM-REK-001', barcode: '5905000000011', name: 'Rekawice nitrylowe 100 szt', category: 'BHP', price: 24.99, reorderThreshold: 40, location: 'C-01-01', quantity: 72 },
-    { sku: 'CHEM-PLY-001', barcode: '5905000000012', name: 'Plyn do dezynfekcji 5L', category: 'Chemia', price: 39.99, reorderThreshold: 25, location: 'C-01-02', quantity: 33 },
-    { sku: 'BIUR-PAP-001', barcode: '5906000000011', name: 'Papier A4 500 arkuszy', category: 'Biuro', price: 21.99, reorderThreshold: 30, location: 'B-02-02', quantity: 58 },
-    { sku: 'BIUR-ETY-001', barcode: '5906000000012', name: 'Etykiety logistyczne 100x150', category: 'Biuro', price: 49.99, reorderThreshold: 20, location: 'B-01-02', quantity: 27 },
-];
+const ZONE_GROUPS = {
+    'Części samochodowe': 'Motoryzacja, chemia i BHP',
+    'Chemia samochodowa': 'Motoryzacja, chemia i BHP',
+    'Elektronika': 'Elektronika i biuro',
+    'Artykuły spożywcze': 'Zywnosc',
+    'Biuro': 'Elektronika i biuro',
+    'BHP': 'Motoryzacja, chemia i BHP'
+};
 
 const GROUP_RULES = {
-    Zywnosc: { group: 'Zywnosc', fallbackLocation: 'A-01-01' },
-    Elektronika: { group: 'Elektronika i biuro', fallbackLocation: 'B-01-01' },
-    Biuro: { group: 'Elektronika i biuro', fallbackLocation: 'B-01-02' },
-    Motoryzacja: { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-01' },
-    Chemia: { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-02' },
-    BHP: { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-01' },
+    'Artykuły spożywcze': { group: 'Zywnosc', fallbackLocation: 'A-01-01' },
+    'Elektronika': { group: 'Elektronika i biuro', fallbackLocation: 'B-01-01' },
+    'Biuro': { group: 'Elektronika i biuro', fallbackLocation: 'B-01-02' },
+    'Części samochodowe': { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-01' },
+    'Chemia samochodowa': { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-02' },
+    'BHP': { group: 'Motoryzacja, chemia i BHP', fallbackLocation: 'C-01-01' },
+};
+
+const ensureLocationExists = async (client, code, group) => {
+    await client.query(`
+        INSERT INTO ${table('warehouse_locations')} (location_code, zone_group)
+        VALUES ($1, $2)
+        ON CONFLICT (location_code) DO NOTHING
+    `, [code, group]);
+
+    const res = await client.query(`
+        SELECT location_id FROM ${table('warehouse_locations')} WHERE location_code = $1
+    `, [code]);
+    return res.rows[0].location_id;
 };
 
 const reconcileProductLocations = async () => {
@@ -73,15 +124,9 @@ const reconcileProductLocations = async () => {
             continue;
         }
 
-        const targetLocationResult = await pool.query(`
-            SELECT location_id
-            FROM ${table('warehouse_locations')}
-            WHERE location_code = $1
-        `, [rule.fallbackLocation]);
+        const targetLocationId = await ensureLocationExists(pool, rule.fallbackLocation, rule.group);
 
-        const targetLocationId = targetLocationResult.rows[0]?.location_id;
-
-        if (!targetLocationId || targetLocationId === stock.location_id) {
+        if (targetLocationId === stock.location_id) {
             continue;
         }
 
@@ -118,6 +163,21 @@ const ensureCatalogSchema = async () => {
     await pool.query(`ALTER TABLE ${table('warehouse_locations')} ADD COLUMN IF NOT EXISTS zone_group VARCHAR(80) DEFAULT 'General'`);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS products_sku_unique_idx ON ${table('products')} (sku) WHERE sku IS NOT NULL`);
 
+    // Alter orders table to support extra storefront/WMS fields
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS customer VARCHAR(150)`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS destination VARCHAR(150)`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS priority VARCHAR(30) DEFAULT 'Normalny'`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS warehouse_code VARCHAR(50) DEFAULT 'HUB-PL-01'`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS internal_notes_actor VARCHAR(100) DEFAULT 'System'`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS is_packed BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS bin_id VARCHAR(50)`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS picked_by VARCHAR(100)`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS pick_completed_time VARCHAR(30)`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS shipment_date VARCHAR(50)`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS change_logs JSONB DEFAULT '[]'::jsonb`);
+    await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS activity_history JSONB DEFAULT '[]'::jsonb`);
+
+    // 1. Seed static warehouse locations first
     for (const location of LOCATIONS) {
         await pool.query(`
             INSERT INTO ${table('warehouse_locations')} (location_code, zone_group)
@@ -132,44 +192,95 @@ const ensureCatalogSchema = async () => {
         `, [location.code, location.group]);
     }
 
-    for (const product of PRODUCTS) {
-        const productResult = await pool.query(`
+    // 2. Seed the 6 base products matching WMS generator + 4 storefront products
+    const baseProducts = [
+        { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', category: 'Chemia samochodowa', stock: 120, reorderThreshold: 100, price: 34.99, locationCode: 'C-03-01-01', zoneGroup: 'General', barcode: '5900000001001' },
+        { sku: 'SKU-20391', name: 'Reflektor LED H7 SuperVolt', category: 'Części samochodowe', stock: 15, reorderThreshold: 40, price: 289.00, locationCode: 'A-01-01-02', zoneGroup: 'General', barcode: '5900000001002' },
+        { sku: 'SKU-94021', name: 'Akumulator VoltPro 74Ah 12V', category: 'Części samochodowe', stock: 0, reorderThreshold: 15, price: 449.99, locationCode: 'A-02-01-01', zoneGroup: 'General', barcode: '5900000001003' },
+        { sku: 'SKU-50493', name: 'Olej silnikowy Syntetic 5W30', category: 'Chemia samochodowa', stock: 8, reorderThreshold: 20, price: 179.99, locationCode: 'C-02-03-01', zoneGroup: 'General', barcode: '5900000001004' },
+        { sku: 'SKU-73012', name: 'Klocki hamulcowe CarbonPremium', category: 'Części samochodowe', stock: 245, reorderThreshold: 80, price: 134.99, locationCode: 'A-03-01-01', zoneGroup: 'General', barcode: '5900000001005' },
+        { sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', category: 'Elektronika', stock: 85, reorderThreshold: 15, price: 249.00, locationCode: 'B-02-01-03', zoneGroup: 'General', barcode: '5900000001006' },
+        { sku: 'APX-ACC-W01', name: 'Luksusowy Zegarek Minimalistyczny', category: 'Akcesoria', stock: 14, reorderThreshold: 5, price: 899.00, locationCode: 'B-01-01', zoneGroup: 'Elektronika i biuro', barcode: '5900000002001' },
+        { sku: 'APX-FURN-C12', name: 'Ergonomiczne Krzesło Aluminiowe', category: 'Dom i Wnętrze', stock: 8, reorderThreshold: 5, price: 1250.00, locationCode: 'B-01-02', zoneGroup: 'Elektronika i biuro', barcode: '5900000002002' },
+        { sku: 'APX-AUD-H03', name: 'Słuchawki Audio Pro (ANC)', category: 'Sprzęt Audio', stock: 31, reorderThreshold: 10, price: 420.00, locationCode: 'B-02-01', zoneGroup: 'Elektronika i biuro', barcode: '5900000002003' },
+        { sku: 'APX-ACC-O45', name: 'Ceramiczny Organizer na Biurko', category: 'Akcesoria', stock: 75, reorderThreshold: 20, price: 140.00, locationCode: 'B-02-02', zoneGroup: 'Elektronika i biuro', barcode: '5900000002004' }
+    ];
+
+    for (const prod of baseProducts) {
+        const prodRes = await pool.query(`
             INSERT INTO ${table('products')} (sku, barcode, name, category, price, reorder_threshold)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (barcode)
             DO UPDATE SET
                 sku = EXCLUDED.sku,
-                barcode = EXCLUDED.barcode,
                 name = EXCLUDED.name,
                 category = EXCLUDED.category,
                 price = EXCLUDED.price,
                 reorder_threshold = EXCLUDED.reorder_threshold
             RETURNING products_id
-        `, [
-            product.sku,
-            product.barcode,
-            product.name,
-            product.category,
-            product.price,
-            product.reorderThreshold,
-        ]);
+        `, [prod.sku, prod.barcode, prod.name, prod.category, prod.price, prod.reorderThreshold]);
 
-        const locationResult = await pool.query(`
-            SELECT location_id
-            FROM ${table('warehouse_locations')}
-            WHERE location_code = $1
-        `, [product.location]);
+        const productId = prodRes.rows[0].products_id;
+        const locationId = await ensureLocationExists(pool, prod.locationCode, prod.zoneGroup);
 
         await pool.query(`
             INSERT INTO ${table('storage_stock')} (products_id, location_id, quantity)
             VALUES ($1, $2, $3)
             ON CONFLICT (products_id, location_id)
-            DO NOTHING
-        `, [
-            productResult.rows[0].products_id,
-            locationResult.rows[0].location_id,
-            product.quantity,
-        ]);
+            DO UPDATE SET quantity = EXCLUDED.quantity
+        `, [productId, locationId, prod.stock]);
+    }
+
+    // 3. Seed the 200 dynamic products matching WMS generator
+    const categories = Object.keys(PRODUCT_TEMPLATES);
+    let barcodeCounter = 5900000000001;
+
+    for (let i = 1; i <= 200; i++) {
+        const category = categories[i % categories.length];
+        const templates = PRODUCT_TEMPLATES[category];
+        const baseName = templates[i % templates.length];
+        
+        const prefix = CATEGORY_PREFIXES[category];
+        const sku = `${prefix}-${String(i).padStart(4, '0')}`;
+        const barcode = String(barcodeCounter++);
+        const name = `${baseName} Model-${i}`;
+        
+        let price = 0;
+        if (category === 'Artykuły spożywcze') {
+            price = Number((2.50 + (i % 5) * 3.5).toFixed(2));
+        } else if (category === 'Części samochodowe') {
+            price = Number((40 + (i % 8) * 45).toFixed(2));
+        } else {
+            price = Number((10 + (i % 6) * 15).toFixed(2));
+        }
+
+        const reorderThreshold = 15 + (i % 10);
+        const stock = 20 + (i % 50);
+        const locationCode = ZONES[category];
+        const zoneGroup = ZONE_GROUPS[category];
+
+        const prodRes = await pool.query(`
+            INSERT INTO ${table('products')} (sku, barcode, name, category, price, reorder_threshold)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (barcode)
+            DO UPDATE SET
+                sku = EXCLUDED.sku,
+                name = EXCLUDED.name,
+                category = EXCLUDED.category,
+                price = EXCLUDED.price,
+                reorder_threshold = EXCLUDED.reorder_threshold
+            RETURNING products_id
+        `, [sku, barcode, name, category, price, reorderThreshold]);
+
+        const productId = prodRes.rows[0].products_id;
+        const locationId = await ensureLocationExists(pool, locationCode, zoneGroup);
+
+        await pool.query(`
+            INSERT INTO ${table('storage_stock')} (products_id, location_id, quantity)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (products_id, location_id)
+            DO UPDATE SET quantity = EXCLUDED.quantity
+        `, [productId, locationId, stock]);
     }
 
     await reconcileProductLocations();

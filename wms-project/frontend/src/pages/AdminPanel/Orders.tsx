@@ -208,9 +208,9 @@ export default function Orders({
         const matchesStatus = statusFilter ? order.status === statusFilter : true;
         const matchesPriority = priorityFilter ? order.priority === priorityFilter : true;
         const matchesSearch = searchQuery
-            ? order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            order.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            order.destination.toLowerCase().includes(searchQuery.toLowerCase())
+            ? (order.id && String(order.id).toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (order.customer && String(order.customer).toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (order.destination && String(order.destination).toLowerCase().includes(searchQuery.toLowerCase()))
             : true;
 
         let matchesDate = true;

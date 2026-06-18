@@ -4,19 +4,31 @@
  */
 
 import { motion } from 'motion/react';
-import { Layers } from 'lucide-react';
 import { Category } from '../types';
 
 interface CategoryCardProps {
-  key?: string;
   category: Category;
   onSelect: (categoryName: string) => void;
   isSelected: boolean;
 }
 
 export default function CategoryCard({ category, onSelect, isSelected }: CategoryCardProps) {
-  // Strip out prefix for actual category query matching if needed
   const cleanName = category.name.replace(/{{category\.name}}\s*/, '').trim();
+
+  // Helper to format Polish product counts nicely
+  const getProductCountText = (text: string) => {
+    const match = text.match(/(\d+)/);
+    if (!match) return text;
+    
+    const count = parseInt(match[1], 10);
+    if (count === 1) return "1 produkt";
+    const lastDigit = count % 10;
+    const lastTwoDigits = count % 100;
+    if (lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 10 || lastTwoDigits >= 20)) {
+      return `${count} produkty`;
+    }
+    return `${count} produktów`;
+  };
 
   return (
     <motion.div
@@ -24,39 +36,35 @@ export default function CategoryCard({ category, onSelect, isSelected }: Categor
       whileHover={{ y: -4 }}
       transition={{ duration: 0.2 }}
       onClick={() => onSelect(cleanName)}
-      className={`cursor-pointer overflow-hidden border transition-all duration-300 ${
+      className={`relative h-44 w-full cursor-pointer overflow-hidden rounded-xl border transition-all duration-300 group ${
         isSelected
-          ? 'bg-zinc-900 border-zinc-500 shadow-lg'
-          : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
+          ? 'border-white ring-1 ring-white shadow-xl'
+          : 'border-zinc-800/80 hover:border-zinc-600'
       }`}
     >
-      <div className="relative h-28 w-full bg-zinc-900">
-        <img
-          src={category.image}
-          alt={category.name}
-          className="h-full w-full object-cover filter brightness-75 contrasts-125 saturate-50 select-none hover:saturate-100 transition-all duration-500"
-          referrerPolicy="no-referrer"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent" />
-        
-        {/* Floating Category Icon Indicator */}
-        <div className="absolute top-2.5 right-2.5 h-6 w-6 rounded-none bg-black/80 border border-zinc-805 flex items-center justify-center text-zinc-400">
-          <Layers size={11} />
-        </div>
+      {/* Background Image */}
+      <img
+        src={category.image}
+        alt={category.name}
+        className="absolute inset-0 h-full w-full object-cover filter brightness-[0.5] group-hover:scale-105 transition-transform duration-700 select-none"
+        referrerPolicy="no-referrer"
+      />
+      
+      {/* Overlay Gradient */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+      
+      {/* Selection Dot */}
+      {isSelected && (
+        <div className="absolute top-3 right-3 h-2 w-2 rounded-full bg-white shadow-sm shadow-black" />
+      )}
 
-        {/* Floating volume counter */}
-        <div className="absolute bottom-2 left-3 font-mono text-[10px] text-zinc-400 tracking-wider">
-          {category.productCount}
-        </div>
-      </div>
-
-      <div className="p-3">
-        <h5 className="text-sm font-medium text-zinc-100 mb-1 flex items-center justify-between">
-          <span>{category.name}</span>
-          {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
-        </h5>
-        <p className="text-[11px] text-zinc-500 line-clamp-1">
-          {category.description}
+      {/* Bottom Text Overlaid */}
+      <div className="absolute bottom-4 left-4 right-4">
+        <h4 className="text-base font-bold text-white tracking-wide">
+          {category.name}
+        </h4>
+        <p className="text-xs text-zinc-400 mt-1 font-mono">
+          {getProductCountText(category.productCount)}
         </p>
       </div>
     </motion.div>

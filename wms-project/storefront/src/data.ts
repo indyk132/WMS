@@ -9,7 +9,7 @@ export const TEMPLATE_PRODUCTS: Product[] = [
   {
     id: 'prod_001',
     name: 'Luksusowy Zegarek Minimalistyczny',
-    description: 'Wyjątkowo cienki zegarek automatyczny z antyrefleksyjnym szkiełkiem szafirowym, kopertą z tytanu klasy premium i paskiem z ekologicznej skóry.',
+    description: 'Luksusowy Dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.',
     price: '899.00 EUR',
     stock: 'Dostępne: 14 szt.',
     image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=800',
@@ -266,7 +266,7 @@ export const TEMPLATE_CATEGORIES: Category[] = [
   {
     id: 'cat_acc',
     name: 'Akcesoria',
-    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&q=80&w=800',
     productCount: '2 produkty',
     description: 'Wysokiej klasy minimalistyczne akcesoria uzupełniające stanowisko pracy.'
   },
@@ -280,7 +280,7 @@ export const TEMPLATE_CATEGORIES: Category[] = [
   {
     id: 'cat_aud',
     name: 'Sprzęt Audio',
-    image: 'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800',
     productCount: '1 produkt',
     description: 'Urządzenia audio wysokiej wierności wykonane z najlepszych materiałów.'
   },

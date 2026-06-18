@@ -15,6 +15,7 @@ import Settings from './pages/AdminPanel/Settings';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
+import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag } from 'lucide-react';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -271,6 +272,7 @@ export default function App() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
     const [usersSync, setUsersSync] = useState({ isLoading: false, error: '' });
+    const [ordersSync, setOrdersSync] = useState({ isLoading: false, error: '' });
 
     const generateDefaultProducts = (): Product[] => {
         const CATEGORY_PREFIXES: Record<string, string> = {
@@ -499,10 +501,51 @@ export default function App() {
         }
     };
 
+    const loadOrders = async (shouldIgnore = () => false) => {
+        setOrdersSync({ isLoading: true, error: '' });
+
+        try {
+            const backendOrders = await fetchOrdersApi();
+            if (shouldIgnore()) return;
+
+            const enriched = backendOrders.map((ord: any) => {
+                return {
+                    ...ord,
+                    waybillNumber: ord.waybillNumber || `DPD${String(ord.id || ord.order_number || '').replace('ORD-', '')}PL`,
+                    waybillPdfDate: ord.waybillPdfDate || new Date(ord.order_date || Date.now()).toLocaleDateString('pl-PL'),
+                    pickingZones: ord.pickingZones || [
+                        { name: 'Strefa A', percentage: 100 }
+                    ],
+                    activityHistory: ord.activityHistory || [
+                        { 
+                            id: `act-init-${ord.id || ord.order_number}`, 
+                            title: 'Utworzono zlecenie wyjazdu', 
+                            actor: ord.internalNotesActor || 'System', 
+                            date: new Date(ord.order_date || Date.now()).toLocaleDateString('pl-PL') 
+                        }
+                    ],
+                    changeLogs: ord.changeLogs || []
+                };
+            });
+
+            setOrders(enriched);
+            setOrdersSync({ isLoading: false, error: '' });
+        } catch (error) {
+            if (shouldIgnore()) return;
+
+            console.error('Orders backend unavailable:', error);
+            setOrdersSync({
+                isLoading: false,
+                error: 'Backend orders niedostępny - używam danych lokalnych.',
+            });
+        }
+    };
+
     useEffect(() => {
         let shouldIgnore = false;
 
         loadInventory(() => shouldIgnore);
+        loadOrders(() => shouldIgnore);
 
         return () => {
             shouldIgnore = true;
@@ -610,7 +653,7 @@ export default function App() {
         });
     };
 
-    const handleAddOrder = (newOrder: any) => {
+    const handleAddOrder = async (newOrder: any) => {
         const enrichedOrder = {
             ...newOrder,
             internalNotesActor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System',
@@ -632,6 +675,12 @@ export default function App() {
         
         setOrders([enrichedOrder, ...orders]);
 
+        try {
+            await createOrderApi(enrichedOrder);
+        } catch (err) {
+            console.error("Failed to save order to backend:", err);
+        }
+
         newOrder.items.forEach((orderItem: any) => {
             setProducts(prev => {
                 return prev.map(p => {
@@ -652,15 +701,26 @@ export default function App() {
         });
     };
 
-    const handleUpdateOrder = (orderId: string, updatedFields: any) => {
+    const handleUpdateOrder = async (orderId: string, updatedFields: any) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedFields } : o));
+        try {
+            await updateOrderApi(orderId, updatedFields);
+        } catch (err) {
+            console.error("Failed to update order on backend:", err);
+        }
     };
 
-    const handleUpdateOrderStatus = (orderId: string, status: string) => {
+    const handleUpdateOrderStatus = async (orderId: string, status: string) => {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+        try {
+            await updateOrderApi(orderId, { status });
+        } catch (err) {
+            console.error("Failed to update order status on backend:", err);
+        }
     };
 
-    const handleAddOrderChangeLog = (orderId: string, title: string, description: string) => {
+    const handleAddOrderChangeLog = async (orderId: string, title: string, description: string) => {
+        let updatedOrder: any = null;
         setOrders(prev => prev.map(o => {
             if (o.id === orderId) {
                 const logs = o.changeLogs || [];
@@ -678,14 +738,26 @@ export default function App() {
                     actor: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Użytkownik',
                     date: new Date().toLocaleString('pl-PL')
                 };
-                return { 
+                updatedOrder = { 
                     ...o, 
                     changeLogs: [newLog, ...logs],
                     activityHistory: [newAct, ...history]
                 };
+                return updatedOrder;
             }
             return o;
         }));
+
+        if (updatedOrder) {
+            try {
+                await updateOrderApi(orderId, {
+                    changeLogs: updatedOrder.changeLogs,
+                    activityHistory: updatedOrder.activityHistory
+                });
+            } catch (err) {
+                console.error("Failed to add changelog on backend:", err);
+            }
+        }
     };
 
     const handleDeleteStaff = async (staffId: string) => {
