@@ -31,3 +31,10 @@ Thumbs.db
 # AI Assistant
 .aiassistant/
 
+# Directory structure export
+structure.txt
+
+# Editor / Agent metadata
+.junie/
+
+

@@ -18,6 +18,7 @@ import {
   Eye,
   ArrowRight,
   Database,
+  Download,
   SlidersHorizontal,
   ChevronRight,
   List,
@@ -293,13 +294,12 @@ export default function App() {
   const [regPhone, setRegPhone] = useState('');
   const [regError, setRegError] = useState('');
 
-  // Order submission payload state
   const [submittedOrder, setSubmittedOrder] = useState<any>(null);
   const [orderComplete, setOrderComplete] = useState(false);
   const [registeredRma, setRegisteredRma] = useState<string | null>(null);
+  const [registeredRmaOrderId, setRegisteredRmaOrderId] = useState<string>('');
   const [rmaReason, setRmaReason] = useState('Damaged casing');
   const [selectedRmaOrderId, setSelectedRmaOrderId] = useState('');
-
   // Seed default user account if not exists
   useEffect(() => {
     const usersJson = localStorage.getItem('wms_store_users');
@@ -612,9 +612,14 @@ export default function App() {
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('wms-data-updated', handleLocalUpdate);
 
+    const interval = setInterval(() => {
+      loadWmsData();
+    }, 5000);
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('wms-data-updated', handleLocalUpdate);
+      clearInterval(interval);
     };
   }, []);
 
@@ -851,12 +856,174 @@ export default function App() {
     }
   };
 
+  const downloadDpdReturnLabel = async (rmaCode: string, orderId: string) => {
+    try {
+      const jspdfModule = await new Promise<any>((resolve, reject) => {
+        if ((window as any).jspdf) {
+          resolve((window as any).jspdf);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        script.onload = () => resolve((window as any).jspdf);
+        script.onerror = (e) => reject(e);
+        document.body.appendChild(script);
+      });
+
+      if (!jspdfModule) {
+        alert("Błąd podczas ładowania modułu PDF.");
+        return;
+      }
+
+      const { jsPDF } = jspdfModule.jspdf ? jspdfModule : (window as any).jspdf;
+      
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [100, 150]
+      });
+
+      // Border
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.rect(2, 2, 96, 146);
+
+      // Header: DPD Logo Block
+      doc.setFillColor(0, 0, 0);
+      doc.rect(2, 2, 96, 15, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('DPD RETURN SERVICE', 5, 11);
+
+      // Hub Code / Routing symbols (top right of header)
+      doc.setFontSize(10);
+      doc.text('RET-PL-01', 75, 11);
+
+      // Divider
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.3);
+      doc.line(2, 17, 98, 17);
+
+      // Routing Block
+      doc.setFillColor(240, 240, 240);
+      doc.rect(2, 17, 96, 18, 'F');
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(26);
+      doc.text('WAW', 36, 31);
+      doc.setFontSize(9);
+      doc.text('DEPOT: 02', 6, 28);
+      doc.text('ROUTE: B35', 70, 28);
+
+      doc.line(2, 35, 98, 35);
+
+      // Sender Section
+      doc.setFontSize(8);
+      doc.setFont('Helvetica', 'bold');
+      doc.text('NADAWCA (SENDER):', 5, 40);
+      doc.setFont('Helvetica', 'normal');
+      
+      const order = wmsOrders.find((o: any) => o.id === orderId);
+      let senderName = order ? order.customer : 'Alexander Kowalski';
+      let senderAddress = 'ul. Jasna 12 m. 4';
+      let senderCity = '00-010 Warszawa';
+      let senderPhone = '+48 501 234 567';
+
+      if (order && order.internalNotes) {
+        const notes = order.internalNotes;
+        const addrMatch = notes.match(/Adres:\s*([^,.\n]+),\s*(\d{2}-\d{3}\s+[^,.\n]+)/);
+        if (addrMatch) {
+          senderAddress = addrMatch[1].trim();
+          senderCity = addrMatch[2].trim();
+        }
+        const phoneMatch = notes.match(/Tel:\s*([^,.\n]+)/);
+        if (phoneMatch) {
+          senderPhone = phoneMatch[1].trim();
+        }
+      }
+
+      doc.text(`Name: ${senderName}`, 5, 45);
+      doc.text(`Address: ${senderAddress}`, 5, 49);
+      doc.text(`City: ${senderCity}`, 5, 53);
+      doc.text(`Phone: ${senderPhone}`, 5, 57);
+
+      doc.line(2, 61, 98, 61);
+
+      // Recipient Section
+      doc.setFont('Helvetica', 'bold');
+      doc.text('ODBIORCA (RECIPIENT):', 5, 66);
+      doc.setFont('Helvetica', 'normal');
+      doc.text('APEX WMS Logistics Center', 5, 71);
+      doc.text('ul. Magazynowa 4, Rampa 12', 5, 75);
+      doc.text('00-001 Warszawa, Polska', 5, 79);
+      doc.text('Ref: APEX-RETURN-DEPT', 5, 83);
+
+      doc.line(2, 87, 98, 87);
+
+      // Package details
+      doc.setFont('Helvetica', 'bold');
+      doc.text('SZCZEGÓŁY PRZESYŁKI (SHIPMENT DETAILS):', 5, 92);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(`Zlecenie RMA: ${rmaCode}`, 5, 97);
+      doc.text(`Dotyczy zamówienia: ${orderId}`, 5, 101);
+      doc.text(`Data zgłoszenia: ${new Date().toLocaleDateString('pl-PL')}`, 5, 105);
+      
+      let itemsStr = '';
+      if (order && order.items) {
+        itemsStr = order.items.map((i: any) => `${i.sku} (x${i.qty})`).join(', ');
+      } else {
+        itemsStr = 'Zwracane produkty';
+      }
+      if (itemsStr.length > 40) itemsStr = itemsStr.substring(0, 38) + '...';
+      doc.text(`Zawartość: ${itemsStr}`, 5, 109);
+
+      doc.line(2, 113, 98, 113);
+
+      // Barcode Section
+      const barcodeXStart = 22;
+      const barcodeYStart = 117;
+      const barcodeHeight = 18;
+      const barcodeString = `*${rmaCode}*`;
+      
+      doc.setFillColor(0, 0, 0);
+      let xOffset = barcodeXStart;
+      for (let charIdx = 0; charIdx < barcodeString.length; charIdx++) {
+        const code = barcodeString.charCodeAt(charIdx);
+        const pattern = [
+          (code & 1) ? 0.4 : 1.2,
+          0.6,
+          (code & 2) ? 1.2 : 0.4,
+          0.4,
+          (code & 4) ? 0.4 : 1.2,
+          0.8
+        ];
+        pattern.forEach((w, pIdx) => {
+          if (pIdx % 2 === 0) {
+            doc.rect(xOffset, barcodeYStart, w, barcodeHeight, 'F');
+          }
+          xOffset += w;
+        });
+      }
+
+      // Print text below barcode
+      doc.setFont('Courier', 'bold');
+      doc.setFontSize(10);
+      doc.text(rmaCode, 33, 140);
+
+      doc.save(`Etykieta_Zwrotna_DPD_${rmaCode}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Wystąpił błąd podczas generowania etykiety PDF.");
+    }
+  };
+
   const handleRmaSubmit = async () => {
     const targetOrderId = selectedRmaOrderId || (customerWmsOrders[0] ? customerWmsOrders[0].id : '');
     if (!targetOrderId) return;
 
-    const rmaCode = `RMA-${Date.now().toString().slice(-6)}`;
+    const rmaCode = `RMA-S${Date.now().toString().slice(-5)}`;
     setRegisteredRma(rmaCode);
+    setRegisteredRmaOrderId(targetOrderId);
 
     const updatedWmsOrders = [...wmsOrders];
     const orderIndex = updatedWmsOrders.findIndex(o => o.id === targetOrderId);
@@ -867,6 +1034,43 @@ export default function App() {
       
       localStorage.setItem('wms-orders', JSON.stringify(updatedWmsOrders));
       setWmsOrders(updatedWmsOrders);
+
+      // Create return PO in wms-purchase-orders (Supplies panel)
+      let existingPOs: any[] = [];
+      try {
+        const storedPOs = localStorage.getItem('wms-purchase-orders');
+        if (storedPOs) {
+          existingPOs = JSON.parse(storedPOs);
+        }
+      } catch (err) {
+        console.error("Failed to parse purchase orders in storefront:", err);
+      }
+
+      const returnItems = order.items.map((item: any) => ({
+        sku: item.sku,
+        name: item.name,
+        qtyOrdered: item.qty || 1
+      }));
+
+      const d = new Date();
+      const months = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+      const createdDate = `${d.getDate()} ${months[d.getMonth()]}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      
+      const expDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      const expectedDeliveryDate = `${expDate.getDate()} ${months[expDate.getMonth()]}, 12:00`;
+
+      const rmaPo = {
+        id: rmaCode,
+        createdDate: createdDate,
+        status: 'ReturnPending',
+        vendorName: `${order.customer || 'Klient'} (Zwrot RMA)`,
+        expectedDeliveryDate: expectedDeliveryDate,
+        items: returnItems,
+        internalNotes: `Zwrot RMA do zamówienia ${targetOrderId}. Powód: ${rmaReason}`
+      };
+
+      existingPOs = [rmaPo, ...existingPOs];
+      localStorage.setItem('wms-purchase-orders', JSON.stringify(existingPOs));
 
       window.dispatchEvent(new Event('storage'));
 
@@ -2843,8 +3047,17 @@ export default function App() {
                                   Numer referencyjny RMA: <strong className="text-white">{registeredRma}</strong>
                                 </p>
                                 <p className="text-[10px] text-zinc-300">
-                                  Etykieta zwrotna została wygenerowana. Po otrzymaniu przesyłki przez nasz magazyn zwrot zostanie automatycznie przetworzony.
+                                  Etykieta zwrotna została wygenerowana. Pobierz ją i naklej na paczkę. Po otrzymaniu przesyłki przez nasz magazyn zwrot zostanie automatycznie zarejestrowany.
                                 </p>
+                                <div className="pt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadDpdReturnLabel(registeredRma, registeredRmaOrderId)}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-[10.5px] font-bold px-3 py-1.5 uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1.5 border-none rounded active:scale-95 shadow-sm"
+                                  >
+                                    <Download size={13} /> Pobierz etykietę zwrotną DPD (PDF)
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="space-y-3 font-mono text-xs">

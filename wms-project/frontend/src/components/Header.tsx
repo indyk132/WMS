@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone } from 'lucide-react';
+import { Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
     currentTab: string;
@@ -13,6 +13,8 @@ interface HeaderProps {
     readNotificationIds: string[];
     onMarkAllAsRead: () => void;
     onNotificationClick: (targetTab: string, notificationId: string, targetId?: string) => void;
+    onRefreshData?: () => void;
+    isRefreshing?: boolean;
 }
 
 export default function Header({
@@ -27,6 +29,8 @@ export default function Header({
     readNotificationIds = [],
     onMarkAllAsRead,
     onNotificationClick,
+    onRefreshData,
+    isRefreshing = false,
 }: HeaderProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -112,6 +116,16 @@ export default function Header({
                 </div>
 
                 <div className="flex gap-1 text-zinc-500">
+                    {onRefreshData && (
+                        <button 
+                            onClick={onRefreshData}
+                            disabled={isRefreshing}
+                            className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50" 
+                            title="Odśwież dane z bazy"
+                        >
+                            <RefreshCw className={`w-4.5 h-4.5 text-zinc-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                    )}
                     <div className="relative">
                         <button 
                             onClick={() => setNotificationsOpen(!notificationsOpen)}

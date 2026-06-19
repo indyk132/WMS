@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   TrendingUp, DollarSign, PackageCheck, Package, 
   Clock, UserCheck, MapPin, Activity, CheckCircle2, AlertTriangle, 
-  Users, Target, BarChart3, Filter, Award, Search, X, ChevronDown, Calendar, ArrowUpDown
+  Users, Target, BarChart3, Filter, Award, Search, X, ChevronDown, Calendar, ArrowUpDown,
+  Move, CheckCircle
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 
@@ -11,6 +12,7 @@ interface StatisticsProps {
   products: Product[];
   zones: any[];
   staffList: any[];
+  onRelocateProduct?: (sku: string, newLocationCode: string, newZone: string) => void;
 }
 
 interface AnalyticsEvent {
@@ -228,8 +230,8 @@ function BarChart({ title, data, colorFrom, colorTo, icon, yLabel = 'operacji', 
   );
 }
 
-export default function Statistics({ orders = [], products = [], zones = [], staffList = [] }: StatisticsProps) {
-  const [activeTab, setActiveTab] = useState<'packers' | 'pickers' | 'new_orders' | 'completed_orders'>('packers');
+export default function Statistics({ orders = [], products = [], zones = [], staffList = [], onRelocateProduct }: StatisticsProps) {
+  const [activeTab, setActiveTab] = useState<'packers' | 'pickers' | 'new_orders' | 'completed_orders' | 'sku_rotation'>('packers');
   const [dateRangeType, setDateRangeType] = useState<'day' | 'week' | 'month' | 'custom'>('month');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -1012,7 +1014,8 @@ export default function Statistics({ orders = [], products = [], zones = [], sta
               { id: 'packers', label: 'Pakowacze' },
               { id: 'pickers', label: 'Zbieracze (pickerzy)' },
               { id: 'new_orders', label: 'Nowe zamówienia' },
-              { id: 'completed_orders', label: 'Zrealizowane zamówienia' }
+              { id: 'completed_orders', label: 'Zrealizowane zamówienia' },
+              { id: 'sku_rotation', label: 'Rotacja SKU (ABC)' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1213,6 +1216,13 @@ export default function Statistics({ orders = [], products = [], zones = [], sta
                   yLabel="zamówień"
                 />
               )}
+              {activeTab === 'sku_rotation' && (
+                <SkuRotationSection
+                  orders={orders}
+                  products={products}
+                  onRelocateProduct={onRelocateProduct}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1348,6 +1358,431 @@ export default function Statistics({ orders = [], products = [], zones = [], sta
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// SKU Rotation ABC Analysis Sub-component
+// ==========================================
+interface SkuRotationSectionProps {
+  orders: any[];
+  products: Product[];
+  onRelocateProduct?: (sku: string, newLocationCode: string, newZone: string) => void;
+}
+
+function SkuRotationSection({ orders, products, onRelocateProduct }: SkuRotationSectionProps) {
+  const [classFilter, setClassFilter] = useState<'All' | 'A' | 'B' | 'C'>('All');
+  const [onlyRecommendations, setOnlyRecommendations] = useState<boolean | 'danger'>(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const demandMap = useMemo(() => {
+    const map: Record<string, { qty: number; orderCount: number }> = {};
+    products.forEach(p => {
+      map[p.sku] = { qty: 0, orderCount: 0 };
+    });
+
+    orders.forEach(o => {
+      if (o.items && Array.isArray(o.items)) {
+        o.items.forEach((item: any) => {
+          const sku = item.sku || item.productCode;
+          if (sku) {
+            const qty = parseInt(item.quantity || item.qty || 0);
+            if (map[sku]) {
+              map[sku].qty += qty;
+              map[sku].orderCount += 1;
+            } else {
+              map[sku] = { qty, orderCount: 1 };
+            }
+          }
+        });
+      }
+    });
+    return map;
+  }, [orders, products]);
+
+  const totalQtySold = useMemo(() => {
+    return Object.values(demandMap).reduce((sum, d) => sum + d.qty, 0);
+  }, [demandMap]);
+
+  const classifiedProducts = useMemo(() => {
+    const sorted = [...products].sort((a, b) => {
+      const demA = demandMap[a.sku]?.qty || 0;
+      const demB = demandMap[b.sku]?.qty || 0;
+      if (demB !== demA) return demB - demA;
+      const cntA = demandMap[a.sku]?.orderCount || 0;
+      const cntB = demandMap[b.sku]?.orderCount || 0;
+      return cntB - cntA;
+    });
+
+    let cumulativeQty = 0;
+    return sorted.map((p, index) => {
+      const qty = demandMap[p.sku]?.qty || 0;
+      cumulativeQty += qty;
+
+      let abcClass: 'A' | 'B' | 'C' = 'C';
+      if (totalQtySold > 0) {
+        const percentage = (cumulativeQty / totalQtySold) * 100;
+        if (percentage <= 70) abcClass = 'A';
+        else if (percentage <= 90) abcClass = 'B';
+        else abcClass = 'C';
+      } else {
+        const rankPercent = (index / products.length) * 100;
+        if (rankPercent <= 20) abcClass = 'A';
+        else if (rankPercent <= 50) abcClass = 'B';
+        else abcClass = 'C';
+      }
+
+      const rec = getZoneRecommendation(abcClass, p.category, p.zone, p.locationCode);
+
+      return {
+        product: p,
+        qtySold: qty,
+        orderCount: demandMap[p.sku]?.orderCount || 0,
+        abcClass,
+        recommendation: rec.recommendation,
+        recType: rec.type,
+        targetLocation: getTargetLocation(abcClass, p.category)
+      };
+    });
+  }, [products, demandMap, totalQtySold]);
+
+  function getTargetLocation(abcClass: 'A' | 'B' | 'C', category: string) {
+    const normCat = (category || '').toLowerCase().trim();
+    const isFood = normCat.includes('spożywcz') || normCat.includes('żywność') || normCat.includes('zywnosc') || normCat.includes('food');
+    const isOffice = normCat.includes('elektronik') || normCat.includes('biur') || normCat.includes('office') || normCat.includes('audio') || normCat.includes('akcesor') || normCat.includes('dom');
+
+    let targetZone = 'C1';
+    let targetZoneGroup = 'C';
+    if (isFood) {
+      targetZone = 'A1';
+      targetZoneGroup = 'A';
+    } else if (isOffice) {
+      targetZone = 'B1';
+      targetZoneGroup = 'B';
+    }
+
+    if (abcClass === 'A') {
+      return { code: `${targetZoneGroup}-01-01`, zone: targetZone };
+    } else if (abcClass === 'C') {
+      const slowZone = targetZoneGroup === 'A' ? 'A2' : targetZoneGroup === 'B' ? 'B2' : 'C2';
+      return { code: `${targetZoneGroup}-02-04`, zone: slowZone };
+    }
+    return null;
+  }
+
+  function getZoneRecommendation(abcClass: 'A' | 'B' | 'C', category: string, zone: string, locationCode: string) {
+    const normCat = (category || '').toLowerCase().trim();
+    const zoneUpper = (zone || '').toUpperCase();
+    const locUpper = (locationCode || '').toUpperCase();
+
+    const isFood = normCat.includes('spożywcz') || normCat.includes('żywność') || normCat.includes('zywnosc') || normCat.includes('food');
+    const isOffice = normCat.includes('elektronik') || normCat.includes('biur') || normCat.includes('office') || normCat.includes('audio') || normCat.includes('akcesor') || normCat.includes('dom');
+    const isChemHazmat = normCat.includes('chem') || normCat.includes('częśc') || normCat.includes('czesc') || normCat.includes('motor') || normCat.includes('bhp') || normCat.includes('auto');
+
+    const locParts = locUpper.split('-');
+    const shelfLevel = locParts.length >= 3 ? parseInt(locParts[2]) : null;
+    const isHighShelf = shelfLevel !== null && shelfLevel >= 3;
+    const isLowShelf = shelfLevel !== null && shelfLevel <= 2;
+
+    let expectedZoneLetter = '';
+    let targetFastZone = '';
+    let targetSlowZone = '';
+
+    if (isFood) {
+      expectedZoneLetter = 'A';
+      targetFastZone = 'A1';
+      targetSlowZone = 'A2';
+    } else if (isOffice) {
+      expectedZoneLetter = 'B';
+      targetFastZone = 'B1';
+      targetSlowZone = 'B2';
+    } else if (isChemHazmat) {
+      expectedZoneLetter = 'C';
+      targetFastZone = 'C1';
+      targetSlowZone = 'C2';
+    }
+
+    if (!expectedZoneLetter) {
+      return { recommendation: 'Prawidłowa lokalizacja', type: 'ok' as const };
+    }
+
+    const currentZoneLetter = zoneUpper.charAt(0);
+
+    if (currentZoneLetter !== expectedZoneLetter) {
+      return {
+        recommendation: `⚠️ Niezgodność strefy BHP! Kategoria „${category}” leży w strefie ${zoneUpper}. Wymagana strefa ${expectedZoneLetter}.`,
+        type: 'danger' as const
+      };
+    }
+
+    if (abcClass === 'A') {
+      const isFastZone = zoneUpper === targetFastZone;
+      if (!isFastZone && isHighShelf) {
+        return {
+          recommendation: `Zalecana relokacja do strefy szybkiej ${targetFastZone} na dolną półkę (poziom 1/2) najbliżej stołów pakowych.`,
+          type: 'warning' as const
+        };
+      }
+      if (!isFastZone) {
+        return {
+          recommendation: `Zalecana relokacja do strefy szybkiej ${targetFastZone} bliżej stołów pakowych.`,
+          type: 'warning' as const
+        };
+      }
+      if (isHighShelf) {
+        return {
+          recommendation: `Przenieś na dolną półkę (poziom 1/2) w strefie ${zoneUpper} dla szybszej kompletacji.`,
+          type: 'warning' as const
+        };
+      }
+      return { recommendation: 'Optymalna lokalizacja (Strefa szybka, dolny poziom)', type: 'ok' as const };
+    }
+
+    if (abcClass === 'C') {
+      const isFastZone = zoneUpper === targetFastZone;
+      if (isFastZone) {
+        return {
+          recommendation: `Zwolnij miejsce w strefie szybkiej: przenieś do strefy ${targetSlowZone} lub na wyższe półki.`,
+          type: 'warning' as const
+        };
+      }
+      if (isLowShelf) {
+        return {
+          recommendation: `Przenieś na wyższe półki (poziom 3/4) w celu zwolnienia dolnego poziomu dla towarów klasy A.`,
+          type: 'warning' as const
+        };
+      }
+      return { recommendation: 'Optymalna lokalizacja (Strefa głęboka, górny poziom)', type: 'ok' as const };
+    }
+
+    return { recommendation: 'Optymalna lokalizacja', type: 'ok' as const };
+  }
+
+  const filteredProducts = useMemo(() => {
+    return classifiedProducts.filter(item => {
+      if (classFilter !== 'All' && item.abcClass !== classFilter) return false;
+      if (onlyRecommendations === true && item.recType === 'ok') return false;
+      if (onlyRecommendations === 'danger' && item.recType !== 'danger') return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return item.product.sku.toLowerCase().includes(query) || item.product.name.toLowerCase().includes(query);
+      }
+      return true;
+    });
+  }, [classifiedProducts, classFilter, onlyRecommendations, searchQuery]);
+
+  const telemetry = useMemo(() => {
+    const classACount = classifiedProducts.filter(p => p.abcClass === 'A').length;
+    const classBCount = classifiedProducts.filter(p => p.abcClass === 'B').length;
+    const classCCount = classifiedProducts.filter(p => p.abcClass === 'C').length;
+    const recsCount = classifiedProducts.filter(p => p.recType !== 'ok').length;
+    const safetyViolations = classifiedProducts.filter(p => p.recType === 'danger').length;
+
+    return { classACount, classBCount, classCCount, recsCount, safetyViolations };
+  }, [classifiedProducts]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 select-none">
+        <div className="bg-[#0f172a] text-white p-4 rounded-xl border border-slate-800 shadow-sm flex flex-col justify-between">
+          <span className="text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider">Suma SKU</span>
+          <div className="text-xl font-black mt-1.5 font-sans">{products.length}</div>
+          <div className="text-[9px] text-zinc-500 mt-1 font-mono">Baza produktów WMS</div>
+        </div>
+        <div className="bg-red-50/50 p-4 rounded-xl border border-red-150 shadow-sm flex flex-col justify-between">
+          <span className="text-[10px] text-red-600 font-extrabold uppercase tracking-wider">Klasa A (Szybkie)</span>
+          <div className="text-xl font-black mt-1.5 text-red-950 font-sans">{telemetry.classACount} SKU</div>
+          <div className="text-[9px] text-red-500 mt-1">Generują ok. 70% operacji</div>
+        </div>
+        <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-150 shadow-sm flex flex-col justify-between">
+          <span className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-wider">Klasa B (Średnie)</span>
+          <div className="text-xl font-black mt-1.5 text-indigo-950 font-sans">{telemetry.classBCount} SKU</div>
+          <div className="text-[9px] text-indigo-500 mt-1">Generują ok. 20% operacji</div>
+        </div>
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <span className="text-[10px] text-slate-600 font-extrabold uppercase tracking-wider">Klasa C (Wolne)</span>
+          <div className="text-xl font-black mt-1.5 text-slate-950 font-sans">{telemetry.classCCount} SKU</div>
+          <div className="text-[9px] text-slate-500 mt-1">Generują ok. 10% operacji</div>
+        </div>
+        <div className={`p-4 rounded-xl border shadow-sm flex flex-col justify-between ${telemetry.safetyViolations > 0 ? 'bg-rose-50 border-rose-200 animate-pulse' : telemetry.recsCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+          <span className={`text-[10px] font-extrabold uppercase tracking-wider ${telemetry.safetyViolations > 0 ? 'text-rose-600' : telemetry.recsCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            {telemetry.safetyViolations > 0 ? 'Krytyczne BHP' : 'Rekomendacje'}
+          </span>
+          <div className={`text-xl font-black mt-1.5 font-sans ${telemetry.safetyViolations > 0 ? 'text-rose-950' : telemetry.recsCount > 0 ? 'text-amber-950' : 'text-emerald-950'}`}>
+            {telemetry.safetyViolations > 0 ? `${telemetry.safetyViolations} pozycji` : `${telemetry.recsCount} pozycji`}
+          </div>
+          <div className={`text-[9px] mt-1 ${telemetry.safetyViolations > 0 ? 'text-rose-600 font-bold' : telemetry.recsCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            {telemetry.safetyViolations > 0 ? 'Niezgodność stref BHP!' : 'Wymaga optymalizacji'}
+          </div>
+        </div>
+      </div>
+
+      {telemetry.safetyViolations > 0 && (
+        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex items-start gap-3.5 shadow-sm">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="font-bold text-rose-900 text-xs font-sans uppercase">Krytyczny Alert Zgodności Magazynowej (BHP / HACCP)</h4>
+            <p className="text-rose-700 text-xs mt-1.5 leading-relaxed">
+              Niektóre z towarów leżą w strefach zagrażających bezpieczeństwu sanitarnemu bądź pożarowemu (np. chemia obok artykułów spożywczych). Przeprowadź natychmiastową relokację za pomocą akcji <strong>Relokuj</strong>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-[#f8fafc] border border-slate-200 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans">
+        <div className="relative flex-grow max-w-sm">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-9 py-2 border border-slate-200 rounded-lg bg-white text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+            placeholder="Szukaj SKU, nazwy produktu..."
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer border-none bg-transparent">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+            <span className="px-2 text-slate-400 font-extrabold uppercase text-[9px] select-none">Klasa ABC:</span>
+            {(['All', 'A', 'B', 'C'] as const).map(cls => (
+              <button
+                key={cls}
+                onClick={() => setClassFilter(cls)}
+                className={`px-3 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
+                  classFilter === cls ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {cls === 'All' ? 'Wszystkie' : `Klasa ${cls}`}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs px-2.5 h-7">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={onlyRecommendations === true}
+                onChange={e => setOnlyRecommendations(e.target.checked ? true : false)}
+                className="rounded text-blue-600 focus:ring-blue-500 border-slate-300 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="text-[10px] font-bold text-slate-600">Optymalizuj</span>
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs px-2.5 h-7">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={onlyRecommendations === 'danger'}
+                onChange={e => setOnlyRecommendations(e.target.checked ? 'danger' : false)}
+                className="rounded text-rose-600 focus:ring-rose-500 border-rose-300 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span className="text-[10px] font-bold text-rose-600">Tylko błędy BHP</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[9px] tracking-wider select-none">
+                <th className="py-3 px-4 w-12 text-center">Rank</th>
+                <th className="py-3 px-4">Kod SKU</th>
+                <th className="py-3 px-4">Nazwa artykułu</th>
+                <th className="py-3 px-4">Kategoria</th>
+                <th className="py-3 px-4 text-center">Klasa ABC</th>
+                <th className="py-3 px-4 text-right">Zapotrzebowanie</th>
+                <th className="py-3 px-4">Bieżąca lokalizacja</th>
+                <th className="py-3 px-5">Rekomendacja operacyjna</th>
+                <th className="py-3 px-4 text-center">Akcja</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-150">
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-slate-400 font-medium font-sans">
+                    Brak produktów spełniających wybrane kryteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((item, idx) => {
+                  let badgeBg = 'bg-slate-100 text-slate-600 border-slate-200';
+                  if (item.abcClass === 'A') badgeBg = 'bg-red-50 text-red-700 border-red-200 font-black';
+                  else if (item.abcClass === 'B') badgeBg = 'bg-indigo-50 text-indigo-700 border-indigo-200 font-bold';
+
+                  let recBadge = 'bg-emerald-50 text-emerald-700 border-emerald-100';
+                  if (item.recType === 'danger') {
+                    recBadge = 'bg-rose-50 text-rose-700 border-rose-250 font-semibold animate-pulse';
+                  } else if (item.recType === 'warning') {
+                    recBadge = 'bg-amber-50 text-amber-700 border-amber-250';
+                  }
+
+                  return (
+                    <tr key={item.product.sku} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-400 font-sans">#{idx + 1}</td>
+                      <td className="py-3 px-4 font-mono font-black text-slate-800">{item.product.sku}</td>
+                      <td className="py-3 px-4 font-bold text-slate-700 max-w-[180px] truncate font-sans" title={item.product.name}>
+                        {item.product.name}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 font-medium font-sans">{item.product.category}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${badgeBg}`}>
+                          Klasa {item.abcClass}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-black text-slate-600">
+                        {item.qtySold} szt. <span className="text-[9px] text-slate-400 font-normal">({item.orderCount} ord.)</span>
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <span className="bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-[9px] font-black text-slate-600">
+                            {item.product.zone}
+                          </span>
+                          <span className="text-slate-500">{item.product.locationCode || 'Brak'}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-5 font-sans">
+                        <div className={`p-1.5 rounded-lg border text-[10px] leading-relaxed flex items-start gap-1.5 ${recBadge}`}>
+                          {item.recType === 'danger' && <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-rose-600" />}
+                          {item.recType === 'ok' && <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />}
+                          {item.recType === 'warning' && <Move className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500" />}
+                          <span>{item.recommendation}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center font-sans">
+                        {item.recType !== 'ok' && item.targetLocation && onRelocateProduct ? (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Czy na pewno zlecić fizyczną relokację wewnętrzną dla towaru ${item.product.name} (${item.product.sku}) z lokalizacji ${item.product.locationCode} do strefy ${item.targetLocation!.zone} (Lokalizacja: ${item.targetLocation!.code})?`)) {
+                                onRelocateProduct(item.product.sku, item.targetLocation!.code, item.targetLocation!.zone);
+                                alert(`Zlecenie relokacji zostało zarejestrowane i wykonane w systemie!`);
+                              }
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-2 py-1 rounded text-[10px] cursor-pointer flex items-center gap-1 mx-auto transition-all active:scale-[0.93] border-none shadow active:shadow-inner"
+                            title={`Przenieś do ${item.targetLocation.code}`}
+                          >
+                            <Move className="w-3 h-3" /> Relokuj
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-[10px] font-medium">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

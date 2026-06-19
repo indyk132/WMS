@@ -12,13 +12,15 @@ interface DashboardProps {
     zones: any[];
     onAddAllocation: (newAlloc: any) => void;
     allocationsLog: any[];
+    onRestockProduct?: (product: Product) => void;
 }
 
 export default function Dashboard({
     products,
     zones,
     onAddAllocation,
-    allocationsLog = []
+    allocationsLog = [],
+    onRestockProduct
 }: DashboardProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [productImages] = useState<Record<string, string>>(() => {
@@ -166,6 +168,21 @@ export default function Dashboard({
                         </div>
                         <p className="text-red-700 text-xs mt-1.5 leading-relaxed">
                             Wykryto <strong>{outOfStockCount} pozycje</strong> ze stanem zerowym. Wymaga to natychmiastowej dyspozycji i weryfikacji przychodzących dokumentów ASN w panelu Inbound.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {lowStockCount > 0 && (
+                <div id="dashboard-low-stock-warning" className="bg-amber-50/90 border border-amber-250 p-4 rounded-xl shadow-md flex items-start gap-3.5">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                            <span className="bg-amber-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded leading-none">NISKI STAN MAGAZYNOWY</span>
+                            <h4 className="font-bold text-amber-900 text-xs font-sans">POZYCJE PONIŻEJ PROGU ZAPASU MINIMALNEGO</h4>
+                        </div>
+                        <p className="text-amber-700 text-xs mt-1.5 leading-relaxed">
+                            Wykryto <strong>{lowStockCount} pozycji</strong> z niskim zapasem. Możesz szybko uzupełnić ich stan bezpośrednio z listy poniżej klikając przycisk <strong>Uzupełnij</strong>.
                         </p>
                     </div>
                 </div>
@@ -392,13 +409,22 @@ export default function Dashboard({
                                                 <p className="text-[10px] text-slate-500 font-mono mt-0.5">{prod.sku} • Lok: {prod.locationCode || `Zn: ${prod.zone}`}</p>
                                             </div>
                                         </div>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono shrink-0 border ${
-                                            prod.stock === 0
-                                                ? 'bg-red-50 text-red-600 border-red-200'
-                                                : 'bg-amber-50 text-amber-700 border-amber-250'
-                                        }`}>
-                                            {prod.stock} szt.
-                                        </span>
+                                        <div className="flex items-center gap-2 shrink-0 select-none">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${
+                                                prod.stock === 0
+                                                    ? 'bg-red-50 text-red-600 border-red-200'
+                                                    : 'bg-amber-50 text-amber-700 border-amber-250'
+                                            }`}>
+                                                {prod.stock} szt.
+                                            </span>
+                                            <button
+                                                onClick={() => onRestockProduct && onRestockProduct(prod)}
+                                                className="h-7 px-2.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold flex items-center justify-center transition-all cursor-pointer border-none shadow active:scale-[0.95]"
+                                                title="Uzupełnij stan o 100 sztuk u dostawcy"
+                                            >
+                                                Uzupełnij
+                                            </button>
+                                        </div>
                                     </div>
                                 ));
                             })()}

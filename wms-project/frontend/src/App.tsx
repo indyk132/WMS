@@ -13,10 +13,11 @@ import UsersPermissions from './pages/AdminPanel/Users';
 import Statistics from './pages/AdminPanel/Statistics';
 import Settings from './pages/AdminPanel/Settings';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
+import Supplies from './pages/AdminPanel/Supplies';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck } from 'lucide-react';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
@@ -219,6 +220,7 @@ export default function App() {
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
@@ -244,6 +246,7 @@ export default function App() {
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
@@ -426,6 +429,212 @@ export default function App() {
         return generateMockOrders();
     });
 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const [purchaseOrders, setPurchaseOrders] = useState<any[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-purchase-orders');
+            if (saved) return JSON.parse(saved);
+        } catch (e) {
+            console.error("Failed to parse stored purchase orders:", e);
+        }
+
+        const initialMockPOs = [
+            {
+                id: 'PO-00812',
+                createdDate: getRelativeDateStr(2, '09:15'),
+                status: 'Completed',
+                vendorName: 'AutoParts Distrib Polska',
+                expectedDeliveryDate: getRelativeDateStr(2, '14:30'),
+                items: [
+                    { sku: 'SKU-10492', name: 'Płyn hamulcowy DOT-4', qtyOrdered: 100 }
+                ],
+                internalNotes: 'Dostawa standardowa od dostawcy chemia.'
+            },
+            {
+                id: 'PO-00813',
+                createdDate: getRelativeDateStr(1, '11:00'),
+                status: 'Pending',
+                vendorName: 'Hurtownia Spożywcza EuroFoods Sp. z o.o.',
+                expectedDeliveryDate: getRelativeDateStr(0, '16:00'),
+                items: [
+                    { sku: 'FOOD-KAWA-001', name: 'Kawa ziarnista Arabica', qtyOrdered: 200 }
+                ],
+                internalNotes: 'Zapotrzebowanie wygenerowane z Dashboardu - niski stan.'
+            },
+            {
+                id: 'PO-00814',
+                createdDate: getRelativeDateStr(0, '08:45'),
+                status: 'Pending',
+                vendorName: 'ElectroDistrib PL S.A.',
+                expectedDeliveryDate: getRelativeDateStr(1, '10:00'),
+                items: [
+                    { sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', qtyOrdered: 150 }
+                ],
+                internalNotes: 'Pilna dostawa elektroniki przed sezonem.'
+            }
+        ];
+
+        window.localStorage.setItem('wms-purchase-orders', JSON.stringify(initialMockPOs));
+        return initialMockPOs;
+    });
+
+    const getSupplierForCategory = (category: string) => {
+        const norm = (category || '').toLowerCase();
+        if (norm.includes('spożywcz') || norm.includes('żywność')) return 'Hurtownia Spożywcza EuroFoods Sp. z o.o.';
+        if (norm.includes('elektronik') || norm.includes('audio')) return 'ElectroDistrib PL S.A.';
+        if (norm.includes('biur') || norm.includes('akcesor')) return 'OfficeMax Supply Poland';
+        if (norm.includes('częśc') || norm.includes('chem') || norm.includes('auto')) return 'AutoParts Distrib Polska';
+        return 'Global Warehousing Supplies';
+    };
+
+    const handleCreatePurchaseOrder = (newPO: any) => {
+        setPurchaseOrders(prev => {
+            const updated = [newPO, ...prev];
+            window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const handleUpdatePurchaseOrder = (poId: string, updatedFields: any) => {
+        setPurchaseOrders(prev => {
+            const updated = prev.map(p => p.id === poId ? { ...p, ...updatedFields } : p);
+            window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const handleCancelPurchaseOrder = (poId: string) => {
+        setPurchaseOrders(prev => {
+            const updated = prev.map(p => p.id === poId ? { ...p, status: 'Cancelled' } : p);
+            window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const handleReceivePurchaseOrder = async (poId: string) => {
+        try {
+            const po = purchaseOrders.find(p => p.id === poId);
+            if (!po || po.status !== 'Pending') return;
+
+            for (const item of po.items) {
+                const prod = products.find(p => p.sku === item.sku);
+                if (prod) {
+                    await handleUpdateStock(prod, item.qtyOrdered);
+                    
+                    handleAddAllocation({
+                        timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                        sku: item.sku,
+                        productName: item.name,
+                        zone: prod.locationCode || 'A-01-01',
+                        qty: Math.ceil(item.qtyOrdered / 10),
+                        type: 'Przyjęcie towaru (Dostawa)',
+                        user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
+                    });
+                }
+            }
+
+            setPurchaseOrders(prev => {
+                const updated = prev.map(p => p.id === poId ? { ...p, status: 'Completed' } : p);
+                window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+                return updated;
+            });
+        } catch (err: any) {
+            console.error("Receive PO failed:", err);
+            alert(`Błąd podczas przyjmowania dostawy: ${err.message}`);
+        }
+    };
+
+    const handleReceiveRmaReturn = async (rmaId: string) => {
+        try {
+            const po = purchaseOrders.find(p => p.id === rmaId);
+            if (!po || po.status !== 'ReturnPending') return;
+
+            for (const item of po.items) {
+                const prod = products.find(p => p.sku === item.sku);
+                if (prod) {
+                    await handleUpdateStock(prod, item.qtyOrdered);
+                    
+                    handleAddAllocation({
+                        timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                        sku: item.sku,
+                        productName: item.name,
+                        zone: prod.locationCode || 'A-01-01',
+                        qty: Math.ceil(item.qtyOrdered / 10) || 1,
+                        type: 'Przyjęcie zwrotu (RMA)',
+                        user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
+                    });
+                }
+            }
+
+            setPurchaseOrders(prev => {
+                const updated = prev.map(p => p.id === rmaId ? { ...p, status: 'ReturnReceived' } : p);
+                window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+                return updated;
+            });
+        } catch (err: any) {
+            console.error("Receive RMA return failed:", err);
+            alert(`Błąd podczas przyjmowania zwrotu RMA: ${err.message}`);
+        }
+    };
+
+    const handleGroupPurchaseOrders = (poIds: string[]) => {
+        const selected = purchaseOrders.filter(p => poIds.includes(p.id) && p.status === 'Pending');
+        if (selected.length < 2) {
+            alert('Wybierz co najmniej 2 oczekujące dostawy do zgrupowania.');
+            return;
+        }
+
+        const consolidatedItems: Record<string, { sku: string; name: string; qtyOrdered: number }> = {};
+        let consolidatedVendor = selected[0].vendorName;
+        const sameSupplier = selected.every(p => p.vendorName === consolidatedVendor);
+        if (!sameSupplier) {
+            consolidatedVendor = 'Skonsolidowani Dostawcy';
+        }
+
+        selected.forEach(po => {
+            po.items.forEach((item: any) => {
+                if (consolidatedItems[item.sku]) {
+                    consolidatedItems[item.sku].qtyOrdered += item.qtyOrdered;
+                } else {
+                    consolidatedItems[item.sku] = { ...item };
+                }
+            });
+        });
+
+        const newPoId = `PO-GRP${Math.floor(1000 + Math.random() * 9000)}`;
+        const newPO = {
+            id: newPoId,
+            createdDate: new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: 'short' }) + ', ' + new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+            status: 'Pending',
+            vendorName: consolidatedVendor,
+            expectedDeliveryDate: selected[0].expectedDeliveryDate,
+            items: Object.values(consolidatedItems),
+            internalNotes: `Zgrupowane i skonsolidowane zlecenia: ${selected.map(p => p.id).join(', ')}.`
+        };
+
+        setPurchaseOrders(prev => {
+            const updated = prev.map(p => poIds.includes(p.id) ? { ...p, status: 'Merged' } : p);
+            const final = [newPO, ...updated];
+            window.localStorage.setItem('wms-purchase-orders', JSON.stringify(final));
+            return final;
+        });
+    };
+
+    const handleRefreshAll = async () => {
+        setIsRefreshing(true);
+        try {
+            await Promise.all([
+                loadInventory(),
+                loadOrders()
+            ]);
+        } catch (e) {
+            console.error("Refresh failed:", e);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     const [zones, setZones] = useState<any[]>([
         { id: 'A1', block: 'AMBIENT', capacityPercent: 94, activeSKUs: 3, totalPallets: 32, maxPallets: 34, temp: 'Ambient (18°C)', hazmatStatus: 'None', lastAuditDaysAgo: 1, isLocked: false },
         { id: 'A2', block: 'AMBIENT', capacityPercent: 91, activeSKUs: 4, totalPallets: 31, maxPallets: 34, temp: 'Ambient (19°C)', hazmatStatus: 'None', lastAuditDaysAgo: 2, isLocked: false },
@@ -586,10 +795,20 @@ export default function App() {
                     console.error("Sync error wms-products:", err);
                 }
             }
+            if (e.key === 'wms-purchase-orders' && e.newValue) {
+                try {
+                    const parsed = JSON.parse(e.newValue);
+                    if (JSON.stringify(parsed) !== JSON.stringify(purchaseOrders)) {
+                        setPurchaseOrders(parsed);
+                    }
+                } catch (err) {
+                    console.error("Sync error wms-purchase-orders:", err);
+                }
+            }
         };
         window.addEventListener('storage', handleStorage);
         return () => window.removeEventListener('storage', handleStorage);
-    }, [orders, products]);
+    }, [orders, products, purchaseOrders]);
 
     useEffect(() => {
         if (currentUser) {
@@ -619,6 +838,10 @@ export default function App() {
 
     const handleAddAllocation = (newAlloc: any) => {
         setAllocationsLog([newAlloc, ...allocationsLog]);
+
+        if (newAlloc.type === 'Uzupełnienie zapasów (dostawca)') {
+            return;
+        }
 
         setProducts(prev => {
             return prev.map(p => {
@@ -792,8 +1015,71 @@ export default function App() {
         await loadInventory();
     };
 
-    const handleRestockItem = (product: Product) => {
-        return handleUpdateStock(product, 100);
+    const handleRestockItem = async (product: Product) => {
+        try {
+            const newPoId = `PO-${Math.floor(10000 + Math.random() * 90000)}`;
+            const vendor = getSupplierForCategory(product.category);
+
+            const newPO = {
+                id: newPoId,
+                createdDate: new Date().toLocaleDateString('pl-PL', { day: '2-digit', month: 'short' }) + ', ' + new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                status: 'Pending',
+                vendorName: vendor,
+                expectedDeliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('pl-PL', { day: '2-digit', month: 'short' }) + ', 12:00',
+                items: [
+                    { sku: product.sku, name: product.name, qtyOrdered: 100 }
+                ],
+                internalNotes: `Automatyczne zapotrzebowanie wygenerowane z Dashboardu - niski stan SKU.`
+            };
+
+            setPurchaseOrders(prev => {
+                const updated = [newPO, ...prev];
+                window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+                return updated;
+            });
+
+            handleAddAllocation({
+                timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                sku: product.sku,
+                productName: product.name,
+                zone: product.locationCode || 'A-01-01',
+                qty: 10,
+                type: 'Zlecenie zakupu PO (Draft)',
+                user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
+            });
+
+            alert(`Wygenerowano zapotrzebowanie zakupowe ${newPoId} na 100 sztuk. Przejdź do zakładki "Dostawy", aby zatwierdzić przyjęcie towaru od dostawcy.`);
+        } catch (err: any) {
+            console.error("Restock failed:", err);
+            alert(`Nie udało się wygenerować zapotrzebowania: ${err.message}`);
+        }
+    };
+
+    const handleRelocateProduct = (sku: string, newLocationCode: string, newZone: string) => {
+        const prod = products.find(p => p.sku === sku);
+        const prodName = prod ? prod.name : 'Towar';
+        const currentQtyPallets = prod ? Math.ceil(prod.stock / 10) || 1 : 1;
+
+        setProducts(prev => prev.map(p => {
+            if (p.sku === sku) {
+                return {
+                    ...p,
+                    locationCode: newLocationCode,
+                    zone: newZone
+                };
+            }
+            return p;
+        }));
+
+        handleAddAllocation({
+            timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            sku: sku,
+            productName: prodName,
+            zone: newZone,
+            qty: currentQtyPallets,
+            type: 'Relokacja wewnętrzna',
+            user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
+        });
     };
 
     const handleCreateProduct = async (newProd: any) => {
@@ -1103,6 +1389,8 @@ export default function App() {
                     readNotificationIds={readNotificationIds}
                     onMarkAllAsRead={handleMarkAllAsRead}
                     onNotificationClick={handleNotificationClick}
+                    onRefreshData={handleRefreshAll}
+                    isRefreshing={isRefreshing}
                 />
 
                 {isMobileMenuOpen && (
@@ -1122,6 +1410,7 @@ export default function App() {
                             zones={zones}
                             allocationsLog={allocationsLog}
                             onAddAllocation={handleAddAllocation}
+                            onRestockProduct={handleRestockItem}
                         />
                     )}
 
@@ -1131,6 +1420,7 @@ export default function App() {
                             products={products}
                             zones={zones}
                             staffList={staffList}
+                            onRelocateProduct={handleRelocateProduct}
                         />
                     )}
 
@@ -1143,6 +1433,19 @@ export default function App() {
                             onUpdateOrderStatus={handleUpdateOrderStatus}
                             onAddOrderChangeLog={handleAddOrderChangeLog}
                             highlightedOrderId={highlightedItemId}
+                        />
+                    )}
+
+                    {currentTab === 'supplies' && isTabAllowed('supplies') && (
+                        <Supplies
+                            purchaseOrders={purchaseOrders}
+                            products={products}
+                            onCreatePurchaseOrder={handleCreatePurchaseOrder}
+                            onUpdatePurchaseOrder={handleUpdatePurchaseOrder}
+                            onReceivePurchaseOrder={handleReceivePurchaseOrder}
+                            onCancelPurchaseOrder={handleCancelPurchaseOrder}
+                            onGroupPurchaseOrders={handleGroupPurchaseOrders}
+                            onReceiveRmaReturn={handleReceiveRmaReturn}
                         />
                     )}
 
