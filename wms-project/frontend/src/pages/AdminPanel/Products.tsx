@@ -31,15 +31,18 @@ interface ProductsProps {
     products: Product[];
     onUpdateStock: (product: Product, delta: number) => Promise<void>;
     onRestockItem: (product: Product) => Promise<void>;
+    onUpdateThreshold: (product: Product, threshold: number) => Promise<void>;
     highlightedSku?: string | null;
 }
 
-export default function Products({ products, onUpdateStock, onRestockItem, highlightedSku }: ProductsProps) {
+export default function Products({ products, onUpdateStock, onRestockItem, onUpdateThreshold, highlightedSku }: ProductsProps) {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [draftStocks, setDraftStocks] = useState<Record<string, number>>({});
+    const [draftThresholds, setDraftThresholds] = useState<Record<string, number>>({});
     const [pendingSku, setPendingSku] = useState('');
+    const [pendingThresholdSku, setPendingThresholdSku] = useState('');
     const [stockError, setStockError] = useState('');
 
     const [productImages] = useState<Record<string, string>>(() => {
@@ -104,6 +107,27 @@ export default function Products({ products, onUpdateStock, onRestockItem, highl
             setStockError(error.message || 'Nie udało się zaktualizować stanu.');
         } finally {
             setPendingSku('');
+        }
+    };
+
+    const saveThresholdUpdate = async (product: Product) => {
+        const draft = draftThresholds[product.sku];
+        if (draft === undefined) return;
+
+        setStockError('');
+        setPendingThresholdSku(product.sku);
+
+        try {
+            await onUpdateThreshold(product, draft);
+            setDraftThresholds(prev => {
+                const copy = { ...prev };
+                delete copy[product.sku];
+                return copy;
+            });
+        } catch (error: any) {
+            setStockError(error.message || 'Nie udało się zaktualizować progu ostrzeżenia.');
+        } finally {
+            setPendingThresholdSku('');
         }
     };
 
@@ -236,7 +260,31 @@ export default function Products({ products, onUpdateStock, onRestockItem, highl
                                         </td>
                                         <td className="py-3 px-4 text-zinc-500">{getCategoryLabel(p.category)}</td>
                                         <td className="py-3 px-4 font-mono font-bold text-zinc-650">{p.locationCode || `Korytarz ${p.zone}`}</td>
-                                        <td className="py-3 px-4 text-right font-mono text-zinc-500">{p.reorderThreshold}</td>
+                                        <td className="py-3 px-4 text-right select-none">
+                                            <div className="flex justify-end items-center gap-1.5 flex-nowrap">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={draftThresholds[p.sku] !== undefined ? draftThresholds[p.sku] : p.reorderThreshold}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value);
+                                                        setDraftThresholds(prev => ({ ...prev, [p.sku]: isNaN(val) ? 0 : val }));
+                                                    }}
+                                                    disabled={pendingThresholdSku === p.sku}
+                                                    className="w-12 h-6 text-center font-mono text-[11px] font-bold text-zinc-800 border border-zinc-250 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                />
+                                                {(draftThresholds[p.sku] !== undefined && draftThresholds[p.sku] !== p.reorderThreshold) && (
+                                                    <button
+                                                        onClick={() => saveThresholdUpdate(p)}
+                                                        disabled={pendingThresholdSku === p.sku}
+                                                        className="h-6 w-6 rounded bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors cursor-pointer shadow-sm shrink-0 border-none active:scale-[0.93]"
+                                                        title="Zapisz próg ostrzeżenia"
+                                                    >
+                                                        <Check className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="py-3 px-4 text-right font-mono text-zinc-650">{(p.price || 199.99).toFixed(2)}</td>
                                         <td className="py-3 px-4 text-center select-none">
                                             {(() => {

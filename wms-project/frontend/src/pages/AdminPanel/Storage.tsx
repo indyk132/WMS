@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers } from 'lucide-react';
+import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 
 interface StorageProps {
@@ -15,6 +15,91 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
     const [rackSearch, setRackSearch] = useState('');
     const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
     const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'info' | 'warning' } | null>(null);
+
+    const [labelsToPrint, setLabelsToPrint] = useState<any[]>([]);
+    const [isPrinting, setIsPrinting] = useState(false);
+
+    const preloadAndPrint = (list: any[]) => {
+        setIsPrinting(true);
+        setLabelsToPrint(list);
+        
+        let loadedCount = 0;
+        const totalCount = list.length;
+        
+        if (totalCount === 0) {
+            setIsPrinting(false);
+            return;
+        }
+        
+        list.forEach(lbl => {
+            const img = new Image();
+            img.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(lbl.code)}`;
+            img.onload = () => {
+                loadedCount++;
+                if (loadedCount === totalCount) {
+                    setTimeout(() => {
+                        window.print();
+                        setLabelsToPrint([]);
+                        setIsPrinting(false);
+                    }, 250);
+                }
+            };
+            img.onerror = () => {
+                loadedCount++;
+                if (loadedCount === totalCount) {
+                    setTimeout(() => {
+                        window.print();
+                        setLabelsToPrint([]);
+                        setIsPrinting(false);
+                    }, 250);
+                }
+            };
+        });
+    };
+
+    const handlePrintSingleSlotLabel = () => {
+        if (!selectedSlot) return;
+        const sector = selectedZone.id[0];
+        const aisle = selectedZone.id[1];
+        const code = `${sector}-0${aisle}-0${selectedSlot.rack}-0${selectedSlot.level}-0${selectedSlot.slot}`;
+        
+        const label = {
+            code,
+            description: `Sektor ${sector} | Korytarz ${aisle} | Regał ${selectedSlot.rack} | Poziom ${selectedSlot.level} | Gniazdo ${selectedSlot.slot}`,
+            sku: selectedSlot.isOccupied ? selectedSlot.product.sku : '',
+            productName: selectedSlot.isOccupied ? selectedSlot.product.name : ''
+        };
+        
+        preloadAndPrint([label]);
+    };
+
+    const handlePrintAllZoneLabels = () => {
+        const list: any[] = [];
+        const sector = selectedZone.id[0];
+        const aisle = selectedZone.id[1];
+        
+        for (let rackNum = 1; rackNum <= 3; rackNum++) {
+            for (let levelNum = 1; levelNum <= 4; levelNum++) {
+                for (let slotNum = 1; slotNum <= 3; slotNum++) {
+                    const prod = allocatedProducts.find(p => {
+                        const loc = parseLocation(p.locationCode);
+                        const slotIndex = (p.sku.charCodeAt(p.sku.length - 1) % 3) + 1;
+                        return loc.rack === rackNum && loc.level === levelNum && slotIndex === slotNum;
+                    });
+                    
+                    const code = `${sector}-0${aisle}-0${rackNum}-0${levelNum}-0${slotNum}`;
+                    list.push({
+                        code,
+                        description: `Sektor ${sector} | Korytarz ${aisle} | Regał ${rackNum} | Poziom ${levelNum} | Gniazdo ${slotNum}`,
+                        sku: prod ? prod.sku : '',
+                        productName: prod ? prod.name : ''
+                    });
+                }
+            }
+        }
+        
+        preloadAndPrint(list);
+    };
 
     React.useEffect(() => {
         if (highlightedZoneId) {
@@ -477,33 +562,51 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                 </div>
                             )}
 
-                            <div className="flex justify-end gap-2.5 pt-2 border-t border-zinc-200">
-                                {selectedSlot.isOccupied ? (
-                                    <>
-                                        <button
-                                            onClick={() => showNotification(`Zlecenie kompletacji SKU ${selectedSlot.product.sku} z regału R${selectedSlot.rack} poziom P${selectedSlot.level} zostało przekazane do terminala mobilnego.`, 'info')}
-                                            className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] transition-colors cursor-pointer shadow-sm border-none"
-                                        >
-                                            Kompletuj (Pick)
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                showNotification(`Uzupełniono lokalizację o +10 sztuk towaru (Pomyślny restock).`, 'success');
-                                            }}
-                                            className="h-8 px-3 border border-zinc-300 hover:bg-zinc-100 text-zinc-700 font-bold text-[11px] rounded transition-colors cursor-pointer bg-white"
-                                        >
-                                            Uzupełnij (Restock)
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button
-                                        onClick={() => showNotification(`Rozpoczęto alokację nowego asortymentu w gnieździe R${selectedSlot.rack}-P${selectedSlot.level}-G${selectedSlot.slot}.`, 'info')}
-                                        className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] transition-colors cursor-pointer shadow-sm border-none"
-                                    >
-                                        Przydziel Towar (Allocate)
-                                    </button>
-                                )}
-                            </div>
+                             <div className="flex justify-end gap-2.5 pt-2 border-t border-zinc-200">
+                                 {selectedSlot.isOccupied ? (
+                                     <>
+                                         <button
+                                             onClick={handlePrintSingleSlotLabel}
+                                             disabled={isPrinting}
+                                             className="h-8 px-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1.5 border-none shadow-sm disabled:opacity-50"
+                                         >
+                                             <Printer className="w-3.5 h-3.5" />
+                                             {isPrinting ? 'Czekaj...' : 'Drukuj QR'}
+                                         </button>
+                                         <button
+                                             onClick={() => showNotification(`Zlecenie kompletacji SKU ${selectedSlot.product.sku} z regału R${selectedSlot.rack} poziom P${selectedSlot.level} zostało przekazane do terminala mobilnego.`, 'info')}
+                                             className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] transition-colors cursor-pointer shadow-sm border-none"
+                                         >
+                                             Kompletuj (Pick)
+                                         </button>
+                                         <button
+                                             onClick={() => {
+                                                 showNotification(`Uzupełniono lokalizację o +10 sztuk towaru (Pomyślny restock).`, 'success');
+                                             }}
+                                             className="h-8 px-3 border border-zinc-300 hover:bg-zinc-100 text-zinc-700 font-bold text-[11px] rounded transition-colors cursor-pointer bg-white"
+                                         >
+                                             Uzupełnij (Restock)
+                                         </button>
+                                     </>
+                                 ) : (
+                                     <>
+                                         <button
+                                             onClick={handlePrintSingleSlotLabel}
+                                             disabled={isPrinting}
+                                             className="h-8 px-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1.5 border-none shadow-sm disabled:opacity-50"
+                                         >
+                                             <Printer className="w-3.5 h-3.5" />
+                                             {isPrinting ? 'Czekaj...' : 'Drukuj QR'}
+                                         </button>
+                                         <button
+                                             onClick={() => showNotification(`Rozpoczęto alokację nowego asortymentu w gnieździe R${selectedSlot.rack}-P${selectedSlot.level}-G${selectedSlot.slot}.`, 'info')}
+                                             className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] transition-colors cursor-pointer shadow-sm border-none"
+                                         >
+                                             Przydziel Towar (Allocate)
+                                         </button>
+                                     </>
+                                 )}
+                             </div>
                         </div>
                     )}
                 </div>
@@ -583,6 +686,17 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                         </div>
                     </div>
 
+                    <div className="pt-4 border-t border-zinc-200 w-full">
+                        <button
+                            onClick={handlePrintAllZoneLabels}
+                            disabled={isPrinting}
+                            className="w-full h-10 bg-zinc-900 hover:bg-zinc-800 text-white rounded font-bold transition-all text-xs cursor-pointer flex items-center justify-center gap-1.5 border-none shadow-md disabled:opacity-50"
+                        >
+                            <Printer className="w-4 h-4" />
+                            {isPrinting ? 'Generowanie kodów QR...' : `Drukuj kody QR dla korytarza ${selectedZone.id}`}
+                        </button>
+                    </div>
+
                     <div className="pt-4 border-t border-zinc-200 flex gap-3 mt-auto font-sans select-none">
                         <button
                             onClick={() => showNotification(`Przeglądanie inwentarza fizycznego korytarza ${selectedZone.id}: Wykryto ${allocatedProducts.length} asortymentów.`, 'info')}
@@ -604,6 +718,78 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                     </div>
                 </div>
             </div>
+
+            {/* System Etykiet Magazynowych do druku */}
+            {labelsToPrint.length > 0 && (
+                <div id="print-labels-container" className="hidden print:block bg-white text-zinc-950 font-sans">
+                    {labelsToPrint.map((lbl, idx) => (
+                        <div key={idx} className="print-label-card">
+                            <div className="text-[10px] font-black tracking-widest text-zinc-400 uppercase border-b border-zinc-200 pb-1.5 w-full mb-3 text-center">
+                                Logistics OS - Etykieta Regałowa
+                            </div>
+                            
+                            <div className="flex justify-center my-2">
+                                <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(lbl.code)}`} 
+                                    alt="Kod QR"
+                                    className="w-36 h-36 border border-zinc-200 p-1 bg-white"
+                                />
+                            </div>
+                            
+                            <div className="text-2xl font-black font-mono tracking-widest text-center text-zinc-900 border-2 border-zinc-900 px-4 py-1.5 rounded-lg bg-zinc-50 my-3">
+                                {lbl.code}
+                            </div>
+                            
+                            <div className="text-[9px] text-zinc-500 font-bold text-center font-mono uppercase tracking-wide">
+                                {lbl.description}
+                            </div>
+
+                            <div className="text-[9px] text-zinc-800 font-black text-center mt-3 border-t border-dashed border-zinc-300 pt-2 w-full truncate font-mono">
+                                {lbl.sku ? `SKU: ${lbl.sku} | ${lbl.productName}` : "LOKALIZACJA WOLNA"}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <style>{`
+                @media print {
+                    body {
+                        background: white !important;
+                        color: black !important;
+                    }
+                    #root > div:not(#print-labels-container) {
+                        display: none !important;
+                    }
+                    #print-labels-container {
+                        display: block !important;
+                        width: 100% !important;
+                        height: auto !important;
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                    .print-label-card {
+                        page-break-after: always !important;
+                        break-after: page !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        border: 3px solid #0f172a !important;
+                        border-radius: 12px !important;
+                        padding: 20px !important;
+                        margin: 40px auto !important;
+                        width: 100mm !important;
+                        height: 100mm !important;
+                        box-sizing: border-box !important;
+                        background: white !important;
+                        box-shadow: none !important;
+                    }
+                }
+            `}</style>
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-50 p-4 rounded-xl border flex items-center gap-3 shadow-2xl animate-bounce ${

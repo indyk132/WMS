@@ -331,6 +331,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     if (onUpdateOrder && selectedOrderId) {
       onUpdateOrder(selectedOrderId, {
         isPacked: true,
+        packedBy: workerName,
         internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Spakowano do ${cartonSize === 'Carton-S' ? 'Koperta / Karton S' : cartonSize === 'Carton-L' ? 'Karton Duży L' : 'Karton Średni M'} o wadze ${weightKg.toFixed(2)}kg przez ${workerName}.`,
         internalNotesActor: workerName,
       });
@@ -349,6 +350,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
       onUpdateOrder(pData.orderId, {
         status: 'Spakowane',
         isPacked: true,
+        packedBy: workerName,
         internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę DPD.`,
         internalNotesActor: workerName,
         waybillPdfDate: new Date().toLocaleDateString('pl-PL')

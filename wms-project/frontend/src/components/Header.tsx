@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone, RefreshCw } from 'lucide-react';
+import { Volume2, VolumeX, Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
     currentTab: string;
@@ -15,6 +15,8 @@ interface HeaderProps {
     onNotificationClick: (targetTab: string, notificationId: string, targetId?: string) => void;
     onRefreshData?: () => void;
     isRefreshing?: boolean;
+    soundEnabled?: boolean;
+    onToggleSound?: () => void;
 }
 
 export default function Header({
@@ -31,6 +33,8 @@ export default function Header({
     onNotificationClick,
     onRefreshData,
     isRefreshing = false,
+    soundEnabled = true,
+    onToggleSound,
 }: HeaderProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -124,6 +128,15 @@ export default function Header({
                             title="Odśwież dane z bazy"
                         >
                             <RefreshCw className={`w-4.5 h-4.5 text-zinc-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                    )}
+                    {onToggleSound && (
+                        <button 
+                            onClick={onToggleSound}
+                            className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer flex items-center justify-center"
+                            title={soundEnabled ? "Wycisz dźwięki powiadomień" : "Włącz dźwięki powiadomień"}
+                        >
+                            {soundEnabled ? <Volume2 className="w-4.5 h-4.5 text-zinc-600" /> : <VolumeX className="w-4.5 h-4.5 text-zinc-400" />}
                         </button>
                     )}
                     <div className="relative">

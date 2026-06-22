@@ -3,9 +3,12 @@ const { sendDbError, toInteger } = require('../utils/httpErrors');
 
 const CATEGORY_ZONE_GROUPS = {
     Zywnosc: ['Zywnosc', 'Przyjecia mieszane'],
+    'Artykuły spożywcze': ['Zywnosc', 'Przyjecia mieszane'],
     Elektronika: ['Elektronika i biuro', 'Przyjecia mieszane'],
     Biuro: ['Elektronika i biuro', 'Przyjecia mieszane'],
     Motoryzacja: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+    'Części samochodowe': ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
+    'Chemia samochodowa': ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
     Chemia: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
     BHP: ['Motoryzacja, chemia i BHP', 'Przyjecia mieszane'],
 };
@@ -69,9 +72,12 @@ const getPreferredLocationId = async (client, product, requestedLocationId) => {
 
     const categoryPrefix = {
         Zywnosc: 'A-%',
+        'Artykuły spożywcze': 'A-%',
         Elektronika: 'B-%',
         Biuro: 'B-%',
         Motoryzacja: 'C-%',
+        'Części samochodowe': 'C-%',
+        'Chemia samochodowa': 'C-%',
         Chemia: 'C-%',
         BHP: 'C-%',
     }[product.category] || 'A-%';

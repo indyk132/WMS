@@ -13,6 +13,7 @@ interface DashboardProps {
     onAddAllocation: (newAlloc: any) => void;
     allocationsLog: any[];
     onRestockProduct?: (product: Product) => void;
+    activitiesLog?: any[];
 }
 
 export default function Dashboard({
@@ -20,7 +21,8 @@ export default function Dashboard({
     zones,
     onAddAllocation,
     allocationsLog = [],
-    onRestockProduct
+    onRestockProduct,
+    activitiesLog = []
 }: DashboardProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [productImages] = useState<Record<string, string>>(() => {
@@ -69,9 +71,12 @@ export default function Dashboard({
         const zoneGroup = getZoneGroup(zoneId);
         const allowedGroups = {
             'Zywnosc': ['Żywność (Ambient)'],
+            'Artykuły spożywcze': ['Żywność (Ambient)'],
             'Elektronika': ['Tech/Biuro (Cold)'],
             'Biuro': ['Tech/Biuro (Cold)'],
             'Motoryzacja': ['Chem/Hazmat (Silesia)'],
+            'Części samochodowe': ['Chem/Hazmat (Silesia)'],
+            'Chemia samochodowa': ['Chem/Hazmat (Silesia)'],
             'Chemia': ['Chem/Hazmat (Silesia)'],
             'BHP': ['Chem/Hazmat (Silesia)'],
         }[category] || [];
@@ -440,65 +445,163 @@ export default function Dashboard({
                 </div>
             </div>
 
-            {/* Dziennik ostatnich alokacji */}
-            <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden mt-6">
-                <div className="px-6 py-4.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div className="flex items-center gap-2">
-                        <Database className="w-4.5 h-4.5 text-[#2563eb]" />
-                        <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
-                            Rejestr Zdarzeń i Alokacji (Live Feed)
-                        </h3>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-250 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-mono uppercase">
-                        <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-ping"></span> Sync Active
-                    </span>
-                </div>
-                
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                        <tr className="bg-slate-50/30 text-slate-400 font-bold border-b border-slate-100 text-[10px] font-mono uppercase tracking-wider">
-                            <th className="py-3 px-6">Timestamp</th>
-                            <th className="py-3 px-6">Rodzaj operacji</th>
-                            <th className="py-3 px-6">Kod SKU</th>
-                            <th className="py-3 px-6">Opis Towaru</th>
-                            <th className="py-3 px-6">Lokacja</th>
-                            <th className="py-3 px-6 text-right">Ilość Palet</th>
-                            <th className="py-3 px-6 text-right">Zleceniodawca</th>
-                        </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 truncate text-[12px] font-medium text-slate-700">
-                        {allocationsLog.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="py-12 text-center text-slate-400 font-bold bg-white">Brak zapisanych alokacji w rejestrze systemowym. Kliknij „Nowa Alokacja”, aby zainicjować system.</td>
-                            </tr>
-                        ) : (
-                            allocationsLog.map((log, idx) => {
-                                const isInbound = log.type && log.type.includes('Przyjęcie');
-                                return (
-                                    <tr key={idx} className="hover:bg-slate-50-70 transition-all">
-                                        <td className="py-3.5 px-6 font-mono text-slate-450 text-[11px]">{log.timestamp}</td>
-                                        <td className="py-3.5 px-6 select-none">
-                                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase border ${
-                                                isInbound
-                                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                                    : 'bg-blue-50 text-blue-750 border-blue-200'
-                                            }`}>
-                                                <Activity className="w-3 h-3" />
-                                                {log.type}
-                                            </span>
-                                        </td>
-                                        <td className="py-3.5 px-6 font-mono font-bold text-[#0052cc]">{log.sku}</td>
-                                        <td className="py-3.5 px-6 font-semibold text-slate-900">{log.productName}</td>
-                                        <td className="py-3.5 px-6 font-mono font-bold text-slate-600 bg-slate-50/50 text-center rounded">{log.zone}</td>
-                                        <td className="py-3.5 px-6 text-right font-mono font-extrabold text-[#0f172a]">{log.qty} PL</td>
-                                        <td className="py-3.5 px-6 text-right">{log.user}</td>
+            {/* Dziennik ostatnich alokacji oraz Oś Czasu Aktywności */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                {/* Rejestr Zdarzeń i Alokacji (2/3 szerokości) */}
+                <div className="lg:col-span-2 bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div className="px-6 py-4.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <div className="flex items-center gap-2">
+                                <Database className="w-4.5 h-4.5 text-[#2563eb]" />
+                                <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
+                                    Rejestr Zdarzeń i Alokacji (Live Feed)
+                                </h3>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-250 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-mono uppercase">
+                                <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full animate-ping"></span> Sync Active
+                            </span>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                <tr className="bg-slate-50/30 text-slate-400 font-bold border-b border-slate-100 text-[10px] font-mono uppercase tracking-wider">
+                                    <th className="py-3 px-6">Timestamp</th>
+                                    <th className="py-3 px-6">Rodzaj operacji</th>
+                                    <th className="py-3 px-6">Kod SKU</th>
+                                    <th className="py-3 px-6">Opis Towaru</th>
+                                    <th className="py-3 px-6">Lokacja</th>
+                                    <th className="py-3 px-6 text-right">Ilość Palet</th>
+                                    <th className="py-3 px-6 text-right">Zleceniodawca</th>
+                                </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 truncate text-[12px] font-medium text-slate-700">
+                                {allocationsLog.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="py-12 text-center text-slate-400 font-bold bg-white">Brak zapisanych alokacji w rejestrze systemowym. Kliknij „Nowa Alokacja”, aby zainicjować system.</td>
                                     </tr>
-                                );
-                            })
-                        )}
-                        </tbody>
-                    </table>
+                                ) : (
+                                    allocationsLog.slice(0, 10).map((log, idx) => {
+                                        const isInbound = log.type && log.type.includes('Przyjęcie');
+                                        return (
+                                            <tr key={idx} className="hover:bg-slate-50-70 transition-all">
+                                                <td className="py-3.5 px-6 font-mono text-slate-450 text-[11px]">{log.timestamp}</td>
+                                                <td className="py-3.5 px-6 select-none">
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase border ${
+                                                        isInbound
+                                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                            : 'bg-blue-50 text-blue-750 border-blue-200'
+                                                    }`}>
+                                                        <Activity className="w-3 h-3" />
+                                                        {log.type}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3.5 px-6 font-mono font-bold text-[#0052cc]">{log.sku}</td>
+                                                <td className="py-3.5 px-6 font-semibold text-slate-900">{log.productName}</td>
+                                                <td className="py-3.5 px-6 font-mono font-bold text-slate-600 bg-slate-50/50 text-center rounded">{log.zone}</td>
+                                                <td className="py-3.5 px-6 text-right font-mono font-extrabold text-[#0f172a]">{log.qty} PL</td>
+                                                <td className="py-3.5 px-6 text-right text-slate-500 font-mono text-[11px]">{log.user}</td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Oś Czasu Aktywności (1/3 szerokości) */}
+                <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm overflow-hidden flex flex-col justify-between">
+                    <div>
+                        <div className="px-6 py-4.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <div className="flex items-center gap-2">
+                                <Clock className="w-4.5 h-4.5 text-indigo-600" />
+                                <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
+                                    Live Activity Timeline
+                                </h3>
+                            </div>
+                            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full uppercase tracking-tight font-mono">
+                                Live Feed
+                            </span>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[380px] scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                            {activitiesLog.length === 0 ? (
+                                <div className="py-12 text-center text-slate-400 font-bold bg-white">
+                                    Brak zarejestrowanych aktywności w systemie.
+                                </div>
+                            ) : (
+                                <div className="relative border-l-2 border-slate-100 pl-4 ml-3 space-y-6">
+                                    {activitiesLog.map((act, idx) => {
+                                        let iconColor = 'text-blue-600 bg-blue-50 border-blue-200';
+                                        let iconEl = <Package className="w-3.5 h-3.5" />;
+                                        let badgeText = 'Operacja';
+
+                                        if (act.type === 'pick') {
+                                            iconColor = 'text-indigo-600 bg-indigo-50 border-indigo-200';
+                                            iconEl = <Package className="w-3.5 h-3.5 animate-pulse" />;
+                                            badgeText = 'Kompletacja';
+                                        } else if (act.type === 'pack') {
+                                            iconColor = 'text-emerald-600 bg-emerald-50 border-emerald-200';
+                                            iconEl = <PackageCheck className="w-3.5 h-3.5" />;
+                                            badgeText = 'Pakowanie';
+                                        } else if (act.type === 'receive') {
+                                            iconColor = 'text-sky-600 bg-sky-50 border-sky-200';
+                                            iconEl = <ArrowDown className="w-3.5 h-3.5" />;
+                                            badgeText = 'Dostawa';
+                                        } else if (act.type === 'rma') {
+                                            iconColor = 'text-amber-600 bg-amber-50 border-amber-200';
+                                            iconEl = <RefreshCw className="w-3.5 h-3.5" />;
+                                            badgeText = 'Zwrot RMA';
+                                        } else if (act.type === 'relocate') {
+                                            iconColor = 'text-purple-600 bg-purple-50 border-purple-200';
+                                            iconEl = <Activity className="w-3.5 h-3.5" />;
+                                            badgeText = 'Relokacja';
+                                        }
+
+                                        return (
+                                            <div key={act.id || idx} className="relative group transition-all duration-200 hover:translate-x-1">
+                                                {/* Łącznik kropkowy na linii */}
+                                                <span className={`absolute -left-[27px] top-1.5 flex items-center justify-center w-5.5 h-5.5 rounded-full border ${iconColor} shadow-sm z-10`}>
+                                                    {iconEl}
+                                                </span>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border leading-none tracking-wider scale-95 -ml-1 ${
+                                                            act.type === 'pick' ? 'text-indigo-700 bg-indigo-50 border-indigo-150' :
+                                                            act.type === 'pack' ? 'text-emerald-700 bg-emerald-50 border-emerald-150' :
+                                                            act.type === 'receive' ? 'text-sky-700 bg-sky-50 border-sky-150' :
+                                                            act.type === 'rma' ? 'text-amber-700 bg-amber-50 border-amber-150' :
+                                                            'text-purple-700 bg-purple-50 border-purple-150'
+                                                        }`}>
+                                                            {badgeText}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-slate-400 font-mono flex items-center gap-1">
+                                                            <Clock className="w-3 h-3 text-slate-350" /> {act.timeStr || act.timestamp}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="text-[12px] font-black text-slate-800 leading-snug">
+                                                        {act.message}
+                                                    </div>
+
+                                                    <div className="text-[11px] text-slate-500 font-medium leading-relaxed bg-slate-50 p-2 rounded border border-slate-100/80">
+                                                        <div className="flex justify-between items-center text-[10px] text-slate-450 border-b border-slate-200/50 pb-1 mb-1 font-mono">
+                                                            <span>Wykonawca:</span>
+                                                            <span className="font-bold text-slate-700">{act.user}</span>
+                                                        </div>
+                                                        {act.details}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import ProfileModal from './components/ProfileModal';
@@ -17,7 +17,8 @@ import Supplies from './pages/AdminPanel/Supplies';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
@@ -273,6 +274,45 @@ export default function App() {
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
     const [searchQuery, setSearchQuery] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+        const stored = window.localStorage.getItem('wms-sound-enabled');
+        return stored !== 'false';
+    });
+
+    const toggleSound = () => {
+        setSoundEnabled(prev => {
+            const next = !prev;
+            window.localStorage.setItem('wms-sound-enabled', String(next));
+            return next;
+        });
+    };
+
+    const [toasts, setToasts] = useState<any[]>([]);
+
+    const addToast = (title: string, text: string, type: 'error' | 'warning' | 'info' | 'success') => {
+        const id = `toast-${Date.now()}-${Math.random()}`;
+        setToasts(prev => [...prev, { id, title, text, type }]);
+        
+        if (soundEnabled) {
+            if (type === 'error') {
+                sounds.playError();
+            } else if (type === 'success') {
+                sounds.playSuccess();
+            } else {
+                sounds.playBeep();
+            }
+        }
+
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+    };
+
+    const removeToast = (id: string) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    };
+
     const [inventorySync, setInventorySync] = useState({ isLoading: false, error: '' });
     const [usersSync, setUsersSync] = useState({ isLoading: false, error: '' });
     const [ordersSync, setOrdersSync] = useState({ isLoading: false, error: '' });
@@ -539,6 +579,20 @@ export default function App() {
                 window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
                 return updated;
             });
+
+            const operator = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
+            const itemsSummary = po.items.map((item: any) => `${item.name} (SKU: ${item.sku}, Ilość: ${item.qtyOrdered})`).join(', ');
+            logActivity(
+                'receive',
+                operator,
+                `Przyjęto dostawę ${poId}`,
+                `Dostawca: ${po.vendorName}. Produkty: ${itemsSummary}`
+            );
+            addToast(
+                'Dostawa przyjęta',
+                `Pomyślnie przyjęto dostawę ${poId} od ${po.vendorName}.`,
+                'success'
+            );
         } catch (err: any) {
             console.error("Receive PO failed:", err);
             alert(`Błąd podczas przyjmowania dostawy: ${err.message}`);
@@ -572,6 +626,20 @@ export default function App() {
                 window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
                 return updated;
             });
+
+            const operator = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
+            const itemsSummary = po.items.map((item: any) => `${item.name} (SKU: ${item.sku}, Ilość: ${item.qtyOrdered})`).join(', ');
+            logActivity(
+                'rma',
+                operator,
+                `Zatwierdzono zwrot RMA ${rmaId}`,
+                `Zwrot od klienta. Produkty: ${itemsSummary}`
+            );
+            addToast(
+                'Zwrot RMA przyjęty',
+                `Pomyślnie zatwierdzono zwrot RMA dla zamówienia ${rmaId}.`,
+                'success'
+            );
         } catch (err: any) {
             console.error("Receive RMA return failed:", err);
             alert(`Błąd podczas przyjmowania zwrotu RMA: ${err.message}`);
@@ -668,6 +736,75 @@ export default function App() {
         { id: 'EMP-3048', employeeId: 'EMP-3048', userId: '3048', firstName: 'Maciej', lastName: 'Kaczmarek', email: 'planner@logistics-os.com', role: 'Logistics Planner', zoneAssignment: 'Global Access', status: 'Active', avatarUrl: null },
         { id: 'EMP-4059', employeeId: 'EMP-4059', userId: '4059', firstName: 'Hanna', lastName: 'Wiśniewska', email: 'auditor@logistics-os.com', role: 'Inventory Auditor', zoneAssignment: 'Aisle 1-12 & B1-B7', status: 'Active', avatarUrl: null }
     ]);
+
+    const [activitiesLog, setActivitiesLog] = useState<any[]>(() => {
+        try {
+            const stored = window.localStorage.getItem('wms-activities-log');
+            if (stored) return JSON.parse(stored);
+        } catch (e) {
+            console.error("Failed to parse stored activities log:", e);
+        }
+        return [
+            {
+                id: 'act-init-1',
+                timestamp: new Date(Date.now() - 3600000).toLocaleString('pl-PL'),
+                timeStr: new Date(Date.now() - 3600000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                type: 'pick',
+                user: 'Jan Kowalski (EMP-1102)',
+                message: 'Zakończono pobieranie zamówienia ORD-89498',
+                details: 'Lokacja: A-04-12, strefa kompletacji'
+            },
+            {
+                id: 'act-init-2',
+                timestamp: new Date(Date.now() - 7200000).toLocaleString('pl-PL'),
+                timeStr: new Date(Date.now() - 7200000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                type: 'pack',
+                user: 'Mariusz Pakosz (EMP-9921)',
+                message: 'Spakowano i zweryfikowano zamówienie ORD-89495',
+                details: 'Karton Średni M, waga 4.5kg, etykieta DPD'
+            },
+            {
+                id: 'act-init-3',
+                timestamp: new Date(Date.now() - 10800000).toLocaleString('pl-PL'),
+                timeStr: new Date(Date.now() - 10800000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                type: 'receive',
+                user: 'Maciej Kaczmarek (EMP-3048)',
+                message: 'Przyjęto dostawę PO-00812',
+                details: '100 sztuk SKU-10492, dostawca AutoParts'
+            },
+            {
+                id: 'act-init-4',
+                timestamp: new Date(Date.now() - 14400000).toLocaleString('pl-PL'),
+                timeStr: new Date(Date.now() - 14400000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                type: 'rma',
+                user: 'Hanna Wiśniewska (EMP-4059)',
+                message: 'Zatwierdzono zwrot RMA-003',
+                details: '1 sztuka SKU-20391, uszkodzenie w transporcie'
+            },
+            {
+                id: 'act-init-5',
+                timestamp: new Date(Date.now() - 18000000).toLocaleString('pl-PL'),
+                timeStr: new Date(Date.now() - 18000000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                type: 'relocate',
+                user: 'Wojtek Nowak (EMP-9104)',
+                message: 'Wykonano relokację SKU-20391',
+                details: 'Przeniesiono do nowej lokacji B-02-05'
+            }
+        ];
+    });
+
+    const logActivity = (type: 'pick' | 'pack' | 'receive' | 'rma' | 'relocate', user: string, message: string, details: string) => {
+        const newLog = {
+            id: `act-${Date.now()}-${Math.random()}`,
+            timestamp: new Date().toLocaleString('pl-PL'),
+            timeStr: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+            type,
+            user,
+            message,
+            details
+        };
+        setActivitiesLog(prev => [newLog, ...prev].slice(0, 50));
+    };
 
     const [allocationsLog, setAllocationsLog] = useState<any[]>([
         { timestamp: '09:35', sku: 'SKU-10492', productName: 'Płyn hamulcowy DOT-4', zone: 'C3', qty: 12, type: 'Przyjęcie towaru', user: 'Jan Kowalski (EMP-1102)' },
@@ -774,11 +911,40 @@ export default function App() {
     }, [orders]);
 
     useEffect(() => {
+        window.localStorage.setItem('wms-activities-log', JSON.stringify(activitiesLog));
+    }, [activitiesLog]);
+
+    useEffect(() => {
         const handleStorage = (e: StorageEvent) => {
             if (e.key === 'wms-orders' && e.newValue) {
                 try {
                     const parsed = JSON.parse(e.newValue);
                     if (JSON.stringify(parsed) !== JSON.stringify(orders)) {
+                        const oldOrdersMap = new Map(orders.map(o => [o.id, o]));
+                        parsed.forEach((newOrd: any) => {
+                            const oldOrd = oldOrdersMap.get(newOrd.id);
+                            if (oldOrd && oldOrd.status !== newOrd.status) {
+                                if (newOrd.status === 'Oczekuje na pakowanie') {
+                                    addToast(
+                                        'Kompletacja zakończona',
+                                        `Zamówienie ${newOrd.id} zostało skompletowane przez ${newOrd.pickedBy || 'Pickera'}. Pojemnik: ${newOrd.binId || 'Pojemnik'}`,
+                                        'success'
+                                    );
+                                } else if (newOrd.status === 'Spakowane') {
+                                    addToast(
+                                        'Zamówienie spakowane',
+                                        `Zamówienie ${newOrd.id} zostało spakowane przez ${newOrd.packedBy || 'Pakowacza'}.`,
+                                        'success'
+                                    );
+                                } else if (newOrd.status === 'Wysłane') {
+                                    addToast(
+                                        'Zamówienie wysłane',
+                                        `Zamówienie ${newOrd.id} zostało wysłane.`,
+                                        'success'
+                                    );
+                                }
+                            }
+                        });
                         setOrders(parsed);
                     }
                 } catch (err) {
@@ -805,10 +971,20 @@ export default function App() {
                     console.error("Sync error wms-purchase-orders:", err);
                 }
             }
+            if (e.key === 'wms-activities-log' && e.newValue) {
+                try {
+                    const parsed = JSON.parse(e.newValue);
+                    if (JSON.stringify(parsed) !== JSON.stringify(activitiesLog)) {
+                        setActivitiesLog(parsed);
+                    }
+                } catch (err) {
+                    console.error("Sync error wms-activities-log:", err);
+                }
+            }
         };
         window.addEventListener('storage', handleStorage);
         return () => window.removeEventListener('storage', handleStorage);
-    }, [orders, products, purchaseOrders]);
+    }, [orders, products, purchaseOrders, activitiesLog]);
 
     useEffect(() => {
         if (currentUser) {
@@ -925,20 +1101,87 @@ export default function App() {
     };
 
     const handleUpdateOrder = async (orderId: string, updatedFields: any) => {
+        const oldOrder = orders.find(o => o.id === orderId);
+        const oldStatus = oldOrder ? oldOrder.status : '';
+        const newStatus = updatedFields.status;
+
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedFields } : o));
         try {
             await updateOrderApi(orderId, updatedFields);
         } catch (err) {
             console.error("Failed to update order on backend:", err);
         }
+
+        if (newStatus && newStatus !== oldStatus) {
+            if (newStatus === 'Oczekuje na pakowanie') {
+                const picker = updatedFields.pickedBy || (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Jan Kowalski');
+                const bin = updatedFields.binId || 'Pojemnik';
+                logActivity(
+                    'pick', 
+                    picker, 
+                    `Skompletowano zamówienie ${orderId}`, 
+                    `Pojemnik: ${bin}`
+                );
+                addToast(
+                    'Kompletacja zakończona',
+                    `Zamówienie ${orderId} zostało skompletowane przez ${picker}. Pojemnik: ${bin}`,
+                    'success'
+                );
+            } else if (newStatus === 'Spakowane' || newStatus === 'Wysłane') {
+                const packer = updatedFields.packedBy || updatedFields.internalNotesActor || (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Mariusz Pakosz');
+                const labelInfo = updatedFields.waybillPdfDate ? `Etykieta DPD wygenerowana` : 'Zlecenie gotowe do wysyłki';
+                logActivity(
+                    'pack', 
+                    packer, 
+                    newStatus === 'Wysłane' ? `Wysłano zamówienie ${orderId}` : `Spakowano zamówienie ${orderId}`, 
+                    `${labelInfo}`
+                );
+                addToast(
+                    newStatus === 'Wysłane' ? 'Zamówienie wysłane' : 'Zamówienie spakowane',
+                    `Zamówienie ${orderId} zostało ${newStatus === 'Wysłane' ? 'wysłane' : 'spakowane'} przez ${packer}.`,
+                    'success'
+                );
+            }
+        }
     };
 
     const handleUpdateOrderStatus = async (orderId: string, status: string) => {
+        const oldOrder = orders.find(o => o.id === orderId);
+        const oldStatus = oldOrder ? oldOrder.status : '';
+
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
         try {
             await updateOrderApi(orderId, { status });
         } catch (err) {
             console.error("Failed to update order status on backend:", err);
+        }
+
+        if (status && status !== oldStatus) {
+            if (status === 'Oczekuje na pakowanie') {
+                logActivity(
+                    'pick', 
+                    currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System Admin', 
+                    `Skompletowano zamówienie ${orderId}`, 
+                    `Status zmieniony z poziomu Admina`
+                );
+                addToast(
+                    'Kompletacja zakończona',
+                    `Zamówienie ${orderId} zostało skompletowane. Status zmieniony z poziomu Admina.`,
+                    'success'
+                );
+            } else if (status === 'Spakowane' || status === 'Wysłane') {
+                logActivity(
+                    'pack', 
+                    currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'System Admin', 
+                    status === 'Wysłane' ? `Wysłano zamówienie ${orderId}` : `Spakowano zamówienie ${orderId}`, 
+                    `Status zmieniony z poziomu Admina`
+                );
+                addToast(
+                    status === 'Wysłane' ? 'Zamówienie wysłane' : 'Zamówienie spakowane',
+                    `Zamówienie ${orderId} zostało ${status === 'Wysłane' ? 'wysłane' : 'spakowane'}.`,
+                    'success'
+                );
+            }
         }
     };
 
@@ -1015,6 +1258,11 @@ export default function App() {
         await loadInventory();
     };
 
+    const handleUpdateThreshold = async (product: Product, threshold: number) => {
+        await updateInventoryProduct(product.productId, { reorderThreshold: threshold });
+        await loadInventory();
+    };
+
     const handleRestockItem = async (product: Product) => {
         try {
             const newPoId = `PO-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -1044,9 +1292,22 @@ export default function App() {
                 productName: product.name,
                 zone: product.locationCode || 'A-01-01',
                 qty: 10,
-                type: 'Zlecenie zakupu PO (Draft)',
+                type: 'Zlecenie zakupiu PO (Draft)',
                 user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
             });
+
+            const operator = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
+            logActivity(
+                'receive',
+                operator,
+                `Zlecono uzupełnienie zapasów (Restock) dla SKU: ${product.sku}`,
+                `Utworzono draft zamówienia PO ${newPoId} na 100 szt.`
+            );
+            addToast(
+                'Zlecono uzupełnienie zapasów',
+                `Utworzono draft zamówienia PO ${newPoId} dla SKU: ${product.sku} (x100 szt.).`,
+                'info'
+            );
 
             alert(`Wygenerowano zapotrzebowanie zakupowe ${newPoId} na 100 sztuk. Przejdź do zakładki "Dostawy", aby zatwierdzić przyjęcie towaru od dostawcy.`);
         } catch (err: any) {
@@ -1080,6 +1341,19 @@ export default function App() {
             type: 'Relokacja wewnętrzna',
             user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
         });
+
+        const operator = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
+        logActivity(
+            'relocate',
+            operator,
+            `Przeniesiono produkt ${sku}`,
+            `Nowa lokacja: ${newLocationCode} (Strefa ${newZone}). Nazwa: ${prodName}`
+        );
+        addToast(
+            'Zakończono relokację',
+            `Przeniesiono produkt ${sku} do strefy ${newZone} (lokacja ${newLocationCode}).`,
+            'info'
+        );
     };
 
     const handleCreateProduct = async (newProd: any) => {
@@ -1246,6 +1520,33 @@ export default function App() {
         return list;
     }, [products, zones, orders]);
 
+    const prevNotificationIdsRef = useRef<string[]>([]);
+    useEffect(() => {
+        if (prevNotificationIdsRef.current.length === 0) {
+            prevNotificationIdsRef.current = notifications.map(n => n.id);
+            return;
+        }
+
+        const currentIds = notifications.map(n => n.id);
+        const oldIds = prevNotificationIdsRef.current;
+        const newNotifications = notifications.filter(n => !oldIds.includes(n.id));
+
+        newNotifications.forEach(n => {
+            let toastType: 'error' | 'warning' | 'info' | 'success' = 'info';
+            let title = 'Powiadomienie systemowe';
+            if (n.type === 'error') {
+                toastType = 'error';
+                title = 'Alarm krytyczny';
+            } else if (n.type === 'warning') {
+                toastType = 'warning';
+                title = 'Ostrzeżenie';
+            }
+            addToast(title, n.text, toastType);
+        });
+
+        prevNotificationIdsRef.current = currentIds;
+    }, [notifications]);
+
     const handleMarkAllAsRead = () => {
         const allIds = notifications.map(n => n.id);
         setReadNotificationIds(allIds);
@@ -1391,6 +1692,8 @@ export default function App() {
                     onNotificationClick={handleNotificationClick}
                     onRefreshData={handleRefreshAll}
                     isRefreshing={isRefreshing}
+                    soundEnabled={soundEnabled}
+                    onToggleSound={toggleSound}
                 />
 
                 {isMobileMenuOpen && (
@@ -1411,6 +1714,7 @@ export default function App() {
                             allocationsLog={allocationsLog}
                             onAddAllocation={handleAddAllocation}
                             onRestockProduct={handleRestockItem}
+                            activitiesLog={activitiesLog}
                         />
                     )}
 
@@ -1454,6 +1758,7 @@ export default function App() {
                             products={products}
                             onUpdateStock={handleUpdateStock}
                             onRestockItem={handleRestockItem}
+                            onUpdateThreshold={handleUpdateThreshold}
                             highlightedSku={highlightedItemId}
                         />
                     )}
@@ -1507,6 +1812,55 @@ export default function App() {
                     }
                 }}
             />
+
+            {/* System Toast Notifications */}
+            <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-3 max-w-sm w-full select-none pointer-events-none">
+                {toasts.map(toast => {
+                    let borderClass = 'border-blue-500 bg-white/95 text-slate-800 shadow-blue-100/50';
+                    let iconColor = 'text-blue-500 bg-blue-50';
+                    let iconEl = <Info className="w-5 h-5" />;
+
+                    if (toast.type === 'error') {
+                        borderClass = 'border-rose-500 bg-white/95 text-slate-800 shadow-rose-100/50';
+                        iconColor = 'text-rose-500 bg-rose-50';
+                        iconEl = <AlertCircle className="w-5 h-5" />;
+                    } else if (toast.type === 'warning') {
+                        borderClass = 'border-amber-500 bg-white/95 text-slate-800 shadow-amber-100/50';
+                        iconColor = 'text-amber-500 bg-amber-50';
+                        iconEl = <AlertTriangle className="w-5 h-5" />;
+                    } else if (toast.type === 'success') {
+                        borderClass = 'border-emerald-500 bg-white/95 text-slate-800 shadow-emerald-100/50';
+                        iconColor = 'text-emerald-500 bg-emerald-50';
+                        iconEl = <CheckCircle2 className="w-5 h-5" />;
+                    }
+
+                    return (
+                        <div 
+                            key={toast.id} 
+                            className={`pointer-events-auto flex items-start gap-3 p-4 rounded-xl border border-l-4 shadow-xl backdrop-blur-md transition-all duration-300 transform translate-y-0 opacity-100 animate-in slide-in-from-right-10 duration-200 ${borderClass}`}
+                        >
+                            <div className={`p-1.5 rounded-lg flex-shrink-0 ${iconColor}`}>
+                                {iconEl}
+                            </div>
+                            <div className="flex-grow min-w-0">
+                                <h4 className="text-[12px] font-black tracking-tight text-slate-900 leading-tight">
+                                    {toast.title}
+                                </h4>
+                                <p className="text-[11px] font-medium text-slate-500 mt-1 leading-normal">
+                                    {toast.text}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => removeToast(toast.id)} 
+                                className="text-slate-450 hover:text-slate-700 bg-transparent border-none cursor-pointer flex-shrink-0 text-sm font-bold font-mono"
+                                title="Zamknij"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
