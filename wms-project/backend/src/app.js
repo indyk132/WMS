@@ -7,6 +7,7 @@ const ordersRoutes = require('./routes/ordersRoutes');
 const productsRoutes = require('./routes/productsRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const usersRoutes = require('./routes/usersRoutes');
+const activitiesRoutes = require('./routes/activitiesRoutes');
 const { ensureCatalogSchema } = require('./setup/catalogSchema');
 const { ensureUsersSchema } = require('./setup/usersSchema');
 
@@ -37,6 +38,7 @@ app.use('/api', ordersRoutes);
 app.use('/api', productsRoutes);
 app.use('/api', stockRoutes);
 app.use('/api', usersRoutes);
+app.use('/api', activitiesRoutes);
 
 const startServer = async () => {
     try {

@@ -177,6 +177,41 @@ const ensureCatalogSchema = async () => {
     await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS change_logs JSONB DEFAULT '[]'::jsonb`);
     await pool.query(`ALTER TABLE ${table('orders')} ADD COLUMN IF NOT EXISTS activity_history JSONB DEFAULT '[]'::jsonb`);
 
+    // Alter order_items table to support FIFO Lot / Expiration Date tracking
+    await pool.query(`ALTER TABLE ${table('order_items')} ADD COLUMN IF NOT EXISTS picked_lot VARCHAR(100)`);
+    await pool.query(`ALTER TABLE ${table('order_items')} ADD COLUMN IF NOT EXISTS expiration_date VARCHAR(50)`);
+
+    // Create activities_log table
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS ${table('activities_log')} (
+            id SERIAL PRIMARY KEY,
+            activity_type VARCHAR(50) NOT NULL,
+            worker_name VARCHAR(150) NOT NULL,
+            message TEXT NOT NULL,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Seed initial activities if empty
+    const activitiesCount = await pool.query(`SELECT COUNT(*) FROM ${table('activities_log')}`);
+    if (parseInt(activitiesCount.rows[0].count, 10) === 0) {
+        const initialActivities = [
+            { type: 'pick', user: 'Jan Kowalski (EMP-1102)', message: 'Zakończono kompletację zamówienia ORD/2026/06/001', details: 'Pojemnik: BIN-024, strefa kompletacji' },
+            { type: 'pack', user: 'Mariusz Pakosz (EMP-9921)', message: 'Spakowano i zweryfikowano zamówienie ORD/2026/06/002', details: 'Karton Średni M, waga 4.5kg, etykieta DPD' },
+            { type: 'receive', user: 'Maciej Kaczmarek (EMP-3048)', message: 'Przyjęto dostawę PO-00812', details: '100 sztuk SKU-10492, dostawca AutoParts' },
+            { type: 'rma', user: 'Hanna Wiśniewska (EMP-4059)', message: 'Zatwierdzono zwrot RMA-003', details: '1 sztuka SKU-20391, uszkodzenie w transporcie' },
+            { type: 'relocate', user: 'Wojtek Nowak (EMP-9104)', message: 'Wykonano relokację SKU-20391', details: 'Z RAMPA-PRZYJEC do A-01-01-02' }
+        ];
+
+        for (const act of initialActivities) {
+            await pool.query(`
+                INSERT INTO ${table('activities_log')} (activity_type, worker_name, message, details)
+                VALUES ($1, $2, $3, $4)
+            `, [act.type, act.user, act.message, act.details]);
+        }
+    }
+
     // 1. Seed static warehouse locations first
     for (const location of LOCATIONS) {
         await pool.query(`

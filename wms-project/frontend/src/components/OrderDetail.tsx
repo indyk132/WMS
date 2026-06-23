@@ -27,6 +27,8 @@ export interface OrderItem {
   quantity: number;
   zone: string;
   status: string;
+  pickedLot?: string;
+  expirationDate?: string;
 }
 
 export interface ActivityLog {
@@ -369,7 +371,17 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                                 <Box className="w-4 h-4 text-slate-400" />
                               )}
                             </div>
-                            <span>{item.product || 'Artykuł WMS'}</span>
+                            <div className="flex flex-col">
+                              <span>{item.product || 'Artykuł WMS'}</span>
+                              {item.pickedLot && (
+                                <span className="text-[10px] text-slate-450 font-mono mt-0.5">
+                                  Partia: <strong className="text-slate-600">{item.pickedLot}</strong>
+                                  {item.expirationDate && (
+                                    <> (Ważność: <span className="text-amber-600">{item.expirationDate}</span>)</>
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-500">{item.zone || 'A1'}</td>

@@ -10,11 +10,83 @@ interface PickerViewProps {
   orders: any[];
   onUpdateOrder: (id: string, updates: any) => void;
   workerName: string;
+  products: any[];
   onBackToMenu: () => void;
 }
 
-export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: PickerViewProps) {
+const isFoodProduct = (sku: string, category?: string) => {
+  const cleanSku = sku.toUpperCase();
+  return cleanSku.startsWith('FOOD-') || 
+         category === 'Artykuły spożywcze' || 
+         category === 'Zywnosc' || 
+         category === 'Żywność';
+};
+
+const getMockLotInfo = (sku: string, isFood: boolean) => {
+  const cleanSku = sku.replace(/[^a-zA-Z0-9]/g, '');
+  if (isFood) {
+    return {
+      fifoLot: `L-F-${cleanSku}-01`,
+      fifoExp: '2026-07-10',
+      newerLot: `L-F-${cleanSku}-02`,
+      newerExp: '2026-12-15'
+    };
+  } else {
+    return {
+      fifoLot: `L-${cleanSku}-99`,
+      fifoExp: null,
+      newerLot: null,
+      newerExp: null
+    };
+  }
+};
+
+export function PickerView({ orders, onUpdateOrder, workerName, products, onBackToMenu }: PickerViewProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  // Helper to parse location code for sorting
+  const parseLocationCode = (code: string) => {
+    if (!code) {
+      return { aisle: 'ZZZ', bay: 999, level: 999, position: 999 };
+    }
+    if (code === 'RAMPA-PRZYJEC') {
+      return { aisle: 'AAA-RAMP', bay: 0, level: 0, position: 0 };
+    }
+    const parts = code.split('-');
+    const aisle = parts[0] || 'ZZZ';
+    const bay = parseInt(parts[1], 10) || 0;
+    const level = parseInt(parts[2], 10) || 0;
+    const position = parseInt(parts[3], 10) || 0;
+    return { aisle, bay, level, position };
+  };
+
+  // Sort order items according to pick path optimization
+  const getSortedItems = () => {
+    if (!selectedOrder || !selectedOrder.items) return [];
+    
+    // Create a map of sku to product details for quick location lookup
+    const productMap = new Map((products || []).map(p => [p.sku, p]));
+    
+    return [...selectedOrder.items].sort((a, b) => {
+      const prodA = productMap.get(a.sku);
+      const prodB = productMap.get(b.sku);
+      
+      const locA = parseLocationCode(prodA?.locationCode);
+      const locB = parseLocationCode(prodB?.locationCode);
+      
+      if (locA.aisle !== locB.aisle) {
+        return locA.aisle.localeCompare(locB.aisle);
+      }
+      if (locA.bay !== locB.bay) {
+        return locA.bay - locB.bay;
+      }
+      if (locA.level !== locB.level) {
+        return locA.level - locB.level;
+      }
+      return locA.position - locB.position;
+    });
+  };
+
   const [pickedItems, setPickedItems] = useState<Record<string, number>>({}); 
   const [kpiStats, setKpiStats] = useState({ picksToday: 42, accuracy: 99.8, speedMin: 1.2 });
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -103,14 +175,51 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
 
   const handleProcessGlobalScan = (scannedSku: string) => {
     sounds.playBeep();
-    const cleanSku = scannedSku.toUpperCase().trim();
+    const cleanInput = scannedSku.toUpperCase().trim();
     
     if (!selectedOrder) return;
     
-    const matchedItem = (selectedOrder.items || []).find((item: any) => item.sku.toUpperCase().trim() === cleanSku);
+    // Find if the input matches any item by SKU, FIFO Lot, or newer Lot
+    let matchedItem: any = null;
+    let scanType: 'sku' | 'fifo_lot' | 'newer_lot' = 'sku';
+    let foodProductFlag = false;
+    let lotInfo: any = null;
+
+    const productMap = new Map((products || []).map(p => [p.sku, p]));
+
+    for (const item of (selectedOrder.items || [])) {
+      const prod = productMap.get(item.sku);
+      const isFood = isFoodProduct(item.sku, prod?.category);
+      const info = getMockLotInfo(item.sku, isFood);
+
+      if (item.sku.toUpperCase().trim() === cleanInput) {
+        matchedItem = item;
+        scanType = 'sku';
+        foodProductFlag = isFood;
+        lotInfo = info;
+        break;
+      } else if (info.fifoLot.toUpperCase().trim() === cleanInput) {
+        matchedItem = item;
+        scanType = 'fifo_lot';
+        foodProductFlag = isFood;
+        lotInfo = info;
+        break;
+      } else if (info.newerLot && info.newerLot.toUpperCase().trim() === cleanInput) {
+        matchedItem = item;
+        scanType = 'newer_lot';
+        foodProductFlag = isFood;
+        lotInfo = info;
+        break;
+      }
+    }
     
     if (!matchedItem) {
-      showFeedback('error', `BŁĄD DEKODOWANIA! Artykuł SKU "${scannedSku}" nie występuje na liście pakowej obecnego zlecenia!`);
+      showFeedback('error', `BŁĄD DEKODOWANIA! Kod "${scannedSku}" nie odpowiada żadnemu SKU ani partii w tym zleceniu!`);
+      return;
+    }
+
+    if (scanType === 'newer_lot' && foodProductFlag) {
+      showFeedback('error', `BLOKADA FIFO! Skanowana partia "${cleanInput}" nie jest najstarsza. Zgodnie z FIFO musisz pobrać partię: ${lotInfo.fifoLot}.`);
       return;
     }
     
@@ -134,7 +243,15 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
       picksToday: prev.picksToday + 1
     }));
 
-    showFeedback('success', `Pomyślnie zeskanowano SKU: ${matchedItem.sku} (+1 szt.).`);
+    if (foodProductFlag) {
+      if (scanType === 'sku') {
+        showFeedback('success', `Pomyślnie zeskanowano SKU: ${matchedItem.sku} (+1 szt.). Automatycznie przypisano partię FIFO: ${lotInfo.fifoLot}.`);
+      } else {
+        showFeedback('success', `Pomyślnie zeskanowano partię FIFO: ${lotInfo.fifoLot} (+1 szt.).`);
+      }
+    } else {
+      showFeedback('success', `Pomyślnie zeskanowano SKU: ${matchedItem.sku} (+1 szt.).`);
+    }
   };
 
   const handleManualAdjustQty = (sku: string, delta: number) => {
@@ -190,13 +307,31 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
     const cleanBin = binName.toUpperCase().trim() || 'BIN-000';
     const currentTime = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
     
-    if (onUpdateOrder && selectedOrderId) {
+    if (onUpdateOrder && selectedOrderId && selectedOrder) {
+      const productMap = new Map((products || []).map(p => [p.sku, p]));
+      const updatedItems = (selectedOrder.items || []).map((item: any) => {
+        const prod = productMap.get(item.sku);
+        const isFood = isFoodProduct(item.sku, prod?.category);
+        const lotInfo = getMockLotInfo(item.sku, isFood);
+        
+        const key = `${selectedOrderId}-${item.sku}`;
+        const pickedQty = pickedItems[key] || 0;
+        
+        return {
+          ...item,
+          picked_quantity: pickedQty,
+          pickedLot: lotInfo.fifoLot,
+          expirationDate: lotInfo.fifoExp || null
+        };
+      });
+
       onUpdateOrder(selectedOrderId, {
         status: 'Oczekuje na pakowanie',
         binId: cleanBin,
         pickedBy: workerName,
         pickCompletedTime: currentTime,
-        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PICKER]: Kompletacja zakończona przez ${workerName}. Pojemnik: ${cleanBin}. Czas: ${Math.floor(secondsElapsed / 60)}m ${secondsElapsed % 60}s.`,
+        items: updatedItems,
+        internalNotes: `${selectedOrder.internalNotes || ''}\n[PICKER]: Kompletacja zakończona przez ${workerName}. Pojemnik: ${cleanBin}. Czas: ${Math.floor(secondsElapsed / 60)}m ${secondsElapsed % 60}s.`,
         internalNotesActor: workerName
       });
     }
@@ -348,6 +483,10 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">KARTA PRACY</span>
                       <code className="font-mono text-sm font-black text-[#0052CC]">{selectedOrder?.id}</code>
+                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-250 text-[9px] uppercase tracking-wider font-extrabold rounded-lg flex items-center gap-1 shadow-sm select-none animate-pulse">
+                        <MapPin className="w-2.5 h-2.5 text-emerald-600" />
+                        Optymalizacja Ścieżki
+                      </span>
                     </div>
                     <p className="text-xs text-zinc-650">
                       Adres przeznaczenia: <span className="text-zinc-900 font-bold">{selectedOrder?.destination || selectedOrder?.shippingAddress}</span>
@@ -401,11 +540,18 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
 
               {/* Items List - High Visibility with massive 2-meter readable fonts */}
               <div className="flex-grow overflow-y-auto space-y-3.5 pr-1">
-                {(selectedOrder?.items || []).map((item: any, idx: number) => {
+                {getSortedItems().map((item: any, idx: number) => {
                   const key = `${selectedOrder?.id}-${item.sku}`;
                   const picked = pickedItems[key] || 0;
                   const target = item.quantity || item.qty || 0;
                   const isDone = picked >= target;
+
+                  // Find product's real location
+                  const matchedProd = (products || []).find(p => p.sku === item.sku);
+                  const displayLocation = matchedProd?.locationCode || `Korytarz ${item.zone || 'A1'}`;
+
+                  const isFood = isFoodProduct(item.sku, matchedProd?.category);
+                  const lotInfo = getMockLotInfo(item.sku, isFood);
 
                   return (
                     <div 
@@ -428,16 +574,32 @@ export function PickerView({ orders, onUpdateOrder, workerName, onBackToMenu }: 
                         <div className="flex justify-between items-start gap-4 w-full">
                           <div className="space-y-1 text-left">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs font-extrabold bg-zinc-100 text-zinc-750 px-2 py-0.5 rounded">{item.sku}</span>
+                              <span className="font-mono text-xs font-extrabold bg-zinc-100 text-[#0052CC] px-2 py-0.5 rounded">{item.sku}</span>
                               <span className="font-sans font-black text-base text-zinc-950">{item.product || item.name}</span>
                             </div>
                             
                             <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono text-zinc-500 mt-1">
                               <span className="flex items-center gap-1.5 bg-zinc-50 border border-zinc-200 px-2.5 py-1 rounded-lg">
                                 <MapPin className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
-                                KORYTARZ REGAŁU: <strong className="text-zinc-950 font-extrabold font-mono text-xs ml-0.5">{item.zone || 'A1'}</strong>
+                                LOKALIZACJA: <strong className="text-zinc-950 font-extrabold font-mono text-xs ml-0.5">{displayLocation}</strong>
                               </span>
-                              <span className="bg-zinc-50 border border-zinc-200 px-2.5 py-1 rounded-lg">Poz/Gniazdo: <strong className="text-zinc-750 font-black">P{(idx % 4) + 1}-G{(idx % 3) + 1}</strong></span>
+                              <span className="bg-zinc-50 border border-zinc-200 px-2.5 py-1 rounded-lg text-amber-850 font-semibold flex items-center gap-1">
+                                <Timer className="w-3.5 h-3.5 text-amber-500" />
+                                KROK ŚCIEŻKI: <strong className="text-zinc-950 font-black font-mono text-xs">{idx + 1}</strong>
+                              </span>
+                            </div>
+
+                            <div className="mt-2.5">
+                              {isFood ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-250 text-amber-850 text-[10px] font-mono font-bold uppercase rounded-lg shadow-inner select-none animate-pulse">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  Wymagany lot FIFO: <strong className="text-zinc-950 font-black ml-0.5">{lotInfo.fifoLot}</strong> <span className="text-zinc-400">|</span> Ważność: {lotInfo.fifoExp}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 border border-zinc-200 text-zinc-500 text-[10px] font-mono font-bold uppercase rounded-lg">
+                                  Partia: <strong className="text-zinc-800 font-bold ml-0.5">{lotInfo.fifoLot}</strong>
+                                </span>
+                              )}
                             </div>
                           </div>
 

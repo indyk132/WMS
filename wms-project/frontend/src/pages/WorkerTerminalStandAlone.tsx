@@ -388,9 +388,10 @@ interface WorkerTerminalStandAloneProps {
   orders: any[];
   onUpdateOrder: (id: string, updates: any) => void;
   staffList: any[];
+  products: any[];
 }
 
-export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffList }: WorkerTerminalStandAloneProps) {
+export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffList, products }: WorkerTerminalStandAloneProps) {
   const [initialData] = useState(() => readStoredAdminForTerminal());
   const [currentUser, setCurrentUser] = useState(initialData.user);
   const [activeTab, setActiveTab] = useState(initialData.tab);
@@ -432,6 +433,7 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
             orders={orders} 
             onUpdateOrder={onUpdateOrder} 
             workerName={currentUser.name}
+            products={products}
             onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
           />
         ) : (

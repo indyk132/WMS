@@ -17,6 +17,7 @@ import Supplies from './pages/AdminPanel/Supplies';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
+import { fetchActivities, logActivityApi } from './services/activitiesApi';
 import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
@@ -793,7 +794,7 @@ export default function App() {
         ];
     });
 
-    const logActivity = (type: 'pick' | 'pack' | 'receive' | 'rma' | 'relocate', user: string, message: string, details: string) => {
+    const logActivity = async (type: 'pick' | 'pack' | 'receive' | 'rma' | 'relocate', user: string, message: string, details: string) => {
         const newLog = {
             id: `act-${Date.now()}-${Math.random()}`,
             timestamp: new Date().toLocaleString('pl-PL'),
@@ -804,6 +805,11 @@ export default function App() {
             details
         };
         setActivitiesLog(prev => [newLog, ...prev].slice(0, 50));
+        try {
+            await logActivityApi({ type, user, message, details });
+        } catch (err) {
+            console.error("Failed to log activity to backend:", err);
+        }
     };
 
     const [allocationsLog, setAllocationsLog] = useState<any[]>([
@@ -887,15 +893,37 @@ export default function App() {
         }
     };
 
+    const loadActivities = async (shouldIgnore = () => false) => {
+        try {
+            const backendActivities = await fetchActivities();
+            if (shouldIgnore()) return;
+            if (backendActivities && backendActivities.length > 0) {
+                setActivitiesLog(backendActivities);
+            }
+        } catch (error) {
+            console.error('Activities backend unavailable:', error);
+        }
+    };
+
     useEffect(() => {
         let shouldIgnore = false;
 
         loadInventory(() => shouldIgnore);
         loadOrders(() => shouldIgnore);
+        loadActivities(() => shouldIgnore);
 
         return () => {
             shouldIgnore = true;
         };
+    }, []);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            loadOrders(() => false);
+            loadActivities(() => false);
+        }, 5000);
+
+        return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
@@ -1248,19 +1276,48 @@ export default function App() {
     };
 
     const handleUpdateStock = async (product: Product, delta: number) => {
-        await adjustInventoryStock({
-            productId: product.productId,
-            sku: product.sku,
-            delta,
-            locationId: product.primaryLocationId,
-        });
-
-        await loadInventory();
+        try {
+            await adjustInventoryStock({
+                productId: product.productId,
+                sku: product.sku,
+                delta,
+                locationId: product.primaryLocationId,
+            });
+            await loadInventory();
+        } catch (error) {
+            console.warn('Backend update stock failed, updating local state:', error);
+            setProducts(prev => {
+                return prev.map(p => {
+                    if (p.sku === product.sku) {
+                        return {
+                            ...p,
+                            stock: Math.max(0, p.stock + delta),
+                        };
+                    }
+                    return p;
+                });
+            });
+        }
     };
 
     const handleUpdateThreshold = async (product: Product, threshold: number) => {
-        await updateInventoryProduct(product.productId, { reorderThreshold: threshold });
-        await loadInventory();
+        try {
+            await updateInventoryProduct(product.productId, { reorderThreshold: threshold });
+            await loadInventory();
+        } catch (error) {
+            console.warn('Backend update threshold failed, updating local state:', error);
+            setProducts(prev => {
+                return prev.map(p => {
+                    if (p.productId === product.productId) {
+                        return {
+                            ...p,
+                            reorderThreshold: threshold,
+                        };
+                    }
+                    return p;
+                });
+            });
+        }
     };
 
     const handleRestockItem = async (product: Product) => {
@@ -1579,6 +1636,7 @@ export default function App() {
                 orders={orders} 
                 onUpdateOrder={handleUpdateOrder} 
                 staffList={staffList}
+                products={products}
             />
         );
     }

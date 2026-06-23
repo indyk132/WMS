@@ -54,7 +54,9 @@ const orderSelect = () => `
                     'price', p.price,
                     'qty', oi.order_quantity,
                     'order_quantity', oi.order_quantity,
-                    'picked_quantity', oi.picked_quantity
+                    'picked_quantity', oi.picked_quantity,
+                    'pickedLot', oi.picked_lot,
+                    'expirationDate', oi.expiration_date
                 )
                 ORDER BY oi.id
             ) FILTER (WHERE oi.id IS NOT NULL),
@@ -326,6 +328,25 @@ const updateOrder = async (req, res) => {
 
         if (!rows[0]) {
             return res.status(404).json({ error: 'Zamowienie nie istnieje.' });
+        }
+
+        if (req.body.items && Array.isArray(req.body.items)) {
+            for (const item of req.body.items) {
+                if (item.id) {
+                    await pool.query(`
+                        UPDATE ${table('order_items')}
+                        SET picked_quantity = $1,
+                            picked_lot = $2,
+                            expiration_date = $3
+                        WHERE id = $4
+                    `, [
+                        item.picked_quantity ?? item.quantity ?? item.qty ?? 0,
+                        item.pickedLot || null,
+                        item.expirationDate || null,
+                        item.id
+                    ]);
+                }
+            }
         }
 
         const order = await fetchOrderByIdOrNumber(pool, rows[0].order_id);
