@@ -19,6 +19,74 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
     const [labelsToPrint, setLabelsToPrint] = useState<any[]>([]);
     const [isPrinting, setIsPrinting] = useState(false);
 
+    // New Storage 2.5D map and IoT sensory states
+    const [is3DView, setIs3DView] = useState(false);
+    const [lockedSlots, setLockedSlots] = useState<string[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-locked-slots');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const [sensorData, setSensorData] = useState({
+        tempA: 20.4,
+        humidityA: 44.5,
+        tempB: -18.2,
+        humidityB: 62.0,
+        tempC: 16.5,
+        gasC: 0.02,
+    });
+    const [isAlarmActive, setIsAlarmActive] = useState(false);
+
+    // Live IoT Sensor Update Simulation
+    React.useEffect(() => {
+        const timer = setInterval(() => {
+            setSensorData(prev => {
+                const tempA = parseFloat((20.0 + Math.random() * 0.8).toFixed(1));
+                const humidityA = parseFloat((43.0 + Math.random() * 3.0).toFixed(1));
+
+                let tempB = prev.tempB;
+                if (isAlarmActive) {
+                    if (tempB < 12.0) {
+                        tempB = parseFloat((tempB + 1.8 + Math.random() * 0.8).toFixed(1));
+                    } else {
+                        tempB = parseFloat((12.0 + Math.random() * 0.5).toFixed(1));
+                    }
+                } else {
+                    if (tempB > -18.0) {
+                        tempB = parseFloat((tempB - 1.5 - Math.random() * 0.5).toFixed(1));
+                        if (tempB < -18.2) tempB = -18.2;
+                    } else {
+                        tempB = parseFloat((-18.5 + Math.random() * 0.6).toFixed(1));
+                    }
+                }
+
+                const tempC = parseFloat((16.2 + Math.random() * 0.6).toFixed(1));
+                const gasC = parseFloat((0.01 + Math.random() * 0.02).toFixed(3));
+
+                return { tempA, humidityA, tempB, humidityB: prev.humidityB, tempC, gasC };
+            });
+        }, 3000);
+
+        return () => clearInterval(timer);
+    }, [isAlarmActive]);
+
+    const handleToggleLockSlot = (slotCode: string) => {
+        const isLocked = lockedSlots.includes(slotCode);
+        let updated;
+        if (isLocked) {
+            updated = lockedSlots.filter(s => s !== slotCode);
+            showNotification(`Odblokowano lokalizację ${slotCode}`, 'success');
+        } else {
+            updated = [...lockedSlots, slotCode];
+            showNotification(`Zablokowano lokalizację ${slotCode}`, 'warning');
+        }
+        setLockedSlots(updated);
+        window.localStorage.setItem('wms-locked-slots', JSON.stringify(updated));
+    };
+
     const preloadAndPrint = (list: any[]) => {
         setIsPrinting(true);
         setLabelsToPrint(list);
@@ -196,6 +264,95 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                     </button>
                 </div>
             </div>
+
+            {/* IoT Sensors Telemetry Panel */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2 select-none">
+                {/* Sector A */}
+                <div className="bg-white border border-[#e5e7eb] rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-650 flex items-center justify-center">
+                            <Thermometer className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sektor A - Ambient (Żywność)</span>
+                            <span className="text-sm font-black text-slate-900 mt-0.5">{sensorData.tempA} °C</span>
+                            <span className="text-[10px] text-slate-450 ml-2 font-medium">Wilgotność: {sensorData.humidityA}%</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-[10px] font-black text-emerald-700 uppercase">OK</span>
+                    </div>
+                </div>
+
+                {/* Sector B */}
+                <div className={`border rounded-2xl p-4 shadow-sm flex items-center justify-between transition-all ${
+                    isAlarmActive 
+                        ? 'bg-rose-50 border-rose-250 text-rose-900 animate-pulse' 
+                        : 'bg-white border-[#e5e7eb] text-slate-900'
+                }`}>
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            isAlarmActive ? 'bg-rose-100 text-rose-600 animate-bounce' : 'bg-indigo-50 text-indigo-600'
+                        }`}>
+                            <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sektor B - Chłodnia (Cold)</span>
+                            <span className={`text-sm font-black mt-0.5 ${isAlarmActive ? 'text-rose-700' : 'text-slate-900'}`}>
+                                {sensorData.tempB} °C
+                            </span>
+                            <span className="text-[10px] text-slate-450 ml-2 font-medium">Docelowa: -18.0 °C</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsAlarmActive(!isAlarmActive)}
+                            className={`text-[9px] font-black px-2.5 py-1 rounded-lg border transition-all ${
+                                isAlarmActive
+                                    ? 'bg-white border-rose-300 text-rose-700 hover:bg-rose-100'
+                                    : 'bg-slate-100 border-slate-200 text-slate-650 hover:bg-slate-200'
+                            }`}
+                        >
+                            {isAlarmActive ? 'Wyłącz test' : 'Symuluj awarię'}
+                        </button>
+                        <span className={`w-2 h-2 rounded-full ${isAlarmActive ? 'bg-rose-500' : 'bg-emerald-500'} animate-pulse`}></span>
+                        <span className={`text-[10px] font-black uppercase ${isAlarmActive ? 'text-rose-700' : 'text-emerald-700'}`}>
+                            {isAlarmActive ? 'ALARM' : 'OK'}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Sector C */}
+                <div className="bg-white border border-[#e5e7eb] rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                            <Thermometer className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sektor C - Hazmat (Chemia)</span>
+                            <span className="text-sm font-black text-slate-900 mt-0.5">{sensorData.tempC} °C</span>
+                            <span className="text-[10px] text-slate-450 ml-2 font-medium">Stężenie par: {sensorData.gasC} ppm</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-[10px] font-black text-emerald-700 uppercase">OK</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Alarm banner */}
+            {isAlarmActive && (
+                <div className="bg-rose-100 border-l-4 border-rose-600 text-rose-900 p-4 rounded-xl flex items-center gap-3 shadow-md select-none animate-bounce">
+                    <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0" />
+                    <div className="text-xs font-bold">
+                        <p className="uppercase text-[9px] tracking-wider text-rose-700">Krytyczny Alert Spedycyjno-Środowiskowy</p>
+                        <p className="mt-0.5">Usterka systemu chłodniczego w Sektorze B (Chłodnia). Temperatura wzrosła do <strong className="font-mono">{sensorData.tempB} °C</strong>! Ryzyko rozmrożenia zapasów spożywczych (FIFO/Lot).</p>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 <div className="lg:col-span-8 space-y-6">
@@ -384,22 +541,37 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                             <p className="text-zinc-500 text-xs mt-1">Interaktywny podgląd pionowy gniazd regałowych.</p>
                         </div>
 
-                        <div className="relative w-full sm:w-64">
-                            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
-                            <input
-                                type="text"
-                                placeholder="Szukaj SKU lub produktu..."
-                                value={rackSearch}
-                                onChange={(e) => setRackSearch(e.target.value)}
-                                className="w-full pl-9 pr-4 py-1.5 border border-zinc-300 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950 bg-white"
-                            />
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                            <button
+                                type="button"
+                                onClick={() => setIs3DView(!is3DView)}
+                                className={`h-8 px-3 rounded border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    is3DView
+                                        ? 'bg-blue-650 border-blue-650 text-white shadow-sm font-black'
+                                        : 'bg-white border-zinc-350 text-zinc-650 hover:bg-zinc-50'
+                                }`}
+                            >
+                                <LayoutGrid className="w-3.5 h-3.5" />
+                                {is3DView ? 'Widok 3D: WŁ' : 'Widok 2.5D'}
+                            </button>
+
+                            <div className="relative w-full sm:w-64">
+                                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2" />
+                                <input
+                                    type="text"
+                                    placeholder="Szukaj SKU lub produktu..."
+                                    value={rackSearch}
+                                    onChange={(e) => setRackSearch(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-1.5 border border-zinc-355 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 text-zinc-950 bg-white"
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${is3DView ? 'perspective-container' : ''}`}>
                         {[1, 2].map(rackNum => {
                             return (
-                                <div key={rackNum} className="bg-zinc-900 text-white rounded-lg p-4 shadow-lg border border-zinc-950 flex flex-col">
+                                <div key={rackNum} className={`bg-zinc-900 text-white rounded-lg p-4 shadow-lg border border-zinc-950 flex flex-col transition-all duration-350 ${is3DView ? 'rack-3d-style' : ''}`}>
                                     <div className="flex justify-between items-center mb-4 border-b border-zinc-800 pb-2">
                                         <span className="text-xs font-extrabold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
                                             <Layers className="w-3.5 h-3.5" />
@@ -412,7 +584,7 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                         {[4, 3, 2, 1].map(levelNum => {
                                             return (
                                                 <div key={levelNum} className="flex items-center gap-3">
-                                                    <div className="w-6 text-[10px] font-bold text-zinc-500 text-center font-mono" title={`Poziom ${levelNum}`}>
+                                                                                    <div className="w-6 text-[10px] font-bold text-zinc-500 text-center font-mono" title={`Poziom ${levelNum}`}>
                                                         P{levelNum}
                                                     </div>
 
@@ -430,6 +602,11 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                                                 prod.name.toLowerCase().includes(rackSearch.toLowerCase())
                                                             );
 
+                                                            const sector = selectedZone.id[0];
+                                                            const aisle = selectedZone.id[1];
+                                                            const slotCode = `${sector}-0${aisle}-0${rackNum}-0${levelNum}-0${slotNum}`;
+                                                            const isLocked = lockedSlots.includes(slotCode);
+
                                                             return (
                                                                 <div key={slotNum} className="relative group">
                                                                     {isOccupied ? (
@@ -441,6 +618,8 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                                                                         ? 'ring-4 ring-yellow-400 border-transparent bg-yellow-50 text-zinc-950 shadow-lg animate-pulse'
                                                                                         : selectedSlot?.rack === rackNum && selectedSlot?.level === levelNum && selectedSlot?.slot === slotNum
                                                                                             ? 'ring-2 ring-white border-transparent bg-blue-600 text-white shadow-md'
+                                                                                            : isLocked
+                                                                                            ? 'bg-stripes border-amber-500 text-amber-100 hover:border-amber-400'
                                                                                             : selectedZone.id.startsWith('C')
                                                                                                 ? 'bg-amber-950/70 border-amber-800 text-amber-100 hover:bg-amber-900/80 hover:border-amber-700'
                                                                                                 : selectedZone.id.startsWith('B')
@@ -449,7 +628,10 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                                                                 }`}
                                                                             >
                                                                                 <div className="flex justify-between items-center text-[8px] opacity-75 leading-none w-full relative z-10">
-                                                                                    <span className="font-mono text-[7px] text-zinc-350">GNIAZDO {slotNum}</span>
+                                                                                    <span className="font-mono text-[7px] text-zinc-350 flex items-center gap-0.5">
+                                                                                        {isLocked && <span className="text-[9px] text-amber-500 animate-pulse">🔒</span>}
+                                                                                        GNIAZDO {slotNum}
+                                                                                    </span>
                                                                                     <span className="font-extrabold bg-white/15 px-1 py-0.5 rounded text-[8.5px] tracking-wide font-sans">{prod.stock} szt.</span>
                                                                                 </div>
 
@@ -472,20 +654,28 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                                                     ) : (
                                                                         <div
                                                                             onClick={() => setSelectedSlot({ rack: rackNum, level: levelNum, slot: slotNum, isOccupied: false })}
-                                                                            className={`p-2 rounded text-[9px] border border-zinc-800 border-dashed bg-zinc-950/40 text-zinc-450 hover:text-zinc-200 hover:bg-zinc-900/60 hover:border-zinc-650 cursor-pointer flex flex-col justify-center items-center text-center font-mono leading-none h-[64px] transition-all hover:scale-[1.02] ${
+                                                                            className={`p-2 rounded text-[9px] border cursor-pointer flex flex-col justify-center items-center text-center font-mono leading-none h-[64px] transition-all hover:scale-[1.02] ${
                                                                                 selectedSlot?.rack === rackNum && selectedSlot?.level === levelNum && selectedSlot?.slot === slotNum
                                                                                     ? 'ring-2 ring-blue-500 border-transparent bg-zinc-900 text-white'
-                                                                                    : ''
+                                                                                    : isLocked
+                                                                                    ? 'bg-stripes border-amber-600 text-amber-450 hover:border-amber-500'
+                                                                                    : 'border-zinc-800 border-dashed bg-zinc-950/40 text-zinc-450 hover:text-zinc-200 hover:bg-zinc-900/60 hover:border-zinc-650'
                                                                             }`}
                                                                         >
                                                                             <span className={`font-extrabold mb-0.5 text-[8px] tracking-wide ${
                                                                                 selectedSlot?.rack === rackNum && selectedSlot?.level === levelNum && selectedSlot?.slot === slotNum
                                                                                     ? 'text-white'
+                                                                                    : isLocked
+                                                                                    ? 'text-amber-500 font-bold'
                                                                                     : 'text-zinc-500'
-                                                                            }`}>WOLNE</span>
+                                                                            }`}>
+                                                                                {isLocked ? '🔒 BLOKADA' : 'WOLNE'}
+                                                                            </span>
                                                                             <span className={
                                                                                 selectedSlot?.rack === rackNum && selectedSlot?.level === levelNum && selectedSlot?.slot === slotNum
                                                                                     ? 'text-zinc-300'
+                                                                                    : isLocked
+                                                                                    ? 'text-amber-600'
                                                                                     : 'text-zinc-500'
                                                                             }>R{rackNum}-P{levelNum}-G{slotNum}</span>
                                                                         </div>
@@ -563,6 +753,27 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                             )}
 
                              <div className="flex justify-end gap-2.5 pt-2 border-t border-zinc-200">
+                                  {(() => {
+                                      const sector = selectedZone.id[0];
+                                      const aisle = selectedZone.id[1];
+                                      const slotCode = `${sector}-0${aisle}-0${selectedSlot.rack}-0${selectedSlot.level}-0${selectedSlot.slot}`;
+                                      const isLocked = lockedSlots.includes(slotCode);
+                                      return (
+                                          <button
+                                              type="button"
+                                              onClick={() => handleToggleLockSlot(slotCode)}
+                                              className={`h-8 px-3 rounded font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1.5 border shadow-sm ${
+                                                  isLocked
+                                                      ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                                                      : 'bg-white border-zinc-350 text-zinc-650 hover:bg-zinc-50'
+                                              }`}
+                                          >
+                                              <Key className="w-3.5 h-3.5" />
+                                              {isLocked ? 'Odblokuj gniazdo' : 'Zablokuj gniazdo'}
+                                          </button>
+                                      );
+                                  })()}
+
                                  {selectedSlot.isOccupied ? (
                                      <>
                                          <button
@@ -788,6 +999,22 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                         background: white !important;
                         box-shadow: none !important;
                     }
+                }
+                .perspective-container {
+                    perspective: 1200px;
+                }
+                .rack-3d-style {
+                    transform: rotateX(15deg) rotateY(-18deg) rotateZ(2deg);
+                    transform-style: preserve-3d;
+                    box-shadow: -15px 15px 25px rgba(0,0,0,0.4) !important;
+                    transition: transform 0.4s ease, box-shadow 0.4s ease;
+                }
+                .rack-3d-style:hover {
+                    transform: rotateX(10deg) rotateY(-12deg) rotateZ(1deg) scale(1.01);
+                    box-shadow: -10px 10px 18px rgba(0,0,0,0.3) !important;
+                }
+                .bg-stripes {
+                    background-image: repeating-linear-gradient(45deg, rgba(24, 24, 27, 0.4), rgba(24, 24, 27, 0.4) 10px, rgba(234, 179, 8, 0.25) 10px, rgba(234, 179, 8, 0.25) 20px) !important;
                 }
             `}</style>
 

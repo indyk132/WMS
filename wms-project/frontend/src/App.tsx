@@ -14,11 +14,13 @@ import Statistics from './pages/AdminPanel/Statistics';
 import Settings from './pages/AdminPanel/Settings';
 import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
 import Supplies from './pages/AdminPanel/Supplies';
+import RmaManager from './pages/AdminPanel/RmaManager';
+import ShippingHub from './pages/AdminPanel/ShippingHub';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -249,6 +251,8 @@ export default function App() {
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
+                    { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
+                    { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
@@ -600,7 +604,7 @@ export default function App() {
         }
     };
 
-    const handleReceiveRmaReturn = async (rmaId: string) => {
+    const handleReceiveRmaReturn = async (rmaId: string, itemsReport?: { sku: string, qtyResale: number, qtyDamaged: number, status: string }[]) => {
         try {
             const po = purchaseOrders.find(p => p.id === rmaId);
             if (!po || po.status !== 'ReturnPending') return;
@@ -608,33 +612,48 @@ export default function App() {
             for (const item of po.items) {
                 const prod = products.find(p => p.sku === item.sku);
                 if (prod) {
-                    await handleUpdateStock(prod, item.qtyOrdered);
+                    const reportItem = itemsReport?.find(r => r.sku === item.sku);
+                    const qtyResale = reportItem ? reportItem.qtyResale : item.qtyOrdered;
+                    const qtyDamaged = reportItem ? reportItem.qtyDamaged : 0;
+                    
+                    if (qtyResale > 0) {
+                        await handleUpdateStock(prod, qtyResale);
+                    }
                     
                     handleAddAllocation({
                         timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                         sku: item.sku,
                         productName: item.name,
                         zone: prod.locationCode || 'A-01-01',
-                        qty: Math.ceil(item.qtyOrdered / 10) || 1,
+                        qty: Math.ceil((qtyResale + qtyDamaged) / 10) || 1,
                         type: 'Przyjęcie zwrotu (RMA)',
                         user: currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)'
                     });
                 }
             }
 
+            const finalStatus = itemsReport?.some(r => r.status === 'Rejected') ? 'ReturnRejected' : 
+                                itemsReport?.every(r => r.qtyDamaged > 0 && r.qtyResale === 0) ? 'ReturnDamaged' : 'ReturnReceived';
+
             setPurchaseOrders(prev => {
-                const updated = prev.map(p => p.id === rmaId ? { ...p, status: 'ReturnReceived' } : p);
+                const updated = prev.map(p => p.id === rmaId ? { ...p, status: finalStatus, itemsReport } : p);
                 window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
                 return updated;
             });
 
             const operator = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
-            const itemsSummary = po.items.map((item: any) => `${item.name} (SKU: ${item.sku}, Ilość: ${item.qtyOrdered})`).join(', ');
+            const itemsSummary = po.items.map((item: any) => {
+                const rItem = itemsReport?.find(r => r.sku === item.sku);
+                const resaleStr = rItem ? `na stan: ${rItem.qtyResale}` : `pełne: ${item.qtyOrdered}`;
+                const damagedStr = rItem && rItem.qtyDamaged > 0 ? `, uszkodzone: ${rItem.qtyDamaged}` : '';
+                return `${item.name} (${resaleStr}${damagedStr})`;
+            }).join(', ');
+
             logActivity(
                 'rma',
                 operator,
                 `Zatwierdzono zwrot RMA ${rmaId}`,
-                `Zwrot od klienta. Produkty: ${itemsSummary}`
+                `Zwrot od klienta. Szczegóły: ${itemsSummary}`
             );
             addToast(
                 'Zwrot RMA przyjęty',
@@ -645,6 +664,26 @@ export default function App() {
             console.error("Receive RMA return failed:", err);
             alert(`Błąd podczas przyjmowania zwrotu RMA: ${err.message}`);
         }
+    };
+
+    const handleCreateRmaReturn = (rma: any) => {
+        setPurchaseOrders(prev => {
+            const updated = [rma, ...prev];
+            window.localStorage.setItem('wms-purchase-orders', JSON.stringify(updated));
+            return updated;
+        });
+        const operator = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
+        logActivity(
+            'rma',
+            operator,
+            `Zgłoszono nowe RMA ${rma.id}`,
+            `Zamówienie bazowe: ${rma.id.replace('RMA-', '')}. Przewoźnik: ${rma.vendorName}.`
+        );
+        addToast(
+            'Zgłoszono zwrot RMA',
+            `Pomyślnie utworzono zgłoszenie RMA dla zamówienia ${rma.id.replace('RMA-', '')}.`,
+            'info'
+        );
     };
 
     const handleGroupPurchaseOrders = (poIds: string[]) => {
@@ -1808,6 +1847,24 @@ export default function App() {
                             onCancelPurchaseOrder={handleCancelPurchaseOrder}
                             onGroupPurchaseOrders={handleGroupPurchaseOrders}
                             onReceiveRmaReturn={handleReceiveRmaReturn}
+                        />
+                    )}
+
+                    {currentTab === 'rma' && isTabAllowed('rma') && (
+                        <RmaManager
+                            purchaseOrders={purchaseOrders}
+                            orders={orders}
+                            products={products}
+                            onCreateRmaReturn={handleCreateRmaReturn}
+                            onReceiveRmaReturn={handleReceiveRmaReturn}
+                        />
+                    )}
+
+                    {currentTab === 'shipping' && isTabAllowed('shipping') && (
+                        <ShippingHub
+                            orders={orders}
+                            onUpdateOrder={handleUpdateOrder}
+                            addToast={addToast}
                         />
                     )}
 

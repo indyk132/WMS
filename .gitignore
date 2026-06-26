@@ -37,4 +37,5 @@ structure.txt
 # Editor / Agent metadata
 .junie/
 
-
+# Scratch pad / temporary scripts
+wms-project/backend/scratch/
