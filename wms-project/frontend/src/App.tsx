@@ -16,11 +16,13 @@ import WorkerTerminalStandAlone from './pages/WorkerTerminalStandAlone';
 import Supplies from './pages/AdminPanel/Supplies';
 import RmaManager from './pages/AdminPanel/RmaManager';
 import ShippingHub from './pages/AdminPanel/ShippingHub';
+import InboundPlanner from './pages/AdminPanel/InboundPlanner';
+import SlottingOptimizer from './pages/AdminPanel/SlottingOptimizer';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -225,6 +227,7 @@ export default function App() {
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
+                    { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
@@ -251,6 +254,8 @@ export default function App() {
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
+                    { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
+                    { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
                     { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
                     { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
@@ -1359,6 +1364,31 @@ export default function App() {
         }
     };
 
+    const handleUpdateProductLocation = async (sku: string, newLocationCode: string, newZone: string) => {
+        try {
+            const product = products.find(p => p.sku === sku);
+            if (!product) return false;
+            await updateInventoryProduct(product.productId, { locationCode: newLocationCode, zone: newZone });
+            await loadInventory();
+            return true;
+        } catch (error) {
+            console.warn('Backend update location failed, updating local state:', error);
+            setProducts(prev => {
+                return prev.map(p => {
+                    if (p.sku === sku) {
+                        return {
+                            ...p,
+                            locationCode: newLocationCode,
+                            zone: newZone,
+                        };
+                    }
+                    return p;
+                });
+            });
+            return true;
+        }
+    };
+
     const handleRestockItem = async (product: Product) => {
         try {
             const newPoId = `PO-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -1864,6 +1894,34 @@ export default function App() {
                         <ShippingHub
                             orders={orders}
                             onUpdateOrder={handleUpdateOrder}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'inbound' && isTabAllowed('inbound') && (
+                        <InboundPlanner
+                            purchaseOrders={purchaseOrders}
+                            products={products}
+                            zones={zones}
+                            onUpdateStock={handleUpdateStock}
+                            onUpdatePurchaseOrder={handleUpdatePurchaseOrder}
+                            logActivity={(message, type, details) => {
+                                const allowedType = type === 'success' ? 'receive' : 'relocate';
+                                logActivity(allowedType, currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'slotting' && isTabAllowed('slotting') && (
+                        <SlottingOptimizer
+                            products={products}
+                            orders={orders}
+                            zones={zones}
+                            onUpdateProductLocation={handleUpdateProductLocation}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
                             addToast={addToast}
                         />
                     )}
