@@ -18,11 +18,14 @@ import RmaManager from './pages/AdminPanel/RmaManager';
 import ShippingHub from './pages/AdminPanel/ShippingHub';
 import InboundPlanner from './pages/AdminPanel/InboundPlanner';
 import SlottingOptimizer from './pages/AdminPanel/SlottingOptimizer';
+import YardManager from './pages/AdminPanel/YardManager';
+import ReorderPlanner from './pages/AdminPanel/ReorderPlanner';
+import SpaceCompactor from './pages/AdminPanel/SpaceCompactor';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -228,6 +231,8 @@ export default function App() {
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
+                    { id: 'yard', label: 'Zarządzanie Placem (YMS)', icon: Truck },
+                    { id: 'reorders', label: 'Planowanie Uzupełnień (Min-Max)', icon: ShoppingCart },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
@@ -255,7 +260,10 @@ export default function App() {
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
+                    { id: 'yard', label: 'Zarządzanie Placem (YMS)', icon: Truck },
+                    { id: 'reorders', label: 'Planowanie Uzupełnień (Min-Max)', icon: ShoppingCart },
                     { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
+                    { id: 'compactor', label: 'Konsolidacja Miejsc (BHP)', icon: Shrink },
                     { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
                     { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
@@ -527,6 +535,30 @@ export default function App() {
 
         window.localStorage.setItem('wms-purchase-orders', JSON.stringify(initialMockPOs));
         return initialMockPOs;
+    });
+
+    const [docks, setDocks] = useState<any[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-inbound-docks');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return [
+            { id: 'D1', name: 'Dok Rozładunkowy D1', status: 'Free' },
+            { id: 'D2', name: 'Dok Rozładunkowy D2', status: 'Free' },
+            { id: 'D3', name: 'Dok Rozładunkowy D3', status: 'Free' }
+        ];
+    });
+
+    const [yardTrucks, setYardTrucks] = useState<any[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-yard-trucks');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return [
+            { id: 'TRK-001', carrierName: 'Raben Logistics', truckPlate: 'WI 90912', status: 'Parked', parkingSlot: 'P1', assignedPoId: 'PO-00813' },
+            { id: 'TRK-002', carrierName: 'DHL Freight', truckPlate: 'WA 87121', status: 'Parked', parkingSlot: 'P2', assignedPoId: 'PO-00814' },
+            { id: 'TRK-003', carrierName: 'Schenker', truckPlate: 'GD 55219', status: 'Queue', assignedPoId: '' }
+        ];
     });
 
     const getSupplierForCategory = (category: string) => {
@@ -987,6 +1019,14 @@ export default function App() {
     }, [activitiesLog]);
 
     useEffect(() => {
+        window.localStorage.setItem('wms-inbound-docks', JSON.stringify(docks));
+    }, [docks]);
+
+    useEffect(() => {
+        window.localStorage.setItem('wms-yard-trucks', JSON.stringify(yardTrucks));
+    }, [yardTrucks]);
+
+    useEffect(() => {
         const handleStorage = (e: StorageEvent) => {
             if (e.key === 'wms-orders' && e.newValue) {
                 try {
@@ -1386,6 +1426,42 @@ export default function App() {
                 });
             });
             return true;
+        }
+    };
+
+    const handleConsolidateStock = async (sku: string, sourceLoc: string, targetLoc: string, qty: number, targetZone: string) => {
+        try {
+            setProducts(prev => {
+                return prev.map(p => {
+                    if (p.sku === sku) {
+                        const newStockEntries = p.stockEntries.map(e => {
+                            if (e.locationCode === sourceLoc) {
+                                return { ...e, quantity: Math.max(0, e.quantity - qty) };
+                            }
+                            if (e.locationCode === targetLoc) {
+                                return { ...e, quantity: e.quantity + qty };
+                            }
+                            return e;
+                        }).filter(e => e.quantity > 0);
+
+                        const newLocations = newStockEntries.map(e => e.locationCode);
+                        const primaryLoc = newStockEntries.length > 0 ? newStockEntries[0].locationCode : targetLoc;
+
+                        return {
+                            ...p,
+                            locationCode: primaryLoc,
+                            locations: newLocations,
+                            stockEntries: newStockEntries,
+                            zone: targetZone
+                        };
+                    }
+                    return p;
+                });
+            });
+            return true;
+        } catch (error) {
+            console.error('Consolidation failed:', error);
+            return false;
         }
     };
 
@@ -1910,6 +1986,34 @@ export default function App() {
                                 logActivity(allowedType, currentUser ? currentUser.name : 'System', message, details || '');
                             }}
                             addToast={addToast}
+                            docks={docks}
+                            setDocks={setDocks}
+                        />
+                    )}
+
+                    {currentTab === 'yard' && isTabAllowed('yard') && (
+                        <YardManager
+                            docks={docks}
+                            setDocks={setDocks}
+                            yardTrucks={yardTrucks}
+                            setYardTrucks={setYardTrucks}
+                            purchaseOrders={purchaseOrders}
+                            logActivity={(message, type, details) => {
+                                logActivity('receive', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'reorders' && isTabAllowed('reorders') && (
+                        <ReorderPlanner
+                            products={products}
+                            purchaseOrders={purchaseOrders}
+                            onCreatePurchaseOrder={handleCreatePurchaseOrder}
+                            logActivity={(message, type, details) => {
+                                logActivity('receive', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
                         />
                     )}
 
@@ -1919,6 +2023,18 @@ export default function App() {
                             orders={orders}
                             zones={zones}
                             onUpdateProductLocation={handleUpdateProductLocation}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'compactor' && isTabAllowed('compactor') && (
+                        <SpaceCompactor
+                            products={products}
+                            zones={zones}
+                            onConsolidateStock={handleConsolidateStock}
                             logActivity={(message, type, details) => {
                                 logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
                             }}

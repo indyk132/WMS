@@ -29,6 +29,8 @@ interface InboundPlannerProps {
   onUpdatePurchaseOrder: (poId: string, updatedFields: Partial<PurchaseOrder>) => void;
   logActivity: (msg: string, type: string, details?: string) => void;
   addToast: (title: string, text: string, type: 'error' | 'warning' | 'info' | 'success') => void;
+  docks: Dock[];
+  setDocks: React.Dispatch<React.SetStateAction<Dock[]>>;
 }
 
 interface Dock {
@@ -48,21 +50,10 @@ export default function InboundPlanner({
   onUpdateStock,
   onUpdatePurchaseOrder,
   logActivity,
-  addToast
+  addToast,
+  docks = [],
+  setDocks
 }: InboundPlannerProps) {
-  // Docks state (saved in localStorage for persistence)
-  const [docks, setDocks] = useState<Dock[]>(() => {
-    try {
-      const saved = window.localStorage.getItem('wms-inbound-docks');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [
-      { id: 'D1', name: 'Dok Rozładunkowy D1', status: 'Free' },
-      { id: 'D2', name: 'Dok Rozładunkowy D2', status: 'Free' },
-      { id: 'D3', name: 'Dok Rozładunkowy D3', status: 'Free' }
-    ];
-  });
-
   // State of locked slots from Storage.tsx config
   const [lockedSlots] = useState<string[]>(() => {
     try {
@@ -93,43 +84,6 @@ export default function InboundPlanner({
     recommendedSlot: string; // e.g. A-01-01-02-01
     reason: string;
   }>>([]);
-
-  // Save docks to localStorage
-  useEffect(() => {
-    window.localStorage.setItem('wms-inbound-docks', JSON.stringify(docks));
-  }, [docks]);
-
-  // Periodic random simulation of incoming trucks
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDocks(prevDocks => {
-        // Find a random free dock and reserve it with a 15% chance
-        const freeDocks = prevDocks.filter(d => d.status === 'Free');
-        if (freeDocks.length > 0 && Math.random() < 0.15) {
-          const targetDock = freeDocks[Math.floor(Math.random() * freeDocks.length)];
-          const carriers = ['DHL Freight', 'Schenker', 'Raben Logistics', 'DPD Cargo', 'FedEx Trade'];
-          const prefixes = ['WI', 'WA', 'KR', 'PO', 'GD', 'DW'];
-          const plates = `${prefixes[Math.floor(Math.random() * prefixes.length)]} ${Math.floor(10000 + Math.random() * 90000)}`;
-          
-          return prevDocks.map(d => {
-            if (d.id === targetDock.id) {
-              return {
-                ...d,
-                status: 'Reserved',
-                carrierName: carriers[Math.floor(Math.random() * carriers.length)],
-                truckPlate: plates,
-                eta: new Date(Date.now() + 15 * 60 * 1000).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
-              };
-            }
-            return d;
-          });
-        }
-        return prevDocks;
-      });
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const pendingPOs = useMemo(() => {
     return purchaseOrders.filter(po => po.status === 'Pending');
