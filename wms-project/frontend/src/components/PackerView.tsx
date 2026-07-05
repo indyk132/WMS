@@ -351,7 +351,9 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
         status: 'Spakowane',
         isPacked: true,
         packedBy: workerName,
-        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę DPD.`,
+        shippingMethod: pData.selectedCourier,
+        waybillNumber: pData.waybillNumber,
+        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę ${pData.selectedCourier}. Numer listu: ${pData.waybillNumber}.`,
         internalNotesActor: workerName,
         waybillPdfDate: new Date().toLocaleDateString('pl-PL')
       });
@@ -1110,7 +1112,9 @@ export function ProcessingOrderScreen({
   onComplete,
   forceError = false
 }: ProcessingOrderScreenProps) {
-  const [processState, setProcessState] = useState<'processing' | 'error' | 'success'>('processing'); 
+  const [processState, setProcessState] = useState<'carrier_selection' | 'processing' | 'error' | 'success'>('carrier_selection'); 
+  const [selectedCourier, setSelectedCourier] = useState<'InPost' | 'DPD' | 'DHL' | 'GLS' | 'UPS'>('DPD');
+  const [waybillNumber, setWaybillNumber] = useState('');
   const [elapsedTime, setElapsedTime] = useState(0);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   
@@ -1124,6 +1128,46 @@ export function ProcessingOrderScreen({
     const d = new Date();
     return d.toTimeString().split(' ')[0];
   });
+
+  // Calculate carrier rates dynamically based on weight & box size markup
+  const calculatedRates = useMemo(() => {
+    let ratesConfig = {
+      InPost: { base: 12.0, perKg: 1.5 },
+      DPD: { base: 15.0, perKg: 1.2 },
+      DHL: { base: 17.0, perKg: 1.0 },
+      GLS: { base: 16.0, perKg: 1.1 },
+      UPS: { base: 22.0, perKg: 0.8 },
+    };
+    try {
+      const saved = window.localStorage.getItem('wms-carrier-rates');
+      if (saved) ratesConfig = JSON.parse(saved);
+    } catch (e) {}
+
+    // Markup based on carton size
+    const cartonMarkups: Record<string, number> = {
+      'Koperta / Karton S': 0,
+      'Karton Średni M': 3.5,
+      'Karton Duży L': 7.0
+    };
+    const markup = cartonMarkups[cartonSize] || 0;
+
+    const results = Object.entries(ratesConfig).map(([carrier, rate]) => {
+      const price = rate.base + (weight * rate.perKg) + markup;
+      return {
+        carrier: carrier as 'InPost' | 'DPD' | 'DHL' | 'GLS' | 'UPS',
+        price: parseFloat(price.toFixed(2)),
+        deliveryDays: carrier === 'UPS' ? 1 : carrier === 'GLS' ? 2 : 1
+      };
+    });
+
+    // Sort by price to find the cheapest
+    return results.sort((a, b) => a.price - b.price);
+  }, [weight, cartonSize]);
+
+  const cheapestCarrier = useMemo(() => {
+    if (calculatedRates.length === 0) return 'DPD';
+    return calculatedRates[0].carrier;
+  }, [calculatedRates]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1143,6 +1187,7 @@ export function ProcessingOrderScreen({
     return () => clearInterval(timer);
   }, [processState]);
 
+  // Simulated API call sequence for shipping label generation
   useEffect(() => {
     if (processState !== 'processing') return;
 
@@ -1176,9 +1221,23 @@ export function ProcessingOrderScreen({
               ...prev, 
               courierLabel: 'complete' 
             }));
+            
+            // Generate mock tracking number
+            const carrierPrefixes: Record<string, string> = {
+              InPost: 'INP',
+              DPD: 'DPD',
+              DHL: 'DHL',
+              GLS: 'GLS',
+              UPS: '1Z'
+            };
+            const prefix = carrierPrefixes[selectedCourier] || 'WAY';
+            const suffix = selectedCourier === 'UPS' ? '9E12803A' : '';
+            const mockWaybill = `${prefix}${Math.floor(100000000 + Math.random() * 900000000)}${suffix}`;
+            setWaybillNumber(mockWaybill);
+
             setProcessState('success');
             sounds.playSuccess();
-            showToast("Pomyślnie wygenerowano list przewozowy DPD", "success");
+            showToast(`Wygenerowano list przewozowy ${selectedCourier}`, "success");
           }
         }, 1800);
 
@@ -1189,11 +1248,22 @@ export function ProcessingOrderScreen({
     }, 1200);
 
     return () => clearTimeout(t1);
-  }, [processState, forceError]);
+  }, [processState, forceError, selectedCourier]);
 
   const showToast = (msg: string, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleStartProcessing = () => {
+    sounds.playSuccess();
+    setProcessState('processing');
+    setStepStates({
+      inventory: 'active',
+      orderStatus: 'pending',
+      courierLabel: 'pending'
+    });
+    setElapsedTime(0);
   };
 
   const handleRetry = () => {
@@ -1204,29 +1274,30 @@ export function ProcessingOrderScreen({
       orderStatus: 'complete',
       courierLabel: 'active'
     });
-    showToast("Ponowna autoryzacja SSL. Generowanie żądania...", "info");
+    showToast(`Ponowna próba autoryzacji SSL dla bramki ${selectedCourier}...`, "info");
 
     setTimeout(() => {
       setStepStates(prev => ({ 
         ...prev, 
         courierLabel: 'complete' 
       }));
+      
+      const carrierPrefixes: Record<string, string> = {
+        InPost: 'INP',
+        DPD: 'DPD',
+        DHL: 'DHL',
+        GLS: 'GLS',
+        UPS: '1Z'
+      };
+      const prefix = carrierPrefixes[selectedCourier] || 'WAY';
+      const suffix = selectedCourier === 'UPS' ? '9E12803A' : '';
+      const mockWaybill = `${prefix}${Math.floor(100000000 + Math.random() * 900000000)}${suffix}`;
+      setWaybillNumber(mockWaybill);
+
       setProcessState('success');
       sounds.playSuccess();
-      showToast("Pomyślnie wygenerowano list przewozowy DPD", "success");
+      showToast(`Wygenerowano list przewozowy ${selectedCourier}`, "success");
     }, 2000);
-  };
-
-  const handleResetSimulation = () => {
-    sounds.playBeep();
-    setProcessState('processing');
-    setStepStates({
-      inventory: 'active',
-      orderStatus: 'pending',
-      courierLabel: 'pending'
-    });
-    setElapsedTime(0);
-    showToast("Zrestartowano proces weryfikacji", "info");
   };
 
   const handleLocalPrintLabel = () => {
@@ -1241,12 +1312,14 @@ export function ProcessingOrderScreen({
       clientName,
       weight,
       cartonSize,
-      cartonCode
+      cartonCode,
+      selectedCourier,
+      waybillNumber
     });
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#f5f7fa] text-zinc-800 flex flex-col font-sans select-none">
+    <div className="w-full min-h-screen bg-[#f5f7fa] text-zinc-800 flex flex-col font-sans select-none animate-fadeIn">
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg border shadow-2xl flex items-center gap-2.5 max-w-sm animate-fadeIn ${
           toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
@@ -1277,7 +1350,6 @@ export function ProcessingOrderScreen({
               <h2 className="text-sm font-black uppercase tracking-wider text-zinc-900">Stacja Pakowania</h2>
             </div>
             <p className="text-[10px] font-mono text-zinc-500 uppercase flex items-center gap-1.5 mt-0.5">
-              <User className="w-3 h-3 text-zinc-400" />
               Zalogowano: <span className="text-zinc-800 font-bold">{workerName}</span>
             </p>
           </div>
@@ -1302,10 +1374,10 @@ export function ProcessingOrderScreen({
       </header>
 
       <div className="flex-grow flex flex-col p-4 md:p-6 gap-6 items-center justify-start max-w-6xl mx-auto w-full">
-        <div className="w-full max-w-4xl mt-2 mb-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="w-full max-w-4xl mt-2 mb-2 flex flex-col sm:flex-row sm:items-end justify-between gap-4 text-left">
           <div>
             <span className="text-[9px] font-black tracking-widest text-[#0052CC] uppercase font-mono block">
-              FINALIZACJA ETYKIETY WYSYŁKOWEJ DPD
+              FINALIZACJA ETYKIETY WYSYŁKOWEJ i SPEDYCJA
             </span>
             <h2 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight mt-1 animate-fadeIn">Przetwarzanie Zlecenia</h2>
             <p className="font-mono text-zinc-500 text-xs mt-1">
@@ -1317,255 +1389,354 @@ export function ProcessingOrderScreen({
             <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono">Stan Przetwarzania: </span>
             <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
               processState === 'error' ? 'bg-red-50 text-red-750 border-red-200' :
-              processState === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-250 shadow-sm' :
+              processState === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-250 shadow-sm animate-pulse' :
+              processState === 'carrier_selection' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
               'bg-white text-purple-700 border-purple-200 animate-pulse'
             }`}>
-              {processState === 'error' ? "Błąd Autoryzacji" : processState === 'success' ? "UKOŃCZONE" : `W TOKU (API)`}
+              {processState === 'error' ? "Błąd Autoryzacji" : 
+               processState === 'success' ? "UKOŃCZONE" : 
+               processState === 'carrier_selection' ? "KALKULACJA STAWEK" : "W TOKU (API)"}
             </span>
           </div>
         </div>
 
-        <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row min-h-[460px] animate-fadeIn">
-          <div className="w-full lg:w-[45%] p-6 sm:p-8 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-center items-center">
-            {processState === 'processing' && (
-              <div className="flex flex-col items-center justify-center text-center space-y-5 animate-fadeIn">
-                <div className="relative w-24 h-24 flex items-center justify-center">
-                  <svg className="absolute w-full h-full text-purple-600 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="1"></circle>
-                    <path d="M12 2a10 10 0 0 1 10 10" className="stroke-[3] text-purple-500"></path>
-                  </svg>
-                  <div className="w-16 h-16 rounded-full bg-white border border-zinc-200 flex items-center justify-center shadow-inner">
-                    <Truck className="w-7 h-7 text-[#0052CC] animate-bounce" />
-                  </div>
-                </div>
-                
-                <div>
-                  <h3 className="text-base font-black text-zinc-950 uppercase tracking-wide">
-                    Generowanie etykiety kurierskiej
-                  </h3>
-                  <p className="text-[10px] text-zinc-500 uppercase font-mono tracking-widest mt-1.5">
-                    UPŁYNĘŁO: <span className="text-[#0052CC] font-bold">{elapsedTime}s</span>
-                  </p>
-                </div>
-                
-                <p className="text-xs text-zinc-500 leading-relaxed max-w-[240px]">
-                  Trwa aktualizacja bazy danych ERP oraz przesyłanie gabarytów opakowania ({weight.toFixed(2)} kg) do bramki DPD API.
-                </p>
-              </div>
-            )}
-
-            {processState === 'error' && (
-              <div className="flex flex-col items-center justify-center text-center space-y-5 animate-fadeIn">
-                <div className="w-20 h-20 rounded-full bg-red-50 border border-red-200 text-red-655 flex items-center justify-center shadow-sm animate-pulse">
-                  <AlertTriangle className="w-9 h-9 stroke-[2.5]" />
-                </div>
-                
-                <div>
-                  <h3 className="text-base font-black text-red-700 uppercase tracking-wide">
-                    Błąd Autoryzacji Bramki
-                  </h3>
-                  <span className="px-2 py-0.5 bg-red-50 border border-red-200 rounded font-mono text-[8px] text-red-750 uppercase tracking-widest font-bold mt-1.5 inline-block">
-                    DPD-API Timeout (Error)
-                  </span>
-                </div>
-                
-                <p className="text-xs text-zinc-500 leading-relaxed max-w-[240px]">
-                  Serwer integracyjny DPD nie zgłosił pomyślnego zwrotu dla przesyłki o kodzie referencyjnym {orderId} z powodu przekroczenia limitu czasu.
-                </p>
-              </div>
-            )}
-
-            {processState === 'success' && (
-              <div className="w-full flex flex-col items-center justify-center gap-4 animate-fadeIn">
-                <span className="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  PODGLĄD WYDRUKU (DPD LABEL)
-                </span>
-                
-                <div className="w-full max-w-[280px] bg-white text-slate-900 p-4 rounded-xl border border-slate-300 shadow-2xl flex flex-col gap-3 font-sans leading-none relative select-none">
-                  <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2.5">
-                    <div>
-                      <p className="text-base font-black text-slate-950 tracking-tight">DPD POLSKA</p>
-                      <p className="text-[8px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">Domestic Express</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold border border-slate-950 px-1.5 py-0.5">PL-OK</span>
-                      <p className="text-[9px] text-slate-700 mt-1 font-bold">Waga: {weight.toFixed(2)} kg</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 text-[9px] text-slate-800">
-                    <p className="font-semibold text-slate-500 uppercase tracking-wider">ODBIORCA / RECIPIENT:</p>
-                    <p className="font-bold text-slate-950 text-[10px]">{clientName}</p>
-                    <div className="pt-1.5 border-t border-dashed border-slate-300 space-y-1">
-                      <p><span className="font-semibold text-slate-400">OPAKOWANIE:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
-                      <p><span className="font-semibold text-slate-400">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded gap-1.5 mt-1 select-none pointer-events-none">
-                    <div className="flex h-11 w-full justify-between max-w-[210px] shrink-0">
-                      {[1,3,1,1,4,2,1,3,1,2,1,3,4,1,2,1,1,3,1,1,4,1,2,1,3,1,1,2,3,4].map((w, idx) => (
-                        <div key={idx} className="bg-slate-950" style={{ width: `${w * 1.3}px` }} />
-                      ))}
-                    </div>
-                    <p className="font-mono text-[9px] font-bold text-slate-900 tracking-[0.18em]">
-                      *DPD20260528{orderId.replace('-', '')}PL*
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleLocalPrintLabel}
-                    className="w-full py-2 bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow border-none"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Drukuj etykietę (Zebra)
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="w-full lg:w-[55%] p-6 sm:p-8 flex flex-col justify-between gap-6">
-            <div className="space-y-6">
-              <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
-                <h4 className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono">
-                  Przebieg Procesu (Execution Sequence)
-                </h4>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={handleResetSimulation}
-                    className="text-[9px] font-bold text-purple-750 hover:text-purple-900 flex items-center gap-1 cursor-pointer transition-all bg-purple-50 border border-purple-250 px-2 py-0.5 rounded"
-                  >
-                    <RotateCcw className="w-3 h-3 animate-pulse" />
-                    Resetuj Symulację
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-5">
-                <div className="flex items-start gap-4">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
-                    stepStates.inventory === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm animate-zoomIn' : 'bg-zinc-50 border-zinc-200 text-zinc-400'
-                  }`}>
-                    {stepStates.inventory === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <span>1</span>}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <h5 className="font-bold text-xs text-zinc-900">Aktualizacja stanów magazynowych (WMS/ERP)</h5>
-                      <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">Ukończono</span>
-                    </div>
-                    <p className="text-[11px] text-zinc-500">Korygowanie stanu magazynowego na lokacji fizycznej zlecenia.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
-                    stepStates.orderStatus === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' :
-                    stepStates.orderStatus === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-400'
-                  }`}>
-                    {stepStates.orderStatus === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <span>2</span>}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <h5 className="font-bold text-xs text-zinc-900">Weryfikacja kompletacji i zmiana statusu paczki</h5>
-                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
-                        stepStates.orderStatus === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                        stepStates.orderStatus === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
-                      }`}>{stepStates.orderStatus === 'complete' ? "Ukończono" : stepStates.orderStatus === 'active' ? "W toku" : "Oczekuje"}</span>
-                    </div>
-                    <p className="text-[11px] text-zinc-500">Autoryzacja i zatwierdzenie statusu zamówienia w bazie systemowej.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
-                    stepStates.courierLabel === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' :
-                    stepStates.courierLabel === 'failed' ? 'bg-red-50 border-red-250 text-red-655' :
-                    stepStates.courierLabel === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-405'
-                  }`}>
-                    {stepStates.courierLabel === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> :
-                     stepStates.courierLabel === 'failed' ? <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-bounce" /> : <span>3</span>}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <h5 className="font-bold text-xs text-zinc-900">Generowanie etykiety kurierskiej kuriera DPD</h5>
-                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
-                        stepStates.courierLabel === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        stepStates.courierLabel === 'failed' ? 'bg-red-50 text-red-750 border-red-200 animate-pulse' :
-                        stepStates.courierLabel === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
-                      }`}>{stepStates.courierLabel === 'complete' ? "Wygenerowano" : stepStates.courierLabel === 'failed' ? "BŁĄD API" : stepStates.courierLabel === 'active' ? "Wysyłanie" : "Oczekuje"}</span>
-                    </div>
-                    {stepStates.courierLabel === 'failed' ? (
-                      <p className="text-[11px] text-red-655 font-semibold font-mono">Courier API Connection Timeout. Serwer 'DPD-PROD-PL-01' nie odpowiedział.</p>
-                    ) : (
-                      <p className="text-[11px] text-zinc-500">Łączenie z serwerem zewnętrznym kuriera DPD w celu wygenerowania listu przewozowego.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
+        {processState === 'carrier_selection' ? (
+          /* Carrier Selector rate calculator panel */
+          <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl p-6 sm:p-8 space-y-6 text-left animate-fadeIn">
+            <div className="border-b border-zinc-150 pb-4">
+              <h3 className="text-base font-extrabold text-zinc-900 flex items-center gap-2">
+                <Truck className="w-5.5 h-5.5 text-blue-650 animate-bounce" /> Kalkulator Taryf Spedycyjnych Brokera WMS
+              </h3>
+              <p className="text-xs text-zinc-550 mt-1 font-medium font-sans">
+                Waga paczki wynosi <strong className="text-zinc-900 font-mono">{weight.toFixed(2)} kg</strong>, a gabaryt to <strong className="text-zinc-900 uppercase">{cartonSize}</strong>. Poniżej wyliczono stawki dla zakontraktowanych kurierów:
+              </p>
             </div>
 
-            <div className="pt-4 border-t border-zinc-200">
-              {processState === 'error' && (
-                <div className="p-4 border border-red-200 rounded-xl bg-red-50/50 flex flex-col gap-4 animate-slideIn">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              {calculatedRates.map(rate => {
+                const isCheapest = rate.carrier === cheapestCarrier;
+                const isSelected = rate.carrier === selectedCourier;
+                
+                // Styling helpers
+                let carrierColor = 'text-amber-600 bg-amber-50 border-amber-200';
+                if (rate.carrier === 'DHL') carrierColor = 'text-yellow-600 bg-yellow-50 border-yellow-250';
+                if (rate.carrier === 'InPost') carrierColor = 'text-zinc-800 bg-zinc-50 border-zinc-300';
+                if (rate.carrier === 'GLS') carrierColor = 'text-blue-750 bg-blue-50 border-blue-200';
+                if (rate.carrier === 'UPS') carrierColor = 'text-amber-900 bg-amber-50/50 border-amber-800/30';
+
+                return (
+                  <div
+                    key={rate.carrier}
+                    onClick={() => {
+                      sounds.playBeep();
+                      setSelectedCourier(rate.carrier);
+                    }}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer text-center flex flex-col justify-between items-center gap-3 relative overflow-hidden select-none hover:shadow-md ${
+                      isSelected 
+                        ? 'border-indigo-650 bg-indigo-50/20 ring-1 ring-indigo-500 shadow-sm' 
+                        : 'border-zinc-200 bg-white hover:border-zinc-300'
+                    }`}
+                  >
+                    {isCheapest && (
+                      <span className="absolute top-0 right-0 bg-emerald-600 text-white font-sans font-black text-[7.5px] uppercase tracking-widest px-2 py-0.6 rounded-bl">
+                        AI TANIO
+                      </span>
+                    )}
+
+                    <div className="space-y-0.5">
+                      <span className={`text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${carrierColor}`}>
+                        {rate.carrier}
+                      </span>
+                      <span className="text-[9px] text-zinc-400 block mt-1 font-semibold">{rate.deliveryDays === 1 ? '1 dzień roboczy' : `${rate.deliveryDays} dni robocze`}</span>
+                    </div>
+
+                    <div className="my-1 text-center">
+                      <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider select-none">Koszt dostawy:</span>
+                      <span className="text-xl font-black font-mono text-zinc-950">{rate.price.toFixed(2)} <span className="text-xs font-bold font-sans">PLN</span></span>
+                    </div>
+
+                    <div className="w-full flex items-center justify-center">
+                      <input 
+                        type="radio" 
+                        name="selectedCourier"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-indigo-600 border-zinc-300 focus:ring-indigo-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-150">
+              <button
+                type="button"
+                onClick={onBack}
+                className="h-11 px-5 border border-zinc-300 hover:bg-zinc-50 text-zinc-650 rounded-xl font-bold text-xs cursor-pointer bg-white"
+              >
+                Powrót
+              </button>
+              <button
+                type="button"
+                onClick={handleStartProcessing}
+                className="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer shadow-md border-none flex items-center gap-1.5 active:scale-[0.98] transition-transform"
+              >
+                Rozpocznij generowanie listu &rarr;
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row min-h-[460px] animate-fadeIn">
+            <div className="w-full lg:w-[45%] p-6 sm:p-8 bg-zinc-50 border-r border-zinc-200 flex flex-col justify-center items-center">
+              {processState === 'processing' && (
+                <div className="flex flex-col items-center justify-center text-center space-y-5 animate-fadeIn">
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                    <svg className="absolute w-full h-full text-purple-600 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="1"></circle>
+                      <path d="M12 2a10 10 0 0 1 10 10" className="stroke-[3] text-purple-500"></path>
+                    </svg>
+                    <div className="w-16 h-16 rounded-full bg-white border border-zinc-200 flex items-center justify-center shadow-inner">
+                      <Truck className="w-7 h-7 text-[#0052CC] animate-bounce" />
+                    </div>
+                  </div>
+                  
                   <div>
-                    <h6 className="font-bold text-xs text-red-750 uppercase tracking-wider animate-pulse">Generowanie listu kończyło się błędem Connection Timeout</h6>
-                    <p className="text-[11px] text-zinc-500 mt-1 font-medium leading-relaxed">
-                      Połączenie z serwerem DPD wygasło. Możesz kliknąć poniżej aby podjąć ponowną próbę autoryzacji sesji SSL.
+                    <h3 className="text-base font-black text-zinc-950 uppercase tracking-wide">
+                      Generowanie etykiety {selectedCourier}
+                    </h3>
+                    <p className="text-[10px] text-zinc-500 uppercase font-mono tracking-widest mt-1.5">
+                      UPŁYNĘŁO: <span className="text-[#0052CC] font-bold">{elapsedTime}s</span>
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={handleRetry}
-                      className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-550 hover:from-red-550 hover:to-red-400 text-white text-xs font-black uppercase tracking-wider rounded-lg flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all border-none"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Spróbuj Ponownie (Retry)
-                    </button>
-                    <button
-                      onClick={() => showToast("Telefon wsparcia WMS-IT: +48 22 555 18 18", "info")}
-                      className="px-4 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-250 text-zinc-700 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-all"
-                    >
-                      Wsparcie IT
-                    </button>
+                  
+                  <p className="text-xs text-zinc-500 leading-relaxed max-w-[240px]">
+                    Trwa aktualizacja bazy danych ERP oraz przesyłanie gabarytów opakowania ({weight.toFixed(2)} kg) do bramki API {selectedCourier}.
+                  </p>
+                </div>
+              )}
+
+              {processState === 'error' && (
+                <div className="flex flex-col items-center justify-center text-center space-y-5 animate-fadeIn">
+                  <div className="w-20 h-20 rounded-full bg-red-50 border border-red-200 text-red-655 flex items-center justify-center shadow-sm animate-pulse">
+                    <AlertTriangle className="w-9 h-9 stroke-[2.5]" />
                   </div>
+                  
+                  <div>
+                    <h3 className="text-base font-black text-red-700 uppercase tracking-wide">
+                      Błąd Autoryzacji Bramki
+                    </h3>
+                    <span className="px-2 py-0.5 bg-red-50 border border-red-200 rounded font-mono text-[8px] text-red-750 uppercase tracking-widest font-bold mt-1.5 inline-block">
+                      {selectedCourier}-API Timeout (Error)
+                    </span>
+                  </div>
+                  
+                  <p className="text-xs text-zinc-500 leading-relaxed max-w-[240px]">
+                    Serwer integracyjny {selectedCourier} nie zgłosił pomyślnego zwrotu dla przesyłki o kodzie referencyjnym {orderId} z powodu przekroczenia limitu czasu.
+                  </p>
                 </div>
               )}
 
               {processState === 'success' && (
-                <div className="p-4 border border-emerald-250 rounded-xl bg-emerald-50/30 flex flex-col gap-4 animate-slideIn">
-                  <div>
-                    <h6 className="font-bold text-xs text-emerald-800 uppercase tracking-wider">Proces zakończony sukcesem</h6>
-                    <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
-                      List przewozowy DPD został poprawnie wygenerowany. Zatwierdź paczkę, aby przenieść zlecenie do statusu 'Spakowane'.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
+                <div className="w-full flex flex-col items-center justify-center gap-4 animate-fadeIn">
+                  <span className="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    PODGLĄD WYDRUKU ({selectedCourier} LABEL)
+                  </span>
+                  
+                  {/* Zebra Thermal Shipping Label Preview Card */}
+                  <div className="w-full max-w-[280px] bg-white text-slate-900 p-4 rounded-xl border border-slate-350 shadow-2xl flex flex-col gap-3.5 font-sans leading-none relative select-none text-left">
+                    <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2.5">
+                      <div>
+                        <p className="text-base font-black text-slate-950 tracking-tight uppercase">{selectedCourier} EXPRESS</p>
+                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">Domestic Courier Service</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold border border-slate-950 px-1.5 py-0.5">PL-WMS</span>
+                        <p className="text-[9px] text-slate-700 mt-1.5 font-bold">Waga: {weight.toFixed(2)} kg</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-[9px] text-slate-800">
+                      <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">NADAWCA / SENDER:</p>
+                      <p className="font-bold text-slate-950">MAGAZYN CENTRALNY WMS</p>
+                      <p className="text-slate-500">Aleja Logistyczna 12, Warszawa</p>
+                    </div>
+
+                    <div className="space-y-1 text-[9px] text-slate-800 border-t border-slate-150 pt-2">
+                      <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">ODBIORCA / RECIPIENT:</p>
+                      <p className="font-bold text-slate-950 text-[10px] leading-snug">{clientName}</p>
+                      
+                      <div className="pt-2 border-t border-dashed border-slate-200 space-y-1 select-none">
+                        <p><span className="font-semibold text-slate-400">PUDŁO:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
+                        <p><span className="font-semibold text-slate-400">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded gap-1.5 mt-1 select-none pointer-events-none">
+                      <div className="flex h-11 w-full justify-between max-w-[210px] shrink-0">
+                        {[1,3,1,1,4,2,1,3,1,2,1,3,4,1,2,1,1,3,1,1,4,1,2,1,3,1,1,2,3,4].map((w, idx) => (
+                          <div key={idx} className="bg-slate-950" style={{ width: `${w * 1.3}px` }} />
+                        ))}
+                      </div>
+                      <p className="font-mono text-[9px] font-bold text-slate-900 tracking-[0.16em]">
+                        *{waybillNumber}*
+                      </p>
+                    </div>
+
                     <button
-                      onClick={handleFinalizeAndCompleteOrder}
-                      className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-550 hover:from-emerald-550 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-widest rounded-xl flex items-center gap-2.5 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.98] transition-all border-none"
+                      onClick={handleLocalPrintLabel}
+                      className="w-full py-2.5 bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow border-none"
                     >
-                      <Check className="w-4 h-4 stroke-[3]" />
-                      ZATWIERDŹ I ZAMKNIJ ZLECENIE
+                      <Printer className="w-3.5 h-3.5" />
+                      Drukuj etykietę (Zebra)
                     </button>
                   </div>
                 </div>
               )}
+            </div>
 
-              {processState !== 'success' && (
-                <div className="flex justify-end mt-4">
-                  <button 
-                    onClick={onBack}
-                    className="border border-zinc-250 hover:bg-zinc-50 bg-white text-zinc-750 font-bold px-4 py-2.5 rounded-lg text-xs uppercase tracking-wider cursor-pointer transition-all"
-                  >
-                    Anuluj / Wróć
-                  </button>
+            <div className="w-full lg:w-[55%] p-6 sm:p-8 flex flex-col justify-between gap-6 text-left">
+              <div className="space-y-6">
+                <div className="flex justify-between items-center border-b border-zinc-200 pb-2 select-none">
+                  <h4 className="text-[10px] uppercase font-black tracking-widest text-zinc-400 font-mono">
+                    Przebieg Procesu (Execution Sequence)
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleStartProcessing}
+                      className="text-[9px] font-bold text-purple-750 hover:text-purple-900 flex items-center gap-1 cursor-pointer transition-all bg-purple-50 border border-purple-250 px-2 py-0.5 rounded"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Resetuj Symulację
+                    </button>
+                  </div>
                 </div>
-              )}
+
+                <div className="space-y-5">
+                  <div className="flex items-start gap-4">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
+                      stepStates.inventory === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm animate-zoomIn' : 'bg-zinc-50 border-zinc-200 text-zinc-400'
+                    }`}>
+                      {stepStates.inventory === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <span>1</span>}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <h5 className="font-bold text-xs text-zinc-900">Aktualizacja stanów magazynowych (WMS/ERP)</h5>
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">Ukończono</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500">Korygowanie stanu magazynowego na lokacji fizycznej zlecenia.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
+                      stepStates.orderStatus === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' :
+                      stepStates.orderStatus === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-400'
+                    }`}>
+                      {stepStates.orderStatus === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <span>2</span>}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <h5 className="font-bold text-xs text-zinc-900">Weryfikacja kompletacji i zmiana statusu paczki</h5>
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
+                          stepStates.orderStatus === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                          stepStates.orderStatus === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
+                        }`}>{stepStates.orderStatus === 'complete' ? "Ukończono" : stepStates.orderStatus === 'active' ? "W toku" : "Oczekuje"}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-500">Autoryzacja i zatwierdzenie statusu zamówienia w bazie systemowej.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-mono text-[10px] border ${
+                      stepStates.courierLabel === 'complete' ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-sm' :
+                      stepStates.courierLabel === 'failed' ? 'bg-red-50 border-red-250 text-red-655' :
+                      stepStates.courierLabel === 'active' ? 'bg-white border-purple-400 text-purple-600 animate-pulse' : 'bg-zinc-50 border-zinc-200 text-zinc-405'
+                    }`}>
+                      {stepStates.courierLabel === 'complete' ? <Check className="w-3.5 h-3.5 stroke-[3]" /> :
+                       stepStates.courierLabel === 'failed' ? <AlertCircle className="w-3.5 h-3.5 text-red-500 animate-bounce" /> : <span>3</span>}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <h5 className="font-bold text-xs text-zinc-900">Generowanie etykiety kurierskiej kuriera {selectedCourier}</h5>
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
+                          stepStates.courierLabel === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          stepStates.courierLabel === 'failed' ? 'bg-red-50 text-red-750 border-red-200 animate-pulse' :
+                          stepStates.courierLabel === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
+                        }`}>{stepStates.courierLabel === 'complete' ? "Wygenerowano" : stepStates.courierLabel === 'failed' ? "BŁĄD API" : stepStates.courierLabel === 'active' ? "Wysyłanie" : "Oczekuje"}</span>
+                      </div>
+                      {stepStates.courierLabel === 'failed' ? (
+                        <p className="text-[11px] text-red-655 font-semibold font-mono">Courier API Connection Timeout. Serwer '{selectedCourier}-PROD-PL-01' nie odpowiedział.</p>
+                      ) : (
+                        <p className="text-[11px] text-zinc-500">Łączenie z serwerem zewnętrznym kuriera {selectedCourier} w celu wygenerowania listu przewozowego.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-200">
+                {processState === 'error' && (
+                  <div className="p-4 border border-red-200 rounded-xl bg-red-50/50 flex flex-col gap-4 animate-slideIn text-left">
+                    <div>
+                      <h6 className="font-bold text-xs text-red-750 uppercase tracking-wider animate-pulse">Błąd połączenia podczas autoryzacji listu przewozowego</h6>
+                      <p className="text-[11px] text-zinc-500 mt-1 font-medium leading-relaxed">
+                        Połączenie z serwerem {selectedCourier} wygasło. Możesz kliknąć poniżej aby podjąć ponowną próbę autoryzacji sesji SSL.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handleRetry}
+                        className="px-5 py-2.5 bg-gradient-to-r from-red-600 to-red-550 hover:from-red-550 hover:to-red-400 text-white text-xs font-black uppercase tracking-wider rounded-lg flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all border-none"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Spróbuj Ponownie (Retry)
+                      </button>
+                      <button
+                        onClick={() => showToast("Telefon wsparcia WMS-IT: +48 22 555 18 18", "info")}
+                        className="px-4 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-250 text-zinc-700 text-xs font-bold rounded-lg flex items-center gap-2 cursor-pointer transition-all"
+                      >
+                        Wsparcie IT
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {processState === 'success' && (
+                  <div className="p-4 border border-emerald-250 rounded-xl bg-emerald-50/30 flex flex-col gap-4 animate-slideIn text-left">
+                    <div>
+                      <h6 className="font-bold text-xs text-emerald-800 uppercase tracking-wider">Proces zakończony sukcesem</h6>
+                      <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                        List przewozowy {selectedCourier} został poprawnie wygenerowany. Zapisz i zamknij zlecenie, aby przenieść je do statusu 'Spakowane'.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handleFinalizeAndCompleteOrder}
+                        className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-550 hover:from-emerald-550 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-widest rounded-xl flex items-center gap-2.5 cursor-pointer shadow-md hover:scale-[1.01] active:scale-[0.98] transition-all border-none"
+                      >
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        ZATWIERDŹ I ZAMKNIJ ZLECENIE
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {processState !== 'success' && (
+                  <div className="flex justify-end mt-4">
+                    <button 
+                      onClick={() => setProcessState('carrier_selection')}
+                      className="border border-zinc-250 hover:bg-zinc-50 bg-white text-zinc-750 font-bold px-4 py-2.5 rounded-lg text-xs uppercase tracking-wider cursor-pointer transition-all"
+                    >
+                      &larr; Wstecz (Taryfy)
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

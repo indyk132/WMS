@@ -21,11 +21,16 @@ import SlottingOptimizer from './pages/AdminPanel/SlottingOptimizer';
 import YardManager from './pages/AdminPanel/YardManager';
 import ReorderPlanner from './pages/AdminPanel/ReorderPlanner';
 import SpaceCompactor from './pages/AdminPanel/SpaceCompactor';
+import PredictiveRelocation from './pages/AdminPanel/PredictiveRelocation';
+import DockScheduling from './pages/AdminPanel/DockScheduling';
+import WavePicking from './pages/AdminPanel/WavePicking';
+import PutawayAssistant from './pages/AdminPanel/PutawayAssistant';
+import LpnManager from './pages/AdminPanel/LpnManager';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -258,12 +263,17 @@ export default function App() {
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'wave_picking', label: 'Zbiórka Falowa (AI)', icon: GitMerge },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
+                    { id: 'putaway', label: 'Rozmieszczenie (Dock-to-Stock)', icon: CornerDownRight },
+                    { id: 'lpn_manager', label: 'Obsługa Palet (LPN)', icon: Tag },
                     { id: 'yard', label: 'Zarządzanie Placem (YMS)', icon: Truck },
+                    { id: 'dock_scheduling', label: 'Awizacje i Bramy (YMS)', icon: Calendar },
                     { id: 'reorders', label: 'Planowanie Uzupełnień (Min-Max)', icon: ShoppingCart },
                     { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
                     { id: 'compactor', label: 'Konsolidacja Miejsc (BHP)', icon: Shrink },
+                    { id: 'predictive', label: 'Optymalizacja Fast-Pick (AI)', icon: Sparkles },
                     { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
                     { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
@@ -1943,6 +1953,17 @@ export default function App() {
                         />
                     )}
 
+                    {currentTab === 'wave_picking' && isTabAllowed('wave_picking') && (
+                        <WavePicking
+                            orders={orders}
+                            onUpdateOrder={handleUpdateOrder}
+                            logActivity={(message, type, details) => {
+                                logActivity('wave', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
                     {currentTab === 'supplies' && isTabAllowed('supplies') && (
                         <Supplies
                             purchaseOrders={purchaseOrders}
@@ -1991,6 +2012,29 @@ export default function App() {
                         />
                     )}
 
+                    {currentTab === 'putaway' && isTabAllowed('putaway') && (
+                        <PutawayAssistant
+                            products={products}
+                            purchaseOrders={purchaseOrders}
+                            onUpdateProductLocation={handleUpdateProductLocation}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'lpn_manager' && isTabAllowed('lpn_manager') && (
+                        <LpnManager
+                            products={products}
+                            onUpdateProductLocation={handleUpdateProductLocation}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
                     {currentTab === 'yard' && isTabAllowed('yard') && (
                         <YardManager
                             docks={docks}
@@ -1998,6 +2042,20 @@ export default function App() {
                             yardTrucks={yardTrucks}
                             setYardTrucks={setYardTrucks}
                             purchaseOrders={purchaseOrders}
+                            logActivity={(message, type, details) => {
+                                logActivity('receive', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'dock_scheduling' && isTabAllowed('dock_scheduling') && (
+                        <DockScheduling
+                            purchaseOrders={purchaseOrders}
+                            yardTrucks={yardTrucks}
+                            setYardTrucks={setYardTrucks}
+                            docks={docks}
+                            setDocks={setDocks}
                             logActivity={(message, type, details) => {
                                 logActivity('receive', currentUser ? currentUser.name : 'System', message, details || '');
                             }}
@@ -2035,6 +2093,18 @@ export default function App() {
                             products={products}
                             zones={zones}
                             onConsolidateStock={handleConsolidateStock}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'predictive' && isTabAllowed('predictive') && (
+                        <PredictiveRelocation
+                            products={products}
+                            orders={orders}
+                            onUpdateProductLocation={handleUpdateProductLocation}
                             logActivity={(message, type, details) => {
                                 logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
                             }}
