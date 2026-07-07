@@ -59,6 +59,7 @@ import CartDrawer from './components/CartDrawer';
 import SearchBar from './components/SearchBar';
 import ProductGallery from './components/ProductGallery';
 import OrderSummary from './components/OrderSummary';
+import SameDayCountdown from './components/SameDayCountdown';
 
 const mapWmsProductToStorefront = (wmsProd: any): Product => {
   const cleanWmsSku = (wmsProd.sku || '').trim().toLowerCase();
@@ -277,6 +278,10 @@ export default function App() {
   const [shippingMethod, setShippingMethod] = useState<'express' | 'air'>('express');
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromoPct, setAppliedPromoPct] = useState(0);
+
+  const [giftWrapping, setGiftWrapping] = useState(false);
+  const [giftStyle, setGiftStyle] = useState('Klasyczny czerwony z wstążką');
+  const [giftMessage, setGiftMessage] = useState('');
 
   // Login Form State
   const [loginEmail, setLoginEmail] = useState('');
@@ -734,10 +739,15 @@ export default function App() {
       shipmentDate: shipmentDate,
       items: wmsOrderItems,
       warehouseCode: 'HUB-PL-01',
-      internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}. Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'}`,
+      internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}. Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'}${
+        giftWrapping ? ` | 🎁 OPCJA PREZENTOWA - Styl: ${giftStyle}, Bilecik: "${giftMessage}"` : ''
+      }`,
       internalNotesActor: 'Sklep Internetowy',
       isPacked: false,
-      synced: false
+      synced: false,
+      giftWrapping: giftWrapping,
+      giftStyle: giftWrapping ? giftStyle : '',
+      giftMessage: giftWrapping ? giftMessage : ''
     };
 
     // Save to WMS orders list
@@ -2361,6 +2371,8 @@ export default function App() {
                             </span>
                           </div>
 
+                          <SameDayCountdown />
+
                           {/* Configuration selectors */}
                           <div className="space-y-4">
                             {/* Color Selector */}
@@ -2634,6 +2646,56 @@ export default function App() {
                               </div>
                             </div>
 
+                            {/* Step C.5: Gift Wrapping Options */}
+                            <div className="bg-zinc-950 border border-zinc-900 p-5 space-y-4">
+                              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
+                                <span className="h-5 w-5 bg-zinc-900 flex items-center justify-center text-[10px] font-mono text-white font-bold border border-zinc-800">3.5</span>
+                                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-200">🎁 Opcje pakowania na prezent</h3>
+                              </div>
+
+                              <label className="flex items-start gap-2.5 p-3 border border-zinc-850 hover:border-zinc-700 bg-black/60 cursor-pointer text-xs font-mono select-none text-left">
+                                <input
+                                  type="checkbox"
+                                  checked={giftWrapping}
+                                  onChange={(e) => setGiftWrapping(e.target.checked)}
+                                  className="accent-white h-4 w-4 mt-0.5"
+                                />
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-zinc-200 block">Zapakuj zamówienie na prezent (+15.00 EUR)</span>
+                                  <span className="text-[10px] text-zinc-500 block">Zamówienie owiniemy papierem ozdobnym i dołączymy odręczny bilecik z Twoją dedykacją.</span>
+                                </div>
+                              </label>
+
+                              {giftWrapping && (
+                                <div className="space-y-3.5 pt-2 animate-fadeIn">
+                                  <div className="space-y-1.5 text-left">
+                                    <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono">Wybierz styl opakowania</label>
+                                    <select
+                                      value={giftStyle}
+                                      onChange={(e) => setGiftStyle(e.target.value)}
+                                      className="w-full bg-black border border-zinc-850 p-2.5 text-xs text-zinc-300 font-mono focus:outline-none focus:border-zinc-750"
+                                    >
+                                      <option value="Klasyczny czerwony z wstążką">Klasyczny czerwony z wstążką</option>
+                                      <option value="Elegancki czarny ze złotem">Elegancki czarny ze złotem</option>
+                                      <option value="Ekologiczny kraft ze sznurkiem">Ekologiczny kraft ze sznurkiem</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="space-y-1.5 text-left">
+                                    <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono">Treść dedykacji na bileciku (maks. 200 znaków)</label>
+                                    <textarea
+                                      value={giftMessage}
+                                      onChange={(e) => setGiftMessage(e.target.value.slice(0, 200))}
+                                      placeholder="Wpisz treść życzeń..."
+                                      rows={3}
+                                      className="w-full bg-black border border-zinc-850 p-2.5 text-xs text-zinc-300 font-mono focus:outline-none focus:border-zinc-750 placeholder-zinc-700"
+                                    />
+                                    <span className="text-[9px] text-zinc-500 block text-right">Pozostało: {200 - giftMessage.length} znaków</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
                             {/* Step D: Mocked Payment and checkout dispatch */}
                             <div className="bg-zinc-950 border border-zinc-905 p-5 space-y-4">
                               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
@@ -2700,6 +2762,7 @@ export default function App() {
                               ]}
                               couponDiscountPct={appliedPromoPct}
                               shippingCost={shippingMethod === 'express' ? 0 : 45}
+                              giftWrappingCost={giftWrapping ? 15 : 0}
                             />
                           </div>
                         </form>

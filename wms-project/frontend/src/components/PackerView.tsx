@@ -19,6 +19,7 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cartonSize, setCartonSize] = useState('Carton-M'); 
   const [weightKg, setWeightKg] = useState(3.45);
+  const [isGiftConfirmed, setIsGiftConfirmed] = useState(false);
   const [isWeightCalibrated, setIsWeightCalibrated] = useState(true);
   const [isCartonScanned, setIsCartonScanned] = useState(true);
   const [kpiStats, setKpiStats] = useState({ packedToday: 18, avgTimeSec: 42 });
@@ -327,12 +328,19 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   };
 
   const handleStartDispatchProcessing = () => {
+    if (selectedOrder?.giftWrapping && !isGiftConfirmed) {
+      sounds.playError();
+      showLocalToast('Błąd! Zlecenie wymaga pakowania ozdobnego. Potwierdź pakowanie przyciskiem na panelu prezentowym.', 'error');
+      return;
+    }
     sounds.playSuccess();
     if (onUpdateOrder && selectedOrderId) {
       onUpdateOrder(selectedOrderId, {
         isPacked: true,
         packedBy: workerName,
-        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Spakowano do ${cartonSize === 'Carton-S' ? 'Koperta / Karton S' : cartonSize === 'Carton-L' ? 'Karton Duży L' : 'Karton Średni M'} o wadze ${weightKg.toFixed(2)}kg przez ${workerName}.`,
+        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Spakowano do ${cartonSize === 'Carton-S' ? 'Koperta / Karton S' : cartonSize === 'Carton-L' ? 'Karton Duży L' : 'Karton Średni M'} o wadze ${weightKg.toFixed(2)}kg przez ${workerName}.${
+          selectedOrder?.giftWrapping ? ` | 🎁 ZAPAKOWANO NA PREZENT (Styl: ${selectedOrder.giftStyle})` : ''
+        }`,
         internalNotesActor: workerName,
       });
     }
@@ -632,6 +640,48 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                   Zamknij sesję
                 </button>
               </div>
+
+              {selectedOrder?.giftWrapping && (
+                <div className={`p-4 border-2 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-300 shadow-sm text-left ${
+                  isGiftConfirmed 
+                    ? 'bg-emerald-50/30 border-emerald-500/40' 
+                    : 'bg-gradient-to-r from-red-50/70 to-amber-50/70 border-red-500/60'
+                }`}>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🎁</span>
+                      <h4 className="text-xs font-black uppercase text-zinc-950 tracking-wider">
+                        ZLECENIE PREZENTOWE
+                      </h4>
+                      <span className="px-2 py-0.5 bg-red-100 border border-red-200 text-red-750 font-mono text-[9px] rounded-md font-bold uppercase tracking-wider">
+                        Styl: {selectedOrder?.giftStyle || 'Klasyczny'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-zinc-400 font-mono font-bold block uppercase">Tekst dedykacji na bilecik okolicznościowy:</span>
+                      <blockquote className="border-l-4 border-amber-500 pl-3 py-1 bg-white/60 p-2.5 rounded text-xs font-mono text-zinc-800 italic leading-relaxed max-w-xl">
+                        "{selectedOrder?.giftMessage || 'Brak dedykacji (tylko pakowanie)'}"
+                      </blockquote>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      sounds.playSuccess();
+                      setIsGiftConfirmed(prev => !prev);
+                    }}
+                    className={`px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 transition-all border-none ${
+                      isGiftConfirmed 
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                        : 'bg-red-655 hover:bg-red-750 text-white animate-pulse'
+                    }`}
+                  >
+                    {isGiftConfirmed ? <CheckCircle2 className="w-4 h-4" /> : <span>🎁</span>}
+                    {isGiftConfirmed ? 'Potwierdzono' : 'Potwierdź pakowanie'}
+                  </button>
+                </div>
+              )}
 
               <div className="bg-white border border-zinc-200 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0 shadow-sm animate-fadeIn">
                 <div className="flex items-center gap-3">

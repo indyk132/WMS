@@ -10,9 +10,10 @@ interface OrderSummaryProps {
   cartItems: CartItem[];
   couponDiscountPct: number; // e.g. 0.1 for 10%
   shippingCost: number; // e.g. 0 or 45
+  giftWrappingCost?: number;
 }
 
-export default function OrderSummary({ cartItems, couponDiscountPct, shippingCost }: OrderSummaryProps) {
+export default function OrderSummary({ cartItems, couponDiscountPct, shippingCost, giftWrappingCost = 0 }: OrderSummaryProps) {
   // Compute prices
   const computeSubtotal = () => {
     return cartItems.reduce((acc, item) => {
@@ -27,7 +28,7 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
   const taxableSubtotal = Math.max(0, subtotal - discountAmount);
   // 23% VAT Polish Tax simulation
   const vatAmount = taxableSubtotal * 0.23;
-  const grandTotal = taxableSubtotal + shippingCost;
+  const grandTotal = taxableSubtotal + shippingCost + giftWrappingCost;
 
   return (
     <div className="bg-zinc-950 border border-zinc-800 p-5 space-y-5" id="order-summary-box">
@@ -62,7 +63,7 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
                 <div className="min-w-0 flex-grow">
                   <div className="flex justify-between gap-1">
                     <h4 className="font-medium text-zinc-200 truncate leading-tight">
-                      {item.product.name}
+                       {item.product.name}
                     </h4>
                     <span className="font-mono text-zinc-300 flex-shrink-0">
                       {lineSub.toFixed(2)} EUR
@@ -108,6 +109,15 @@ export default function OrderSummary({ cartItems, couponDiscountPct, shippingCos
             {shippingCost === 0 ? 'DARMOWA' : `${shippingCost.toFixed(2)} EUR`}
           </span>
         </div>
+
+        {giftWrappingCost > 0 && (
+          <div className="flex items-center justify-between text-zinc-400">
+            <span>Pakowanie ozdobne (Prezent):</span>
+            <span className="text-zinc-200">
+              {giftWrappingCost.toFixed(2)} EUR
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-[11px] text-zinc-500 border-t border-zinc-900 border-dashed pt-2.5">
           <span>Zawiera podatek (szac. 23% VAT):</span>

@@ -26,11 +26,14 @@ import DockScheduling from './pages/AdminPanel/DockScheduling';
 import WavePicking from './pages/AdminPanel/WavePicking';
 import PutawayAssistant from './pages/AdminPanel/PutawayAssistant';
 import LpnManager from './pages/AdminPanel/LpnManager';
+import TruckLoader3D from './pages/AdminPanel/TruckLoader3D';
+import PickPathOptimizer from './pages/AdminPanel/PickPathOptimizer';
+import AdrManager from './pages/AdminPanel/AdrManager';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag, Compass, ChevronDown, ChevronRight } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -263,7 +266,7 @@ export default function App() {
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
-                    { id: 'wave_picking', label: 'Zbiórka Falowa (AI)', icon: GitMerge },
+                    { id: 'wave_picking', label: 'Zbiórka Falowa', icon: GitMerge },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
                     { id: 'putaway', label: 'Rozmieszczenie (Dock-to-Stock)', icon: CornerDownRight },
@@ -273,13 +276,16 @@ export default function App() {
                     { id: 'reorders', label: 'Planowanie Uzupełnień (Min-Max)', icon: ShoppingCart },
                     { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
                     { id: 'compactor', label: 'Konsolidacja Miejsc (BHP)', icon: Shrink },
-                    { id: 'predictive', label: 'Optymalizacja Fast-Pick (AI)', icon: Sparkles },
+                    { id: 'predictive', label: 'Optymalizacja Fast-Pick', icon: Sparkles },
+                    { id: 'pick_path', label: 'Optymalizacja Tras', icon: Compass },
                     { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
                     { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
+                    { id: 'truck_loader', label: 'Symulator 3D Załadunku', icon: Truck },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
                     { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
+                    { id: 'adr_manager', label: 'Zgodność Chemiczna (ADR)', icon: AlertTriangle },
                     { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
@@ -300,6 +306,78 @@ export default function App() {
 
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
+
+    const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() => {
+        try {
+            const stored = window.localStorage.getItem('wms-expanded-categories');
+            return stored ? JSON.parse(stored) : {
+                dashboard: true,
+                inbound: true,
+                yms: false,
+                outbound: true,
+                optimization: false,
+                master_data: false,
+                admin: false,
+            };
+        } catch {
+            return {
+                dashboard: true,
+                inbound: true,
+                yms: false,
+                outbound: true,
+                optimization: false,
+                master_data: false,
+                admin: false,
+            };
+        }
+    });
+
+    const toggleCategory = (catKey: string) => {
+        setExpandedCategories(prev => {
+            const next = { ...prev, [catKey]: !prev[catKey] };
+            window.localStorage.setItem('wms-expanded-categories', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const navigationCategories = [
+        {
+            key: 'dashboard',
+            label: 'Pulpit i Analizy',
+            itemIds: ['overview', 'statistics']
+        },
+        {
+            key: 'inbound',
+            label: 'Procesy Przyjęć',
+            itemIds: ['supplies', 'inbound', 'putaway', 'lpn_manager']
+        },
+        {
+            key: 'yms',
+            label: 'Plac i Bramy (YMS)',
+            itemIds: ['yard', 'dock_scheduling']
+        },
+        {
+            key: 'outbound',
+            label: 'Procesy Wydań',
+            itemIds: ['orders', 'wave_picking', 'shipping', 'truck_loader', 'rma']
+        },
+        {
+            key: 'optimization',
+            label: 'Optymalizacja i Strategia',
+            itemIds: ['reorders', 'slotting', 'compactor', 'predictive', 'pick_path', 'adr_manager']
+        },
+        {
+            key: 'master_data',
+            label: 'Kartoteki i Strefy',
+            itemIds: ['inventory', 'products', 'zones']
+        },
+        {
+            key: 'admin',
+            label: 'Administracja i Narzędzia',
+            itemIds: ['permissions', 'settings', 'storefront']
+        }
+    ];
+
     const [searchQuery, setSearchQuery] = useState('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -1827,35 +1905,58 @@ export default function App() {
                     </div>
                 </div>
 
-                <ul className="flex flex-col gap-1 px-3 flex-grow select-none">
-                    {sideNavItems.map((item: any) => {
-                        const Icon = item.icon;
-                        const isActive = currentTab === item.id;
+                <div className="flex flex-col gap-1 px-3 flex-grow select-none overflow-y-auto max-h-[calc(100vh-220px)] scrollbar-thin">
+                    {navigationCategories.map((category) => {
+                        const allowedItems = sideNavItems.filter((item: any) => category.itemIds.includes(item.id));
+                        if (allowedItems.length === 0) return null;
+
+                        const isExpanded = !!expandedCategories[category.key];
+                        
                         return (
-                            <li key={item.id}>
+                            <div key={category.key} className="space-y-1">
                                 <button
-                                    onClick={() => {
-                                        if (item.isExternal) {
-                                            window.open('http://localhost:3001/', '_blank');
-                                        } else {
-                                            setCurrentTab(item.id);
-                                            window.localStorage.setItem('wms-current-tab', item.id);
-                                            setIsMobileMenuOpen(false);
-                                        }
-                                    }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all font-sans text-xs font-bold cursor-pointer border-none bg-transparent text-left outline-none ${
-                                        isActive
-                                            ? 'bg-white/5 border-l-4 border-[#2170e4] text-[#d8e2ff] font-extrabold pl-3 scale-[1.02]'
-                                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                                    }`}
+                                    onClick={() => toggleCategory(category.key)}
+                                    className="w-full flex items-center justify-between px-3 py-2 text-zinc-500 hover:text-zinc-300 font-sans text-[10px] font-black uppercase tracking-wider bg-transparent border-none outline-none cursor-pointer mt-2 first:mt-0 text-left"
                                 >
-                                    <Icon className="w-4.5 h-4.5 text-zinc-400" />
-                                    <span>{item.label}</span>
+                                    <span>{category.label}</span>
+                                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                                 </button>
-                            </li>
+                                
+                                {isExpanded && (
+                                    <ul className="flex flex-col gap-1 pl-3 border-l border-zinc-800 ml-3">
+                                        {allowedItems.map((item: any) => {
+                                            const Icon = item.icon;
+                                            const isActive = currentTab === item.id;
+                                            return (
+                                                <li key={item.id}>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (item.isExternal) {
+                                                                window.open('http://localhost:3001/', '_blank');
+                                                            } else {
+                                                                setCurrentTab(item.id);
+                                                                window.localStorage.setItem('wms-current-tab', item.id);
+                                                                setIsMobileMenuOpen(false);
+                                                            }
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all font-sans text-xs font-bold cursor-pointer border-none bg-transparent text-left outline-none ${
+                                                            isActive
+                                                                ? 'bg-white/5 border-l-4 border-[#2170e4] text-[#d8e2ff] font-extrabold pl-2 scale-[1.01]'
+                                                                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                                                        }`}
+                                                    >
+                                                        <Icon className="w-4 h-4 text-zinc-400" />
+                                                        <span>{item.label}</span>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </div>
                         );
                     })}
-                </ul>
+                </div>
 
                 <div className="mt-auto px-4 pt-4 border-t border-white/10 space-y-3 select-none">
                     <button
@@ -1995,6 +2096,17 @@ export default function App() {
                         />
                     )}
 
+                    {currentTab === 'truck_loader' && isTabAllowed('truck_loader') && (
+                        <TruckLoader3D
+                            orders={orders}
+                            onUpdateOrder={handleUpdateOrder}
+                            logActivity={(message, type, details) => {
+                                logActivity('shipping', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
                     {currentTab === 'inbound' && isTabAllowed('inbound') && (
                         <InboundPlanner
                             purchaseOrders={purchaseOrders}
@@ -2104,6 +2216,28 @@ export default function App() {
                         <PredictiveRelocation
                             products={products}
                             orders={orders}
+                            onUpdateProductLocation={handleUpdateProductLocation}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'pick_path' && isTabAllowed('pick_path') && (
+                        <PickPathOptimizer
+                            products={products}
+                            orders={orders}
+                            logActivity={(message, type, details) => {
+                                logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'adr_manager' && isTabAllowed('adr_manager') && (
+                        <AdrManager
+                            products={products}
                             onUpdateProductLocation={handleUpdateProductLocation}
                             logActivity={(message, type, details) => {
                                 logActivity('relocate', currentUser ? currentUser.name : 'System', message, details || '');
