@@ -275,7 +275,7 @@ export default function App() {
   const [postalCode, setPostalCode] = useState(() => getLoggedInUserDetail('postalCode', ''));
   const [city, setCity] = useState(() => getLoggedInUserDetail('city', ''));
   const [phone, setPhone] = useState(() => getLoggedInUserDetail('phone', ''));
-  const [shippingMethod, setShippingMethod] = useState<'express' | 'air'>('express');
+  const [shippingMethod, setShippingMethod] = useState<'express' | 'air' | 'pickup'>('express');
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromoPct, setAppliedPromoPct] = useState(0);
 
@@ -730,16 +730,24 @@ export default function App() {
     const currentMin = String(d.getMinutes()).padStart(2, '0');
     const shipmentDate = `${d.getDate()} ${months[d.getMonth()]}, ${currentHour}:${currentMin}`;
 
+    const pin = shippingMethod === 'pickup' 
+      ? `PU-${Math.floor(100000 + Math.random() * 900000)}` 
+      : '';
+
     const newWmsOrder = {
       id: newOrderId,
       customer: `${firstName} ${lastName}`,
-      destination: `${city}, PL`,
+      destination: shippingMethod === 'pickup' ? 'Odbiór w HUB-PL-01' : `${city}, PL`,
       status: 'Oczekujące',
       priority: shippingMethod === 'express' ? 'Wysoki' : 'Normalny',
       shipmentDate: shipmentDate,
       items: wmsOrderItems,
       warehouseCode: 'HUB-PL-01',
-      internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}. Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'}${
+      internalNotes: `Zamówienie ze sklepu internetowego. Klient: ${firstName} ${lastName}, Tel: ${phone}. E-mail: ${customerEmail}.${
+        shippingMethod === 'pickup'
+          ? ` Odbiór w HUB-PL-01. PIN: ${pin}.`
+          : ` Adres: ${streetAddress}, ${postalCode} ${city}. Dostawca: ${shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'}.`
+      }${
         giftWrapping ? ` | 🎁 OPCJA PREZENTOWA - Styl: ${giftStyle}, Bilecik: "${giftMessage}"` : ''
       }`,
       internalNotesActor: 'Sklep Internetowy',
@@ -747,7 +755,9 @@ export default function App() {
       synced: false,
       giftWrapping: giftWrapping,
       giftStyle: giftWrapping ? giftStyle : '',
-      giftMessage: giftWrapping ? giftMessage : ''
+      giftMessage: giftWrapping ? giftMessage : '',
+      isPickup: shippingMethod === 'pickup',
+      pickupCode: pin
     };
 
     // Save to WMS orders list
@@ -805,15 +815,17 @@ export default function App() {
         phone
       },
       delivery_address: {
-        street: streetAddress,
-        postalCode,
-        city,
+        street: shippingMethod === 'pickup' ? 'Odbiór Osobisty HUB-PL-01' : streetAddress,
+        postalCode: shippingMethod === 'pickup' ? '00-001' : postalCode,
+        city: shippingMethod === 'pickup' ? 'Warszawa' : city,
         country: 'Poland'
       },
       logistics: {
-        method: shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail',
-        cost_eur: shippingMethod === 'express' ? 0 : 45
+        method: shippingMethod === 'pickup' ? 'Odbiór Osobisty' : (shippingMethod === 'express' ? 'Express Cargo' : 'Air Mail'),
+        cost_eur: shippingMethod === 'air' ? 45 : 0
       },
+      isPickup: shippingMethod === 'pickup',
+      pickupCode: pin,
       financials: {
         applied_promo_percentage: appliedPromoPct * 100,
         subtotal_before_discount: cart.reduce((acc, item) => {
@@ -2524,9 +2536,29 @@ export default function App() {
                             <p className="text-xs text-zinc-400 font-mono">
                               Numer zamówienia: <span className="text-white font-bold">{submittedOrder.order_id}</span>
                             </p>
-                            <p className="text-[11px] text-zinc-500 leading-normal max-w-md mx-auto">
-                              Twoje zamówienie zostało pomyślnie zarejestrowane w naszym systemie i przekazane do realizacji.
-                            </p>
+                            
+                            {submittedOrder.isPickup ? (
+                              <div className="mt-4 p-5 bg-zinc-900/60 border border-zinc-800 text-left space-y-3 font-mono max-w-md mx-auto">
+                                <div className="text-xs font-bold text-zinc-200 flex items-center gap-2">
+                                  <span>📍</span> ODBIÓR OSOBISTY W HUB-PL-01
+                                </div>
+                                <div className="p-3 bg-black border border-zinc-850 flex flex-col items-center justify-center space-y-1">
+                                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest">KOD PIN ODBIORU</span>
+                                  <span className="text-xl font-black text-emerald-400 tracking-wider font-mono">{submittedOrder.pickupCode}</span>
+                                </div>
+                                <div className="text-[10px] text-zinc-400 leading-relaxed">
+                                  <p className="font-bold text-zinc-300">📍 Punkt odbioru:</p>
+                                  <p>Magazyn Centralny HUB-PL-01 (ul. Logistyczna 12, Warszawa)</p>
+                                  <p className="mt-1 font-bold text-zinc-300">⏰ Godziny pracy:</p>
+                                  <p>Pon - Pt: 08:00 - 20:00, Sob: 09:00 - 15:00</p>
+                                  <p className="mt-2 text-zinc-500 italic">Podaj powyższy kod PIN pracownikowi magazynu przy wydawaniu paczki.</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-zinc-500 leading-normal max-w-md mx-auto">
+                                Twoje zamówienie zostało pomyślnie zarejestrowane w naszym systemie i przekazane do realizacji.
+                              </p>
+                            )}
                           </div>
 
                           <div className="flex gap-3 justify-center pt-3">
@@ -2586,21 +2618,36 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-mono uppercase text-zinc-500">Ulica i numer mieszkania</label>
-                                <input type="text" required value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2.5 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
-                              </div>
+                              {shippingMethod === 'pickup' ? (
+                                <div className="p-4 border border-zinc-800 bg-zinc-900/40 space-y-2 text-left font-mono">
+                                  <div className="flex items-center gap-2 text-zinc-200 text-xs font-bold">
+                                    <span>📍</span> Punkt Odbioru: Magazyn Centralny HUB-PL-01
+                                  </div>
+                                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                    Adres: ul. Logistyczna 12, 00-001 Warszawa<br />
+                                    Godziny otwarcia: Pon - Pt: 08:00 - 20:00, Sob: 09:00 - 15:00<br />
+                                    Czas przygotowania: zazwyczaj w 2 godziny.
+                                  </p>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-mono uppercase text-zinc-500">Ulica i numer mieszkania</label>
+                                    <input type="text" required value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2.5 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
+                                  </div>
 
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Kod pocztowy</label>
-                                  <input type="text" required value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-mono uppercase text-zinc-500">Miasto</label>
-                                  <input type="text" required value={city} onChange={(e) => setCity(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
-                                </div>
-                              </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                      <label className="text-[10px] font-mono uppercase text-zinc-500">Kod pocztowy</label>
+                                      <input type="text" required value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <label className="text-[10px] font-mono uppercase text-zinc-500">Miasto</label>
+                                      <input type="text" required value={city} onChange={(e) => setCity(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
+                                    </div>
+                                  </div>
+                                </>
+                              )}
 
                               <div className="space-y-1.5">
                                 <label className="text-[10px] font-mono uppercase text-zinc-500">Telefon kontaktowy</label>
@@ -2642,6 +2689,20 @@ export default function App() {
                                     <span>Priorytetowa przesyłka lotnicza</span>
                                   </span>
                                   <span className="text-zinc-300 font-bold">45.00 EUR</span>
+                                </label>
+
+                                <label className="flex items-center justify-between p-3 border border-zinc-850 hover:border-zinc-700 bg-black/60 cursor-pointer text-xs font-mono select-none">
+                                  <span className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      name="shipping"
+                                      checked={shippingMethod === 'pickup'}
+                                      onChange={() => setShippingMethod('pickup')}
+                                      className="accent-white h-3.5 w-3.5"
+                                    />
+                                    <span>Odbiór osobisty w Magazynie Centralnym HUB-PL-01</span>
+                                  </span>
+                                  <span className="text-emerald-400 font-bold">DARMOWY</span>
                                 </label>
                               </div>
                             </div>
@@ -2761,7 +2822,7 @@ export default function App() {
                                 }
                               ]}
                               couponDiscountPct={appliedPromoPct}
-                              shippingCost={shippingMethod === 'express' ? 0 : 45}
+                              shippingCost={shippingMethod === 'air' ? 45 : 0}
                               giftWrappingCost={giftWrapping ? 15 : 0}
                             />
                           </div>

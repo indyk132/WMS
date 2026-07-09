@@ -3,9 +3,10 @@ import {
   TrendingUp, DollarSign, PackageCheck, Package, 
   Clock, UserCheck, MapPin, Activity, CheckCircle2, AlertTriangle, 
   Users, Target, BarChart3, Filter, Award, Search, X, ChevronDown, Calendar, ArrowUpDown,
-  Move, CheckCircle
+  Move, CheckCircle, Download
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
+import { sounds } from '../../components/SoundEffects';
 
 interface StatisticsProps {
   orders: any[];
@@ -672,6 +673,48 @@ export default function Statistics({ orders = [], products = [], zones = [], sta
     }
   };
 
+  const handleExportToCsv = () => {
+    sounds.playSuccess();
+    let csvContent = "";
+    let filename = "";
+
+    if (activeTab === 'packers') {
+      csvContent = "Ranking;Nazwa Pakowacza;Suma spakowanych paczek\n";
+      packerData.forEach((item, idx) => {
+        csvContent += `${idx + 1};"${item.label.replace(/"/g, '""')}";${item.value}\n`;
+      });
+      filename = `WMS_Statystyki_Pakowacze_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (activeTab === 'pickers') {
+      csvContent = "Ranking;Nazwa Zbieracza;Suma pobranych SKU\n";
+      pickerData.forEach((item, idx) => {
+        csvContent += `${idx + 1};"${item.label.replace(/"/g, '""')}";${item.value}\n`;
+      });
+      filename = `WMS_Statystyki_Zbieracze_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (activeTab === 'new_orders') {
+      csvContent = "Data;Liczba Nowych Zamowien\n";
+      timeSeriesData.newOrders.forEach(item => {
+        csvContent += `${item.label};${item.value}\n`;
+      });
+      filename = `WMS_Statystyki_Nowe_Zamowienia_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (activeTab === 'completed_orders') {
+      csvContent = "Data;Liczba Zrealizowanych Zamowien\n";
+      timeSeriesData.completedOrders.forEach(item => {
+        csvContent += `${item.label};${item.value}\n`;
+      });
+      filename = `WMS_Statystyki_Zrealizowane_Zamowienia_${new Date().toISOString().split('T')[0]}.csv`;
+    }
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Detailed Analysis modes helper values
   const daysCount = useMemo(() => {
     const now = new Date();
@@ -1033,46 +1076,64 @@ export default function Statistics({ orders = [], products = [], zones = [], sta
             ))}
           </div>
 
-          {/* Conditional Controls for Worker statistics */}
-          {(activeTab === 'packers' || activeTab === 'pickers') && (
-            <div className="flex flex-wrap items-center gap-3 select-none">
-              {/* TOP limit selector */}
-              <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
-                <span className="px-2 text-slate-500 font-extrabold uppercase text-[9px] tracking-wide">Pokazuj:</span>
-                {[10, 20, 50, 'all'].map(limit => (
+          {/* Controls and Export bar */}
+          <div className="flex flex-wrap items-center gap-3 select-none">
+            {/* Conditional Controls for Worker statistics */}
+            {(activeTab === 'packers' || activeTab === 'pickers') && (
+              <>
+                {/* TOP limit selector */}
+                <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+                  <span className="px-2 text-slate-500 font-extrabold uppercase text-[9px] tracking-wide">Pokazuj:</span>
+                  {[10, 20, 50, 'all'].map(limit => (
+                    <button
+                      key={limit}
+                      onClick={() => setTopLimit(limit as any)}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
+                        topLimit === limit ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      {limit === 'all' ? 'Wszyscy' : `TOP ${limit}`}
+                    </button>
+                  ))}
+                </div>
+
+                {/* View layout selector */}
+                <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
                   <button
-                    key={limit}
-                    onClick={() => setTopLimit(limit as any)}
+                    type="button"
+                    onClick={() => setViewType('chart')}
                     className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
-                      topLimit === limit ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                      viewType === 'chart' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
-                    {limit === 'all' ? 'Wszyscy' : `TOP ${limit}`}
+                    Wykres
                   </button>
-                ))}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewType('table')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
+                      viewType === 'table' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Tabela
+                  </button>
+                </div>
+              </>
+            )}
 
-              {/* View layout selector */}
-              <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
-                <button
-                  onClick={() => setViewType('chart')}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
-                    viewType === 'chart' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Wykres
-                </button>
-                <button
-                  onClick={() => setViewType('table')}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border-none transition-all ${
-                    viewType === 'table' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Tabela
-                </button>
-              </div>
-            </div>
-          )}
+            {/* Export CSV button for packers, pickers, new_orders, completed_orders */}
+            {activeTab !== 'sku_rotation' && (
+              <button
+                type="button"
+                onClick={handleExportToCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer border-none shadow-xs h-7"
+                title="Pobierz aktualne dane w formacie CSV"
+              >
+                <Download size={13} />
+                Pobierz CSV
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Dynamic Display area */}
@@ -1584,6 +1645,34 @@ function SkuRotationSection({ orders, products, onRelocateProduct }: SkuRotation
     return { classACount, classBCount, classCCount, recsCount, safetyViolations };
   }, [classifiedProducts]);
 
+  const handleExportCsv = () => {
+    sounds.playSuccess();
+    let csvContent = "SKU;Nazwa Produktu;Kategoria;Klasa ABC;Sprzedana Ilosc;Liczba Zamowien;Aktualna Strefa;Aktualna Lokalizacja;Rekomendowana Akcja\n";
+    filteredProducts.forEach(item => {
+      const sku = item.product.sku;
+      const name = item.product.name;
+      const cat = item.product.category;
+      const abc = item.abcClass;
+      const qty = item.qtySold;
+      const ordersCount = item.orderCount;
+      const zone = item.product.zone || '';
+      const loc = item.product.locationCode || '';
+      const rec = item.recommendation || 'Optymalna lokalizacja';
+      csvContent += `"${sku}";"${name.replace(/"/g, '""')}";"${cat}";${abc};${qty};${ordersCount};"${zone}";"${loc}";"${rec.replace(/"/g, '""')}"\n`;
+    });
+    const filename = `WMS_Rotacja_SKU_${classFilter}_${new Date().toISOString().split('T')[0]}.csv`;
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 select-none">
@@ -1688,6 +1777,17 @@ function SkuRotationSection({ orders, products, onRelocateProduct }: SkuRotation
               <span className="text-[10px] font-bold text-rose-600">Tylko błędy BHP</span>
             </label>
           </div>
+
+          {/* CSV Export Button for SKU Rotation */}
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer border-none shadow-xs h-7 select-none"
+            title="Eksportuj dane rotacji do pliku CSV"
+          >
+            <Download size={13} />
+            Pobierz CSV
+          </button>
         </div>
       </div>
 

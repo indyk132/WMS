@@ -27,13 +27,14 @@ import WavePicking from './pages/AdminPanel/WavePicking';
 import PutawayAssistant from './pages/AdminPanel/PutawayAssistant';
 import LpnManager from './pages/AdminPanel/LpnManager';
 import TruckLoader3D from './pages/AdminPanel/TruckLoader3D';
+import ClickCollect from './pages/AdminPanel/ClickCollect';
 import PickPathOptimizer from './pages/AdminPanel/PickPathOptimizer';
 import AdrManager from './pages/AdminPanel/AdrManager';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag, Compass, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag, Compass, ChevronDown, ChevronRight, MapPin } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -228,6 +229,8 @@ export default function App() {
                 return [
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
                     { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
+                    { id: 'click_collect', label: 'Punkt Odbioru (BOPIS)', icon: MapPin },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
@@ -236,21 +239,30 @@ export default function App() {
                 return [
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
                     { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
-                    { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
                     { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
                     { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
+                    { id: 'putaway', label: 'Rozmieszczenie (Dock-to-Stock)', icon: CornerDownRight },
                     { id: 'yard', label: 'Zarządzanie Placem (YMS)', icon: Truck },
+                    { id: 'dock_scheduling', label: 'Awizacje i Bramy (YMS)', icon: Calendar },
                     { id: 'reorders', label: 'Planowanie Uzupełnień (Min-Max)', icon: ShoppingCart },
+                    { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
+                    { id: 'compactor', label: 'Konsolidacja Miejsc (BHP)', icon: Shrink },
+                    { id: 'pick_path', label: 'Optymalizacja Tras', icon: Compass },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                    { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                    { id: 'adr_manager', label: 'Zgodność Chemiczna (ADR)', icon: AlertTriangle },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
             case 'Inventory Auditor':
                 return [
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+                    { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
+                    { id: 'compactor', label: 'Konsolidacja Miejsc (BHP)', icon: Shrink },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                    { id: 'adr_manager', label: 'Zgodność Chemiczna (ADR)', icon: AlertTriangle },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
             case 'Picker':
@@ -259,8 +271,34 @@ export default function App() {
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                 ];
-            case 'Admin':
             case 'Warehouse Manager':
+                return [
+                    { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
+                    { id: 'statistics', label: 'Statystyki i Raporty', icon: BarChart3 },
+                    { id: 'orders', label: 'Zarządzanie Zamówieniami', icon: FileText },
+                    { id: 'wave_picking', label: 'Zbiórka Falowa', icon: GitMerge },
+                    { id: 'supplies', label: 'Dostawy (Zamówienia PO)', icon: Truck },
+                    { id: 'inbound', label: 'Planowanie Przyjęć (Inbound)', icon: Boxes },
+                    { id: 'putaway', label: 'Rozmieszczenie (Dock-to-Stock)', icon: CornerDownRight },
+                    { id: 'lpn_manager', label: 'Obsługa Palet (LPN)', icon: Tag },
+                    { id: 'yard', label: 'Zarządzanie Placem (YMS)', icon: Truck },
+                    { id: 'dock_scheduling', label: 'Awizacje i Bramy (YMS)', icon: Calendar },
+                    { id: 'reorders', label: 'Planowanie Uzupełnień (Min-Max)', icon: ShoppingCart },
+                    { id: 'slotting', label: 'Optymalizacja Zapasów (ABC/XYZ)', icon: Combine },
+                    { id: 'compactor', label: 'Konsolidacja Miejsc (BHP)', icon: Shrink },
+                    { id: 'predictive', label: 'Optymalizacja Fast-Pick', icon: Sparkles },
+                    { id: 'pick_path', label: 'Optymalizacja Tras', icon: Compass },
+                    { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
+                    { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
+                    { id: 'truck_loader', label: 'Symulator 3D Załadunku', icon: Truck },
+                    { id: 'click_collect', label: 'Punkt Odbioru (BOPIS)', icon: MapPin },
+                    { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
+                    { id: 'products', label: 'Katalog Produktów', icon: Layers },
+                    { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
+                    { id: 'adr_manager', label: 'Zgodność Chemiczna (ADR)', icon: AlertTriangle },
+                    { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
+                ];
+            case 'Admin':
             default:
                 return [
                     { id: 'overview', label: 'Podgląd Magazynu', icon: LayoutDashboard },
@@ -281,6 +319,7 @@ export default function App() {
                     { id: 'rma', label: 'Obsługa Zwrotów (RMA)', icon: RotateCcw },
                     { id: 'shipping', label: 'Centrum Wysyłek (Broker)', icon: Send },
                     { id: 'truck_loader', label: 'Symulator 3D Załadunku', icon: Truck },
+                    { id: 'click_collect', label: 'Punkt Odbioru (BOPIS)', icon: MapPin },
                     { id: 'inventory', label: 'Stany Zapasów SKU', icon: Package },
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
@@ -306,6 +345,18 @@ export default function App() {
 
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
+
+    // Auto-redirect if the stored tab is not allowed for the user's role
+    useEffect(() => {
+        if (currentUser && sideNavItems.length > 0) {
+            const isAllowed = sideNavItems.some(item => item.id === currentTab);
+            if (!isAllowed) {
+                const fallbackTab = sideNavItems[0].id;
+                setCurrentTab(fallbackTab);
+                window.localStorage.setItem('wms-current-tab', fallbackTab);
+            }
+        }
+    }, [currentUser, currentTab, sideNavItems]);
 
     const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() => {
         try {
@@ -359,7 +410,7 @@ export default function App() {
         {
             key: 'outbound',
             label: 'Procesy Wydań',
-            itemIds: ['orders', 'wave_picking', 'shipping', 'truck_loader', 'rma']
+            itemIds: ['orders', 'wave_picking', 'shipping', 'truck_loader', 'rma', 'click_collect']
         },
         {
             key: 'optimization',
@@ -618,6 +669,28 @@ export default function App() {
                     { sku: 'SKU-39402', name: 'Prostownik mikroprocesorowy 12V', qtyOrdered: 150 }
                 ],
                 internalNotes: 'Pilna dostawa elektroniki przed sezonem.'
+            },
+            {
+                id: 'PO-00815',
+                createdDate: getRelativeDateStr(0, '09:00'),
+                status: 'Pending',
+                vendorName: 'Chemia Przemysłowa S.A.',
+                expectedDeliveryDate: getRelativeDateStr(0, '12:00'),
+                items: [
+                    { sku: 'CHEM-ADR-003', name: 'Rozpuszczalnik organiczny (ADR Klasa 3)', qtyOrdered: 80, isAdr: true }
+                ],
+                internalNotes: 'Wymagany rozładunek na dedykowanej rampie ADR (Dok 1).'
+            },
+            {
+                id: 'PO-00816',
+                createdDate: getRelativeDateStr(0, '09:30'),
+                status: 'Pending',
+                vendorName: 'Mrożonki Polskie Sp. z o.o.',
+                expectedDeliveryDate: getRelativeDateStr(0, '15:00'),
+                items: [
+                    { sku: 'COLD-FOOD-902', name: 'Lody rzemieślnicze waniliowe', qtyOrdered: 300, isColdChain: true }
+                ],
+                internalNotes: 'Wymagany rozładunek w doku chłodniczym (Dok 2).'
             }
         ];
 
@@ -1807,8 +1880,10 @@ export default function App() {
             targetId: 'ORD-89240'
         });
 
-        return list;
-    }, [products, zones, orders]);
+        // Filter notifications based on tab authorization for the logged-in role
+        const allowedTabIds = sideNavItems.map((item: any) => item.id);
+        return list.filter(item => allowedTabIds.includes(item.targetTab));
+    }, [products, zones, orders, sideNavItems]);
 
     const prevNotificationIdsRef = useRef<string[]>([]);
     useEffect(() => {
@@ -2100,6 +2175,18 @@ export default function App() {
                         <TruckLoader3D
                             orders={orders}
                             onUpdateOrder={handleUpdateOrder}
+                            logActivity={(message, type, details) => {
+                                logActivity('shipping', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                            addToast={addToast}
+                        />
+                    )}
+
+                    {currentTab === 'click_collect' && isTabAllowed('click_collect') && (
+                        <ClickCollect
+                            orders={orders}
+                            onUpdateOrder={handleUpdateOrder}
+                            currentUser={currentUser}
                             logActivity={(message, type, details) => {
                                 logActivity('shipping', currentUser ? currentUser.name : 'System', message, details || '');
                             }}

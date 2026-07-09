@@ -355,13 +355,18 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
   const handleCompleteDispatch = (pData: any) => {
     if (onUpdateOrder) {
+      const isPickupOrder = selectedOrder?.isPickup;
       onUpdateOrder(pData.orderId, {
-        status: 'Spakowane',
+        status: isPickupOrder ? 'Gotowe do odbioru' : 'Spakowane',
         isPacked: true,
         packedBy: workerName,
-        shippingMethod: pData.selectedCourier,
-        waybillNumber: pData.waybillNumber,
-        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}. Wygenerowano etykietę ${pData.selectedCourier}. Numer listu: ${pData.waybillNumber}.`,
+        shippingMethod: isPickupOrder ? 'Odbiór Osobisty' : pData.selectedCourier,
+        waybillNumber: isPickupOrder ? (selectedOrder?.pickupCode || 'BOPIS') : pData.waybillNumber,
+        internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}.${
+          isPickupOrder
+            ? ` Przygotowano do odbioru osobistego (BOPIS) w HUB-PL-01. PIN: ${selectedOrder?.pickupCode || 'BOPIS'}.`
+            : ` Wygenerowano etykietę ${pData.selectedCourier}. Numer listu: ${pData.waybillNumber}.`
+        }`,
         internalNotesActor: workerName,
         waybillPdfDate: new Date().toLocaleDateString('pl-PL')
       });
@@ -393,6 +398,8 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
         }}
         onComplete={handleCompleteDispatch}
         forceError={shouldSimulateApiError}
+        isPickup={selectedOrder?.isPickup}
+        pickupCode={selectedOrder?.pickupCode}
       />
     );
   }
@@ -1147,6 +1154,8 @@ interface ProcessingOrderScreenProps {
   onBack: () => void;
   onComplete: (data: any) => void;
   forceError?: boolean;
+  isPickup?: boolean;
+  pickupCode?: string;
 }
 
 export function ProcessingOrderScreen({ 
@@ -1453,88 +1462,129 @@ export function ProcessingOrderScreen({
         {processState === 'carrier_selection' ? (
           /* Carrier Selector rate calculator panel */
           <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl p-6 sm:p-8 space-y-6 text-left animate-fadeIn">
-            <div className="border-b border-zinc-150 pb-4">
-              <h3 className="text-base font-extrabold text-zinc-900 flex items-center gap-2">
-                <Truck className="w-5.5 h-5.5 text-blue-650 animate-bounce" /> Kalkulator Taryf Spedycyjnych Brokera WMS
-              </h3>
-              <p className="text-xs text-zinc-550 mt-1 font-medium font-sans">
-                Waga paczki wynosi <strong className="text-zinc-900 font-mono">{weight.toFixed(2)} kg</strong>, a gabaryt to <strong className="text-zinc-900 uppercase">{cartonSize}</strong>. Poniżej wyliczono stawki dla zakontraktowanych kurierów:
-              </p>
-            </div>
+            {isPickup ? (
+              <>
+                <div className="border-b border-zinc-150 pb-4">
+                  <h3 className="text-base font-extrabold text-zinc-900 flex items-center gap-2">
+                    <MapPin className="w-5.5 h-5.5 text-emerald-605 animate-pulse text-emerald-600" /> Odbiór osobisty w Magazynie Centralnym (BOPIS)
+                  </h3>
+                  <p className="text-xs text-zinc-550 mt-1 font-medium font-sans">
+                    To zamówienie zostało wyznaczone jako odbiór osobisty. Nie jest wymagane generowanie zewnętrznej etykiety spedytora.
+                  </p>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              {calculatedRates.map(rate => {
-                const isCheapest = rate.carrier === cheapestCarrier;
-                const isSelected = rate.carrier === selectedCourier;
-                
-                // Styling helpers
-                let carrierColor = 'text-amber-600 bg-amber-50 border-amber-200';
-                if (rate.carrier === 'DHL') carrierColor = 'text-yellow-600 bg-yellow-50 border-yellow-250';
-                if (rate.carrier === 'InPost') carrierColor = 'text-zinc-800 bg-zinc-50 border-zinc-300';
-                if (rate.carrier === 'GLS') carrierColor = 'text-blue-750 bg-blue-50 border-blue-200';
-                if (rate.carrier === 'UPS') carrierColor = 'text-amber-900 bg-amber-50/50 border-amber-800/30';
-
-                return (
-                  <div
-                    key={rate.carrier}
-                    onClick={() => {
-                      sounds.playBeep();
-                      setSelectedCourier(rate.carrier);
-                    }}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer text-center flex flex-col justify-between items-center gap-3 relative overflow-hidden select-none hover:shadow-md ${
-                      isSelected 
-                        ? 'border-indigo-650 bg-indigo-50/20 ring-1 ring-indigo-500 shadow-sm' 
-                        : 'border-zinc-200 bg-white hover:border-zinc-300'
-                    }`}
-                  >
-                    {isCheapest && (
-                      <span className="absolute top-0 right-0 bg-emerald-600 text-white font-sans font-black text-[7.5px] uppercase tracking-widest px-2 py-0.6 rounded-bl">
-                        AI TANIO
-                      </span>
-                    )}
-
-                    <div className="space-y-0.5">
-                      <span className={`text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${carrierColor}`}>
-                        {rate.carrier}
-                      </span>
-                      <span className="text-[9px] text-zinc-400 block mt-1 font-semibold">{rate.deliveryDays === 1 ? '1 dzień roboczy' : `${rate.deliveryDays} dni robocze`}</span>
-                    </div>
-
-                    <div className="my-1 text-center">
-                      <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider select-none">Koszt dostawy:</span>
-                      <span className="text-xl font-black font-mono text-zinc-950">{rate.price.toFixed(2)} <span className="text-xs font-bold font-sans">PLN</span></span>
-                    </div>
-
-                    <div className="w-full flex items-center justify-center">
-                      <input 
-                        type="radio" 
-                        name="selectedCourier"
-                        checked={isSelected}
-                        onChange={() => {}}
-                        className="w-4 h-4 text-indigo-600 border-zinc-300 focus:ring-indigo-500 cursor-pointer"
-                      />
-                    </div>
+                <div className="p-5 rounded-2xl border border-emerald-250 bg-emerald-50/20 text-center flex flex-col items-center gap-2">
+                  <span className="text-[10px] font-mono text-zinc-400 font-bold uppercase tracking-wider select-none">PUNKT ODBIORU W WMS</span>
+                  <strong className="text-sm font-extrabold text-slate-800">Magazyn Centralny HUB-PL-01 (ul. Logistyczna 12, Warszawa)</strong>
+                  <div className="my-1.5 p-3 bg-white border border-emerald-200 rounded-lg flex flex-col items-center gap-1 min-w-[200px]">
+                    <span className="text-[9px] text-zinc-500 font-bold uppercase font-mono">Dedykowany PIN odbioru:</span>
+                    <strong className="text-xl font-mono text-emerald-650 font-black text-emerald-600">{pickupCode}</strong>
                   </div>
-                );
-              })}
-            </div>
+                </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-150">
-              <button
-                type="button"
-                onClick={onBack}
-                className="h-11 px-5 border border-zinc-300 hover:bg-zinc-50 text-zinc-650 rounded-xl font-bold text-xs cursor-pointer bg-white"
-              >
-                Powrót
-              </button>
-              <button
-                type="button"
-                onClick={handleStartProcessing}
-                className="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer shadow-md border-none flex items-center gap-1.5 active:scale-[0.98] transition-transform"
-              >
-                Rozpocznij generowanie listu &rarr;
-              </button>
-            </div>
+                <div className="flex justify-end gap-3 pt-4 border-t border-zinc-150">
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="h-11 px-5 border border-zinc-300 hover:bg-zinc-50 text-zinc-650 rounded-xl font-bold text-xs cursor-pointer bg-white"
+                  >
+                    Powrót
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartProcessing}
+                    className="h-11 px-6 bg-emerald-650 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer shadow-md border-none flex items-center gap-1.5 active:scale-[0.98] transition-transform"
+                  >
+                    Rozpocznij kompletowanie &rarr;
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="border-b border-zinc-150 pb-4">
+                  <h3 className="text-base font-extrabold text-zinc-900 flex items-center gap-2">
+                    <Truck className="w-5.5 h-5.5 text-blue-650 animate-bounce" /> Kalkulator Taryf Spedycyjnych Brokera WMS
+                  </h3>
+                  <p className="text-xs text-zinc-550 mt-1 font-medium font-sans">
+                    Waga paczki wynosi <strong className="text-zinc-900 font-mono">{weight.toFixed(2)} kg</strong>, a gabaryt to <strong className="text-zinc-900 uppercase">{cartonSize}</strong>. Poniżej wyliczono stawki dla zakontraktowanych kurierów:
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  {calculatedRates.map(rate => {
+                    const isCheapest = rate.carrier === cheapestCarrier;
+                    const isSelected = rate.carrier === selectedCourier;
+                    
+                    // Styling helpers
+                    let carrierColor = 'text-amber-600 bg-amber-50 border-amber-200';
+                    if (rate.carrier === 'DHL') carrierColor = 'text-yellow-600 bg-yellow-50 border-yellow-250';
+                    if (rate.carrier === 'InPost') carrierColor = 'text-zinc-800 bg-zinc-50 border-zinc-300';
+                    if (rate.carrier === 'GLS') carrierColor = 'text-blue-750 bg-blue-50 border-blue-200';
+                    if (rate.carrier === 'UPS') carrierColor = 'text-amber-900 bg-amber-50/50 border-amber-800/30';
+
+                    return (
+                      <div
+                        key={rate.carrier}
+                        onClick={() => {
+                          sounds.playBeep();
+                          setSelectedCourier(rate.carrier);
+                        }}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer text-center flex flex-col justify-between items-center gap-3 relative overflow-hidden select-none hover:shadow-md ${
+                          isSelected 
+                            ? 'border-indigo-650 bg-indigo-50/20 ring-1 ring-indigo-500 shadow-sm' 
+                            : 'border-zinc-200 bg-white hover:border-zinc-300'
+                        }`}
+                      >
+                        {isCheapest && (
+                          <span className="absolute top-0 right-0 bg-emerald-600 text-white font-sans font-black text-[7.5px] uppercase tracking-widest px-2 py-0.6 rounded-bl">
+                            AI TANIO
+                          </span>
+                        )}
+
+                        <div className="space-y-0.5">
+                          <span className={`text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${carrierColor}`}>
+                            {rate.carrier}
+                          </span>
+                          <span className="text-[9px] text-zinc-400 block mt-1 font-semibold">{rate.deliveryDays === 1 ? '1 dzień roboczy' : `${rate.deliveryDays} dni robocze`}</span>
+                        </div>
+
+                        <div className="my-1 text-center">
+                          <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider select-none">Koszt dostawy:</span>
+                          <span className="text-xl font-black font-mono text-zinc-950">{rate.price.toFixed(2)} <span className="text-xs font-bold font-sans">PLN</span></span>
+                        </div>
+
+                        <div className="w-full flex items-center justify-center">
+                          <input 
+                            type="radio" 
+                            name="selectedCourier"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-indigo-600 border-zinc-300 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-zinc-150">
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="h-11 px-5 border border-zinc-300 hover:bg-zinc-50 text-zinc-650 rounded-xl font-bold text-xs cursor-pointer bg-white"
+                  >
+                    Powrót
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartProcessing}
+                    className="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded-xl cursor-pointer shadow-md border-none flex items-center gap-1.5 active:scale-[0.98] transition-transform"
+                  >
+                    Rozpocznij generowanie listu &rarr;
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden flex flex-col lg:flex-row min-h-[460px] animate-fadeIn">
@@ -1589,59 +1639,113 @@ export function ProcessingOrderScreen({
 
               {processState === 'success' && (
                 <div className="w-full flex flex-col items-center justify-center gap-4 animate-fadeIn">
-                  <span className="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    PODGLĄD WYDRUKU ({selectedCourier} LABEL)
-                  </span>
-                  
-                  {/* Zebra Thermal Shipping Label Preview Card */}
-                  <div className="w-full max-w-[280px] bg-white text-slate-900 p-4 rounded-xl border border-slate-350 shadow-2xl flex flex-col gap-3.5 font-sans leading-none relative select-none text-left">
-                    <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2.5">
-                      <div>
-                        <p className="text-base font-black text-slate-950 tracking-tight uppercase">{selectedCourier} EXPRESS</p>
-                        <p className="text-[8px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">Domestic Courier Service</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-bold border border-slate-950 px-1.5 py-0.5">PL-WMS</span>
-                        <p className="text-[9px] text-slate-700 mt-1.5 font-bold">Waga: {weight.toFixed(2)} kg</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-[9px] text-slate-800">
-                      <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">NADAWCA / SENDER:</p>
-                      <p className="font-bold text-slate-950">MAGAZYN CENTRALNY WMS</p>
-                      <p className="text-slate-500">Aleja Logistyczna 12, Warszawa</p>
-                    </div>
-
-                    <div className="space-y-1 text-[9px] text-slate-800 border-t border-slate-150 pt-2">
-                      <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">ODBIORCA / RECIPIENT:</p>
-                      <p className="font-bold text-slate-950 text-[10px] leading-snug">{clientName}</p>
+                  {isPickup ? (
+                    <>
+                      <span className="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        PODGLĄD POTWIERDZENIA (BOPIS)
+                      </span>
                       
-                      <div className="pt-2 border-t border-dashed border-slate-200 space-y-1 select-none">
-                        <p><span className="font-semibold text-slate-400">PUDŁO:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
-                        <p><span className="font-semibold text-slate-400">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
-                      </div>
-                    </div>
+                      {/* BOPIS Ticket Preview Card */}
+                      <div className="w-full max-w-[280px] bg-white text-slate-900 p-4 rounded-xl border border-emerald-300 shadow-2xl flex flex-col gap-3.5 font-sans leading-none relative select-none text-left animate-scaleIn">
+                        <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2.5">
+                          <div>
+                            <p className="text-base font-black text-slate-950 tracking-tight uppercase">ODBIÓR OSOBISTY</p>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">Magazyn Centralny HUB-PL-01</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold border border-emerald-500 text-emerald-600 px-1.5 py-0.5 rounded uppercase font-mono">BOPIS</span>
+                            <p className="text-[9px] text-slate-700 mt-1.5 font-bold font-mono">Waga: {weight.toFixed(2)} kg</p>
+                          </div>
+                        </div>
 
-                    <div className="flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded gap-1.5 mt-1 select-none pointer-events-none">
-                      <div className="flex h-11 w-full justify-between max-w-[210px] shrink-0">
-                        {[1,3,1,1,4,2,1,3,1,2,1,3,4,1,2,1,1,3,1,1,4,1,2,1,3,1,1,2,3,4].map((w, idx) => (
-                          <div key={idx} className="bg-slate-950" style={{ width: `${w * 1.3}px` }} />
-                        ))}
-                      </div>
-                      <p className="font-mono text-[9px] font-bold text-slate-900 tracking-[0.16em]">
-                        *{waybillNumber}*
-                      </p>
-                    </div>
+                        <div className="space-y-1 text-[9px] text-slate-800">
+                          <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">PUNKT WYDANIA / HUB:</p>
+                          <p className="font-bold text-slate-950">HUB-PL-01 WARSZAWA</p>
+                          <p className="text-slate-500">Aleja Logistyczna 12, Warszawa</p>
+                        </div>
 
-                    <button
-                      onClick={handleLocalPrintLabel}
-                      className="w-full py-2.5 bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow border-none"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      Drukuj etykietę (Zebra)
-                    </button>
-                  </div>
+                        <div className="space-y-1 text-[9px] text-slate-800 border-t border-slate-150 pt-2">
+                          <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">KLIENT / RECIPIENT:</p>
+                          <p className="font-bold text-slate-950 text-[10px] leading-snug">{clientName}</p>
+                          
+                          <div className="pt-2 border-t border-dashed border-slate-200 space-y-1 select-none">
+                            <p><span className="font-semibold text-slate-400 font-mono">OPAKOWANIE:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
+                            <p><span className="font-semibold text-slate-400 font-mono">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center p-3 bg-zinc-50 border border-zinc-200 rounded gap-1 mt-1 font-mono">
+                          <span className="text-[8px] text-zinc-500 font-bold uppercase">Kod PIN odbioru:</span>
+                          <span className="text-base font-black text-emerald-600 tracking-wider">{pickupCode}</span>
+                        </div>
+
+                        <button
+                          onClick={handleLocalPrintLabel}
+                          className="w-full py-2.5 bg-emerald-650 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow border-none font-mono"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Drukuj potwierdzenie (A4)
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        PODGLĄD WYDRUKU ({selectedCourier} LABEL)
+                      </span>
+                      
+                      {/* Zebra Thermal Shipping Label Preview Card */}
+                      <div className="w-full max-w-[280px] bg-white text-slate-900 p-4 rounded-xl border border-slate-350 shadow-2xl flex flex-col gap-3.5 font-sans leading-none relative select-none text-left">
+                        <div className="flex justify-between items-start border-b-2 border-slate-950 pb-2.5">
+                          <div>
+                            <p className="text-base font-black text-slate-950 tracking-tight uppercase">{selectedCourier} EXPRESS</p>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">Domestic Courier Service</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold border border-slate-950 px-1.5 py-0.5 font-mono">PL-WMS</span>
+                            <p className="text-[9px] text-slate-700 mt-1.5 font-bold font-mono">Waga: {weight.toFixed(2)} kg</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 text-[9px] text-slate-800">
+                          <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">NADAWCA / SENDER:</p>
+                          <p className="font-bold text-slate-950">MAGAZYN CENTRALNY WMS</p>
+                          <p className="text-slate-500">Aleja Logistyczna 12, Warszawa</p>
+                        </div>
+
+                        <div className="space-y-1 text-[9px] text-slate-800 border-t border-slate-150 pt-2">
+                          <p className="font-semibold text-slate-400 uppercase tracking-wider select-none">ODBIORCA / RECIPIENT:</p>
+                          <p className="font-bold text-slate-950 text-[10px] leading-snug">{clientName}</p>
+                          
+                          <div className="pt-2 border-t border-dashed border-slate-200 space-y-1 select-none">
+                            <p><span className="font-semibold text-slate-400 font-mono">PUDŁO:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
+                            <p><span className="font-semibold text-slate-400 font-mono">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded gap-1.5 mt-1 select-none pointer-events-none">
+                          <div className="flex h-11 w-full justify-between max-w-[210px] shrink-0">
+                            {[1,3,1,1,4,2,1,3,1,2,1,3,4,1,2,1,1,3,1,1,4,1,2,1,3,1,1,2,3,4].map((w, idx) => (
+                              <div key={idx} className="bg-slate-950" style={{ width: `${w * 1.3}px` }} />
+                            ))}
+                          </div>
+                          <p className="font-mono text-[9px] font-bold text-slate-900 tracking-[0.16em]">
+                            *{waybillNumber}*
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={handleLocalPrintLabel}
+                          className="w-full py-2.5 bg-slate-950 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-[10px] tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase shadow border-none font-mono"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Drukuj etykietę (Zebra)
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1709,17 +1813,21 @@ export function ProcessingOrderScreen({
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-0.5">
-                        <h5 className="font-bold text-xs text-zinc-900">Generowanie etykiety kurierskiej kuriera {selectedCourier}</h5>
+                        <h5 className="font-bold text-xs text-zinc-900">
+                          {isPickup ? 'Autoryzacja kodu PIN Click-and-Collect' : `Generowanie etykiety kurierskiej kuriera ${selectedCourier}`}
+                        </h5>
                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${
                           stepStates.courierLabel === 'complete' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                           stepStates.courierLabel === 'failed' ? 'bg-red-50 text-red-750 border-red-200 animate-pulse' :
                           stepStates.courierLabel === 'active' ? 'bg-purple-50 text-purple-700 border-purple-200 animate-pulse' : 'bg-transparent text-zinc-450 border-zinc-200'
-                        }`}>{stepStates.courierLabel === 'complete' ? "Wygenerowano" : stepStates.courierLabel === 'failed' ? "BŁĄD API" : stepStates.courierLabel === 'active' ? "Wysyłanie" : "Oczekuje"}</span>
+                        }`}>{stepStates.courierLabel === 'complete' ? (isPickup ? "Zatwierdzono" : "Wygenerowano") : stepStates.courierLabel === 'failed' ? "BŁĄD API" : stepStates.courierLabel === 'active' ? (isPickup ? "Weryfikacja" : "Wysyłanie") : "Oczekuje"}</span>
                       </div>
                       {stepStates.courierLabel === 'failed' ? (
                         <p className="text-[11px] text-red-655 font-semibold font-mono">Courier API Connection Timeout. Serwer '{selectedCourier}-PROD-PL-01' nie odpowiedział.</p>
                       ) : (
-                        <p className="text-[11px] text-zinc-500">Łączenie z serwerem zewnętrznym kuriera {selectedCourier} w celu wygenerowania listu przewozowego.</p>
+                        <p className="text-[11px] text-zinc-500">
+                          {isPickup ? `Zapisanie unikalnego kodu odbioru BOPIS: ${pickupCode}` : `Łączenie z serwerem zewnętrznym kuriera ${selectedCourier} w celu wygenerowania listu przewozowego.`}
+                        </p>
                       )}
                     </div>
                   </div>
