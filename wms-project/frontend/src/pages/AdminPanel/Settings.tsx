@@ -45,7 +45,7 @@ const DEFAULT_SETTINGS: WarehouseSettings = {
   selectedCourier: 'dhl',
   // User/Admin defaults
   passwordMinLength: 8,
-  sessionTimeout: 30,
+  sessionTimeout: 0,
   requireMfaForAdmins: true,
   lockoutAttempts: 5,
   passwordChangeInterval: 90,
@@ -58,6 +58,17 @@ interface SettingsProps {
 }
 
 export default function Settings({ highlightedField }: SettingsProps) {
+  const currentUser = (() => {
+    try {
+      const stored = localStorage.getItem('wms-current-user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const isAllowedToEdit = currentUser?.role === 'Admin' || currentUser?.role === 'Warehouse Manager';
+
   const [settings, setSettings] = useState<WarehouseSettings>(() => {
     try {
       const stored = localStorage.getItem('wms-warehouse-settings');
@@ -698,19 +709,34 @@ export default function Settings({ highlightedField }: SettingsProps) {
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <label className="text-xs font-bold text-slate-700">Timeout bezczynności sesji</label>
-                        <span className="text-xs font-bold text-[#2170e4] font-mono bg-blue-50 px-2 py-0.5 rounded border border-blue-150">
-                          {settings.sessionTimeout || 30} min
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                          settings.sessionTimeout === 0 
+                            ? 'text-slate-500 bg-slate-50 border-slate-200' 
+                            : 'text-[#2170e4] bg-blue-50 border-blue-150'
+                        }`}>
+                          {settings.sessionTimeout === 0 ? 'Wyłączony' : `${settings.sessionTimeout} min`}
                         </span>
                       </div>
-                      <input
-                        type="range"
-                        min="5"
-                        max="120"
-                        step="5"
-                        value={settings.sessionTimeout || 30}
-                        onChange={(e) => setSettings({ ...settings, sessionTimeout: parseInt(e.target.value) })}
-                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#2170e4]"
-                      />
+                      <select
+                        value={settings.sessionTimeout}
+                        disabled={!isAllowedToEdit}
+                        onChange={(e) => setSettings({ ...settings, sessionTimeout: parseInt(e.target.value, 10) })}
+                        className="w-full bg-white border border-zinc-200 focus:border-blue-500 rounded px-2.5 py-1.5 text-xs text-slate-800 outline-none cursor-pointer font-semibold disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      >
+                        <option value={0}>Wyłączone (brak wylogowania)</option>
+                        <option value={5}>5 minut bezczynności</option>
+                        <option value={15}>15 minut bezczynności</option>
+                        <option value={30}>30 minut bezczynności</option>
+                        <option value={60}>60 minut bezczynności</option>
+                        <option value={120}>120 minut bezczynności</option>
+                      </select>
+
+                      {!isAllowedToEdit && (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-lg text-[10px] leading-normal flex items-start gap-1.5 font-medium mt-1 select-none">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <span>Modyfikacja zablokowana. Wymagane uprawnienia: Administrator lub Kierownik.</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between p-3 bg-slate-100 rounded-lg border border-slate-200">

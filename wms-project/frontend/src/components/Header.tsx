@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Volume2, VolumeX, Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone, RefreshCw } from 'lucide-react';
+import { sounds } from './SoundEffects';
 
 interface HeaderProps {
     currentTab: string;
@@ -41,6 +42,15 @@ export default function Header({
     const [helpOpen, setHelpOpen] = useState(false);
     const [helpSearchQuery, setHelpSearchQuery] = useState('');
     const [activeHelpTopic, setActiveHelpTopic] = useState<string | null>(null);
+
+    const [selectedLanguage, setSelectedLanguage] = useState<'PL' | 'UA' | 'EN'>('PL');
+    const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+
+    const handleLanguageSelect = (langCode: 'PL' | 'UA' | 'EN') => {
+        sounds.playSuccess();
+        setSelectedLanguage(langCode);
+        setLangDropdownOpen(false);
+    };
 
     const helpLinks = [
         { id: 'user-manual', label: 'Instrukcja użytkownika', icon: BookOpen },
@@ -230,6 +240,53 @@ export default function Header({
                             </>
                         )}
                     </div>
+
+                    {/* Language Selector Dropdown */}
+                    <div className="relative flex items-center justify-center">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setLangDropdownOpen(!langDropdownOpen);
+                                setNotificationsOpen(false);
+                                setHelpOpen(false);
+                            }}
+                            className="h-8 px-2 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 border border-zinc-200 text-xs font-bold text-zinc-700 bg-white"
+                            title="Zmień język systemu / Change language"
+                        >
+                            <span className="text-sm select-none">
+                                {selectedLanguage === 'PL' ? '🇵🇱' : selectedLanguage === 'UA' ? '🇺🇦' : '🇬🇧'}
+                            </span>
+                            <span className="font-mono text-[10px] tracking-wide select-none">{selectedLanguage}</span>
+                        </button>
+
+                        {langDropdownOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setLangDropdownOpen(false)} />
+                                <div className="absolute right-0 mt-2 w-36 bg-white border border-zinc-200 rounded-xl shadow-2xl z-50 text-xs font-sans p-2 space-y-1 animate-fadeIn text-left">
+                                    {[
+                                        { code: 'PL', label: 'Polski', flag: '🇵🇱' },
+                                        { code: 'UA', label: 'Українська', flag: '🇺🇦' },
+                                        { code: 'EN', label: 'English', flag: '🇬🇧' }
+                                    ].map(lang => (
+                                        <button
+                                            key={lang.code}
+                                            type="button"
+                                            onClick={() => handleLanguageSelect(lang.code as any)}
+                                            className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left font-bold cursor-pointer border-none transition-all ${
+                                                selectedLanguage === lang.code
+                                                    ? 'bg-indigo-50 text-indigo-700'
+                                                    : 'hover:bg-zinc-100 text-zinc-750'
+                                            }`}
+                                        >
+                                            <span className="text-base leading-none select-none">{lang.flag}</span>
+                                            <span className="font-sans text-[11px] leading-none">{lang.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
                     <button 
                         onClick={onSettingsClick}
                         className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer" 

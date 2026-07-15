@@ -595,7 +595,8 @@ export default function App() {
                 primaryLocationId: i,
                 locations: [locationCode],
                 zoneGroups: [zoneGroup],
-                stockEntries: [{ stockId: i, locationId: i, locationCode, zoneGroup, quantity: stock }]
+                stockEntries: [{ stockId: i, locationId: i, locationCode, zoneGroup, quantity: stock }],
+                vatRate: category === 'Artykuły spożywcze' ? 5 : 23
             });
         }
         return list;
@@ -691,6 +692,19 @@ export default function App() {
                     { sku: 'COLD-FOOD-902', name: 'Lody rzemieślnicze waniliowe', qtyOrdered: 300, isColdChain: true }
                 ],
                 internalNotes: 'Wymagany rozładunek w doku chłodniczym (Dok 2).'
+            },
+            {
+                id: 'RMA-PO-00813',
+                createdDate: getRelativeDateStr(0, '10:00'),
+                status: 'ReturnPending',
+                vendorName: 'DHL Freight',
+                expectedDeliveryDate: getRelativeDateStr(0, '12:00'),
+                items: [
+                    { sku: 'FOOD-KAWA-001', name: 'Kawa ziarnista Arabica', qtyOrdered: 5, reason: 'Odstąpienie od umowy' }
+                ],
+                trackingNumber: 'DPD-RET-990231',
+                carrier: 'DHL Freight',
+                internalNotes: 'Zgłoszenie zwrotu od klienta. Powód: Odstąpienie od umowy.'
             }
         ];
 
@@ -1269,6 +1283,56 @@ export default function App() {
         }
     }, [currentUser, currentTab]);
 
+    useEffect(() => {
+        if (!currentUser) return;
+
+        let lastActiveTime = Date.now();
+
+        const resetTimer = () => {
+            lastActiveTime = Date.now();
+        };
+
+        window.addEventListener('mousemove', resetTimer);
+        window.addEventListener('mousedown', resetTimer);
+        window.addEventListener('keypress', resetTimer);
+        window.addEventListener('scroll', resetTimer);
+        window.addEventListener('click', resetTimer);
+        window.addEventListener('touchstart', resetTimer);
+
+        const intervalId = setInterval(() => {
+            try {
+                const stored = localStorage.getItem('wms-warehouse-settings');
+                if (stored) {
+                    const settingsObj = JSON.parse(stored);
+                    const timeoutMinutes = Number(settingsObj.sessionTimeout);
+                    if (timeoutMinutes && timeoutMinutes > 0) {
+                        const elapsed = Date.now() - lastActiveTime;
+                        if (elapsed >= timeoutMinutes * 60 * 1000) {
+                            handleLogout();
+                            addToast(
+                                'Sesja wygasła',
+                                'Zostałeś automatycznie wylogowany z powodu bezczynności.',
+                                'warning'
+                            );
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to parse settings for session timeout', err);
+            }
+        }, 10000); // Check every 10 seconds
+
+        return () => {
+            window.removeEventListener('mousemove', resetTimer);
+            window.removeEventListener('mousedown', resetTimer);
+            window.removeEventListener('keypress', resetTimer);
+            window.removeEventListener('scroll', resetTimer);
+            window.removeEventListener('click', resetTimer);
+            window.removeEventListener('touchstart', resetTimer);
+            clearInterval(intervalId);
+        };
+    }, [currentUser]);
+
     const handleLoginSuccess = (userObj: User) => {
         setCurrentUser(userObj);
         window.localStorage.setItem('wms-current-user', JSON.stringify(userObj));
@@ -1563,6 +1627,28 @@ export default function App() {
                 });
             });
         }
+    };
+
+    const handleUpdateBulkCategoryVat = (category: string, vatRate: number) => {
+        setProducts(prev => {
+            const updated = prev.map(p => p.category === category ? { ...p, vatRate } : p);
+            window.localStorage.setItem('wms-products', JSON.stringify(updated));
+            return updated;
+        });
+
+        const operatorName = currentUser ? `${currentUser.firstName} ${currentUser.lastName} (${currentUser.employeeId})` : 'System Admin (EMP-8492)';
+        logActivity(
+            'system',
+            operatorName,
+            `Masowa zmiana stawki VAT`,
+            `Dla kategorii "${category}" ustawiono nową stawkę VAT: ${vatRate}%`
+        );
+
+        addToast(
+            'Zmiana stawki VAT',
+            `Pomyślnie zaktualizowano stawkę VAT na ${vatRate}% dla wszystkich produktów w kategorii "${category}".`,
+            'success'
+        );
     };
 
     const handleUpdateProductLocation = async (sku: string, newLocationCode: string, newZone: string) => {
@@ -2339,6 +2425,7 @@ export default function App() {
                             onUpdateStock={handleUpdateStock}
                             onRestockItem={handleRestockItem}
                             onUpdateThreshold={handleUpdateThreshold}
+                            onUpdateBulkCategoryVat={handleUpdateBulkCategoryVat}
                             highlightedSku={highlightedItemId}
                         />
                     )}

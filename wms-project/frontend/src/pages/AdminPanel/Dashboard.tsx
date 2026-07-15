@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, Filter, TrendingUp, AlertTriangle, Layers, Database, 
   CheckCircle2, Users, Clock, Activity, ArrowUpRight, ShieldAlert,
@@ -43,6 +43,70 @@ export default function Dashboard({
     const [formType, setFormType] = useState('Przyjęcie towaru');
     const [filterActiveOnly, setFilterActiveOnly] = useState(false);
     const [modalError, setModalError] = useState('');
+
+    // Hourly Pick/Pack Velocity chart state
+    const [chartRange, setChartRange] = useState<'today' | 'yesterday' | 'average'>('today');
+    const [showPicksLine, setShowPicksLine] = useState(true);
+    const [showPacksLine, setShowPacksLine] = useState(true);
+
+    const chartData = useMemo(() => {
+        const hours = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
+        
+        let picks = [120, 210, 340, 410, 480, 450, 290, 310, 390, 460, 520, 490, 320, 280, 190, 110];
+        let packs = [80, 150, 220, 310, 420, 460, 380, 290, 320, 410, 480, 510, 420, 310, 210, 140];
+
+        if (chartRange === 'yesterday') {
+            picks = [100, 180, 290, 380, 440, 410, 260, 280, 350, 415, 490, 460, 290, 240, 160, 95];
+            packs = [70, 120, 190, 280, 380, 410, 330, 260, 300, 380, 450, 470, 380, 270, 180, 110];
+        } else if (chartRange === 'average') {
+            picks = [110, 195, 315, 395, 460, 430, 275, 295, 370, 435, 505, 475, 305, 260, 175, 102];
+            packs = [75, 135, 205, 295, 400, 435, 355, 275, 310, 395, 465, 490, 400, 290, 195, 125];
+        }
+
+        return hours.map((h, i) => ({
+            hour: h,
+            picks: picks[i],
+            packs: packs[i]
+        }));
+    }, [chartRange]);
+
+    const getPicksPath = () => {
+        let path = "";
+        chartData.forEach((d, i) => {
+            const x = 60 + i * (880 / 15);
+            const y = 260 - (d.picks / 600) * 230;
+            if (i === 0) path += `M ${x} ${y}`;
+            else path += ` L ${x} ${y}`;
+        });
+        return path;
+    };
+
+    const getPacksPath = () => {
+        let path = "";
+        chartData.forEach((d, i) => {
+            const x = 60 + i * (880 / 15);
+            const y = 260 - (d.packs / 600) * 230;
+            if (i === 0) path += `M ${x} ${y}`;
+            else path += ` L ${x} ${y}`;
+        });
+        return path;
+    };
+
+    const getPicksAreaPath = () => {
+        const path = getPicksPath();
+        if (!path) return "";
+        const firstX = 60;
+        const lastX = 60 + 15 * (880 / 15);
+        return `${path} L ${lastX} 260 L ${firstX} 260 Z`;
+    };
+
+    const getPacksAreaPath = () => {
+        const path = getPacksPath();
+        if (!path) return "";
+        const firstX = 60;
+        const lastX = 60 + 15 * (880 / 15);
+        return `${path} L ${lastX} 260 L ${firstX} 260 Z`;
+    };
 
     const totalSkusCount = products.length;
     const outOfStockCount = products.filter(p => p.stock === 0).length;
@@ -299,6 +363,168 @@ export default function Dashboard({
                             {laborKPIs.avgVerificationTime}
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Wykres Wydajności Godzinowej (Hourly Pick/Pack Velocity) */}
+            <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                    <div className="text-left font-sans">
+                        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-indigo-655" />
+                            Wykres Wydajności Godzinowej (Picks / Packs Velocity)
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1">
+                            Monitorowanie liczby zebranych SKU oraz spakowanych zamówień w ujęciu godzinowym.
+                        </p>
+                    </div>
+
+                    {/* Chart Controls */}
+                    <div className="flex flex-wrap items-center gap-3 select-none text-xs font-sans">
+                        {/* Day Range Selector */}
+                        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 font-mono text-[10px]">
+                            {[
+                                { id: 'today', label: 'Dziś' },
+                                { id: 'yesterday', label: 'Wczoraj' },
+                                { id: 'average', label: 'Średnia 7 dni' }
+                            ].map(range => (
+                                <button
+                                    key={range.id}
+                                    type="button"
+                                    onClick={() => setChartRange(range.id as any)}
+                                    className={`px-3 py-1 rounded-md font-bold cursor-pointer transition-all border-none ${
+                                        chartRange === range.id
+                                            ? 'bg-white text-slate-900 shadow-xs'
+                                            : 'text-slate-500 hover:text-slate-900 bg-transparent'
+                                    }`}
+                                >
+                                    {range.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Line Toggles */}
+                        <div className="flex items-center gap-3 font-semibold text-slate-600">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showPicksLine}
+                                    onChange={(e) => setShowPicksLine(e.target.checked)}
+                                    className="rounded text-blue-600 focus:ring-blue-500 border-slate-350 w-3.5 h-3.5 cursor-pointer"
+                                />
+                                <span className="text-[11px] flex items-center gap-1"><span className="w-2.5 h-1 bg-blue-500 rounded-full inline-block"></span> Kompletacja (Picks)</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={showPacksLine}
+                                    onChange={(e) => setShowPacksLine(e.target.checked)}
+                                    className="rounded text-emerald-600 focus:ring-emerald-500 border-slate-350 w-3.5 h-3.5 cursor-pointer"
+                                />
+                                <span className="text-[11px] flex items-center gap-1"><span className="w-2.5 h-1 bg-emerald-500 rounded-full inline-block"></span> Pakowanie (Packs)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* SVG Graph Container */}
+                <div className="relative w-full h-[320px] bg-slate-50/30 rounded-xl border border-slate-100 p-4">
+                    <svg viewBox="0 0 1000 300" className="w-full h-full overflow-visible">
+                        <defs>
+                            {/* Blue gradient for Picks */}
+                            <linearGradient id="picksGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+                            </linearGradient>
+                            {/* Emerald gradient for Packs */}
+                            <linearGradient id="packsGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                                <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                            </linearGradient>
+                        </defs>
+
+                        {/* Grid lines & Y Axis values */}
+                        {[100, 200, 300, 400, 500, 600].map(val => {
+                            const y = 260 - (val / 600) * 230;
+                            return (
+                                <g key={val}>
+                                    <line x1="60" y1={y} x2="940" y2={y} stroke="#e2e8f0" strokeDasharray="3,3" />
+                                    <text x="35" y={y + 4} fill="#94a3b8" className="text-[10px] font-mono text-right" textAnchor="end">{val}</text>
+                                </g>
+                            );
+                        })}
+
+                        {/* Baseline */}
+                        <line x1="60" y1="260" x2="940" y2="260" stroke="#cbd5e1" strokeWidth="1.5" />
+
+                        {/* X Axis Labels */}
+                        {chartData.map((d, i) => {
+                            const x = 60 + i * (880 / 15);
+                            if (i % 2 !== 0) return null;
+                            return (
+                                <text key={i} x={x} y="280" fill="#64748b" className="text-[10px] font-mono font-bold" textAnchor="middle">
+                                    {d.hour}
+                                </text>
+                            );
+                        })}
+
+                        {/* Picks Area under line */}
+                        {showPicksLine && (
+                            <path d={getPicksAreaPath()} fill="url(#picksGradient)" />
+                        )}
+
+                        {/* Packs Area under line */}
+                        {showPacksLine && (
+                            <path d={getPacksAreaPath()} fill="url(#packsGradient)" />
+                        )}
+
+                        {/* Picks line */}
+                        {showPicksLine && (
+                            <path d={getPicksPath()} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                        )}
+
+                        {/* Packs line */}
+                        {showPacksLine && (
+                            <path d={getPacksPath()} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                        )}
+
+                        {/* Interactive dots and text overlay */}
+                        {chartData.map((d, i) => {
+                            const x = 60 + i * (880 / 15);
+                            const yPicks = 260 - (d.picks / 600) * 230;
+                            const yPacks = 260 - (d.packs / 600) * 230;
+
+                            const showPeakValues = d.hour === '10:00' || d.hour === '16:00' || d.hour === '21:00';
+
+                            return (
+                                <g key={i}>
+                                    {/* Picks Dot */}
+                                    {showPicksLine && (
+                                        <>
+                                            <circle cx={x} cy={yPicks} r="4" fill="#3b82f6" stroke="#ffffff" strokeWidth="1.5" />
+                                            {showPeakValues && (
+                                                <text x={x} y={yPicks - 10} fill="#2563eb" className="text-[9px] font-mono font-bold" textAnchor="middle">
+                                                    {d.picks}
+                                                </text>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* Packs Dot */}
+                                    {showPacksLine && (
+                                        <>
+                                            <circle cx={x} cy={yPacks} r="4" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
+                                            {showPeakValues && (
+                                                <text x={x} y={yPacks + 15} fill="#059669" className="text-[9px] font-mono font-bold" textAnchor="middle">
+                                                    {d.packs}
+                                                </text>
+                                            )}
+                                        </>
+                                    )}
+                                </g>
+                            );
+                        })}
+                    </svg>
                 </div>
             </div>
 

@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   RotateCcw, Plus, Search, X, CheckCircle, AlertCircle, 
-  Filter, FileText, Calendar, Printer, ShieldAlert, ArrowLeftRight, Check, Trash2, Package
+  Filter, FileText, Calendar, Printer, ShieldAlert, ArrowLeftRight, Check, Trash2, Package, Sparkles
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
+import { sounds } from '../../components/SoundEffects';
 
 interface RmaItem {
   sku: string;
@@ -50,6 +51,7 @@ export default function RmaManager({
   // Lists
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [scannedCode, setScannedCode] = useState('');
   
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -106,6 +108,24 @@ export default function RmaManager({
       damaged,
       rejected
     };
+  }, [rmaList]);
+
+  // Return Reason Statistics
+  const reasonStats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    rmaList.forEach(rma => {
+      rma.items.forEach(it => {
+        const r = it.reason || 'Inny powód';
+        counts[r] = (counts[r] || 0) + it.qtyOrdered;
+      });
+    });
+    
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    return Object.entries(counts).map(([name, val]) => ({
+      name,
+      value: val,
+      percentage: total > 0 ? Math.round((val / total) * 100) : 0
+    })).sort((a, b) => b.value - a.value);
   }, [rmaList]);
 
   // 3. Search and filter logic
@@ -308,6 +328,50 @@ export default function RmaManager({
     setIsCreateModalOpen(false);
   };
 
+  // Barcode Scanner logic for Return Waybills (RMA)
+  const pendingRmaTrackingMockList = useMemo(() => {
+    return rmaList
+      .filter(r => r.status === 'ReturnPending')
+      .map(r => r.trackingNumber || r.id)
+      .filter(Boolean)
+      .slice(0, 3);
+  }, [rmaList]);
+
+  const handleScanCode = (code: string) => {
+    const trimmed = code.trim().toLowerCase();
+    if (!trimmed) return;
+
+    const matchedRma = rmaList.find(r => 
+      r.id.toLowerCase() === trimmed || 
+      (r.trackingNumber && r.trackingNumber.toLowerCase() === trimmed)
+    );
+
+    if (matchedRma) {
+      sounds.playSuccess();
+      openVerifyModal(matchedRma);
+      setScannedCode('');
+    } else {
+      sounds.playError();
+      alert(`Błąd skanowania: Nie znaleziono oczekującego zgłoszenia RMA dla kodu "${code}".`);
+    }
+  };
+
+  const handleScanInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleScanCode(scannedCode);
+    }
+  };
+
+  const handleTriggerScan = () => {
+    handleScanCode(scannedCode);
+  };
+
+  const handleSimulateScan = (code: string) => {
+    setScannedCode(code);
+    handleScanCode(code);
+  };
+
   // Trigger browser print dialog for selected RMA protocol
   const triggerPrint = (rma: RmaReturn) => {
     setPrintingRma(rma);
@@ -442,6 +506,66 @@ export default function RmaManager({
 
       </div>
 
+      {/* Barcode Scanner Panel for Return Waybills */}
+      <div className="bg-[#0f172a] text-white p-5 rounded-2xl border border-slate-800 shadow-xl mb-6 text-left flex flex-col xl:flex-row xl:items-center justify-between gap-5 relative overflow-hidden select-none font-sans">
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex items-center gap-4.5 z-10">
+          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 relative">
+            <div className="absolute left-1 right-1 h-0.5 bg-red-500 top-1/2 animate-pulse" />
+            <Package className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" /> Szybki skaner paczek zwrotnych (RMA Scanner)
+            </h3>
+            <p className="text-[11px] text-zinc-400 mt-1 max-w-xl">
+              Zeskanuj kod kreskowy (ID zwrotu lub numer listu przewozowego) z naklejki kurierskiej, aby natychmiast otworzyć kartę weryfikacji jakościowej.
+            </p>
+          </div>
+        </div>
+
+        {/* Input & Simulation Controls */}
+        <div className="flex flex-wrap items-center gap-3 z-10 w-full xl:w-auto shrink-0">
+          <div className="relative w-full sm:w-72">
+            <input
+              type="text"
+              placeholder="Wpisz lub zeskanuj kod..."
+              value={scannedCode}
+              onChange={(e) => setScannedCode(e.target.value)}
+              onKeyDown={handleScanInputKeyDown}
+              className="w-full pl-3 pr-16 py-2.5 bg-black/40 border border-zinc-800 focus:border-indigo-500 outline-none text-zinc-100 font-mono text-xs tracking-wide rounded-xl"
+            />
+            <button
+              type="button"
+              onClick={handleTriggerScan}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-700 text-white border-none cursor-pointer font-bold px-2.5 py-1 text-[10px] uppercase rounded-lg active:scale-95 transition-all"
+            >
+              Skanuj
+            </button>
+          </div>
+
+          {/* Quick Mock Simulation Buttons */}
+          {pendingRmaTrackingMockList.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-zinc-900/60 border border-zinc-800 p-1 rounded-xl text-[10px] font-mono select-none">
+              <span className="px-2 text-zinc-550 font-bold uppercase">Symulator:</span>
+              {pendingRmaTrackingMockList.map((mockTrack) => (
+                <button
+                  key={mockTrack}
+                  type="button"
+                  onClick={() => handleSimulateScan(mockTrack)}
+                  className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-750 text-indigo-400 hover:text-indigo-300 border-none cursor-pointer rounded-lg transition-colors font-bold"
+                  title={`Zeskanuj: ${mockTrack}`}
+                >
+                  {mockTrack.startsWith('RMA-') ? mockTrack : `List: ${mockTrack}`}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Search and Filters */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         
@@ -493,135 +617,220 @@ export default function RmaManager({
 
       </div>
 
-      {/* RMA List Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-0 flex-1">
-        <div className="overflow-x-auto min-h-0 flex-1">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <th className="py-3 px-4 font-black">ID RMA / Data</th>
-                <th className="py-3 px-4 font-black">Zamówienie Bazowe</th>
-                <th className="py-3 px-4 font-black">Klient</th>
-                <th className="py-3 px-4 font-black">Kurier i Tracking</th>
-                <th className="py-3 px-4 font-black">Status</th>
-                <th className="py-3 px-4 font-black">Zwracane SKU</th>
-                <th className="py-3 px-4 font-black text-right">Akcje</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              {filteredRmaList.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">
-                    <RotateCcw className="w-10 h-10 text-slate-300 mx-auto mb-2.5 animate-pulse" />
-                    Brak zgłoszeń RMA spełniających kryteria wyszukiwania.
-                  </td>
+      {/* Main Grid: RMA Table (2/3) and Statistics Chart (1/3) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start flex-1 min-h-0">
+        
+        {/* Left Side: RMA List Table (2/3) */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col min-h-0 h-full">
+          <div className="overflow-x-auto min-h-0 flex-1">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <th className="py-3 px-4 font-black">ID RMA / Data</th>
+                  <th className="py-3 px-4 font-black">Zamówienie Bazowe</th>
+                  <th className="py-3 px-4 font-black">Klient</th>
+                  <th className="py-3 px-4 font-black">Kurier i Tracking</th>
+                  <th className="py-3 px-4 font-black">Status</th>
+                  <th className="py-3 px-4 font-black">Zwracane SKU</th>
+                  <th className="py-3 px-4 font-black text-right">Akcje</th>
                 </tr>
-              ) : (
-                filteredRmaList.map((rma) => {
-                  const baseOrder = orders.find(o => o.id === rma.id.replace('RMA-', ''));
-                  return (
-                    <tr key={rma.id} className="hover:bg-slate-50/50 transition-colors">
-                      
-                      {/* RMA ID and Created Date */}
-                      <td className="py-4 px-4">
-                        <div className="font-mono font-black text-slate-900">{rma.id}</div>
-                        <div className="text-[11px] font-medium text-slate-400 mt-0.5 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {rma.createdDate}
-                        </div>
-                      </td>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {filteredRmaList.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">
+                      <RotateCcw className="w-10 h-10 text-slate-300 mx-auto mb-2.5 animate-pulse" />
+                      Brak zgłoszeń RMA spełniających kryteria wyszukiwania.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRmaList.map((rma) => {
+                    const baseOrder = orders.find(o => o.id === rma.id.replace('RMA-', ''));
+                    return (
+                      <tr key={rma.id} className="hover:bg-slate-50/50 transition-colors">
+                        
+                        {/* RMA ID and Created Date */}
+                        <td className="py-4 px-4">
+                          <div className="font-mono font-black text-slate-900">{rma.id}</div>
+                          <div className="text-[11px] font-medium text-slate-400 mt-0.5 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {rma.createdDate}
+                          </div>
+                        </td>
 
-                      {/* Base Order ID */}
-                      <td className="py-4 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg font-mono">
-                          <FileText className="w-3.5 h-3.5 text-slate-500" />
-                          {rma.id.replace('RMA-', '')}
-                        </span>
-                      </td>
+                        {/* Base Order ID */}
+                        <td className="py-4 px-4">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg font-mono">
+                            <FileText className="w-3.5 h-3.5 text-slate-500" />
+                            {rma.id.replace('RMA-', '')}
+                          </span>
+                        </td>
 
-                      {/* Customer Info */}
-                      <td className="py-4 px-4">
-                        <div className="font-bold text-slate-800">{baseOrder?.customer || 'Nieznany klient'}</div>
-                        <div className="text-[11px] font-medium text-slate-400 mt-0.5">{baseOrder?.destination || 'Brak adresu'}</div>
-                      </td>
+                        {/* Customer Info */}
+                        <td className="py-4 px-4">
+                          <div className="font-bold text-slate-800">{baseOrder?.customer || 'Nieznany klient'}</div>
+                          <div className="text-[11px] font-medium text-slate-400 mt-0.5">{baseOrder?.destination || 'Brak adresu'}</div>
+                        </td>
 
-                      {/* Carrier & Tracking */}
-                      <td className="py-4 px-4">
-                        <div className="font-bold text-slate-700 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-slate-300"></span>
-                          {rma.vendorName || rma.carrier || 'Kurier'}
-                        </div>
-                        <div className="text-[11px] font-bold font-mono text-slate-400 mt-0.5">
-                          {rma.trackingNumber ? `List: ${rma.trackingNumber}` : 'Brak nr przewozowego'}
-                        </div>
-                      </td>
+                        {/* Carrier & Tracking */}
+                        <td className="py-4 px-4">
+                          <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                            {rma.vendorName || rma.carrier || 'Kurier'}
+                          </div>
+                          <div className="text-[11px] font-bold font-mono text-slate-400 mt-0.5">
+                            {rma.trackingNumber ? `List: ${rma.trackingNumber}` : 'Brak nr przewozowego'}
+                          </div>
+                        </td>
 
-                      {/* Status */}
-                      <td className="py-4 px-4">
-                        {getStatusBadge(rma.status)}
-                      </td>
+                        {/* Status */}
+                        <td className="py-4 px-4">
+                          {getStatusBadge(rma.status)}
+                        </td>
 
-                      {/* Returned SKU Summary */}
-                      <td className="py-4 px-4 max-w-xs">
-                        <div className="flex flex-col gap-1">
-                          {rma.items.map((item, idx) => {
-                            const report = rma.itemsReport?.find(r => r.sku === item.sku);
-                            return (
-                              <div key={idx} className="text-xs font-medium text-slate-600 truncate flex items-center justify-between gap-1.5">
-                                <span className="truncate">
-                                  <strong className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[10px] text-slate-600 mr-1">{item.sku}</strong>
-                                  {item.name}
-                                </span>
-                                <span className="font-bold text-slate-800 shrink-0">
-                                  {item.qtyOrdered} szt.
-                                  {report && (
-                                    <span className="text-[10px] text-slate-400 font-normal ml-1">
-                                      ({report.qtyResale} resale, {report.qtyDamaged} scrap)
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </td>
+                        {/* Returned SKU Summary */}
+                        <td className="py-4 px-4 max-w-xs">
+                          <div className="flex flex-col gap-1">
+                            {rma.items.map((item, idx) => {
+                              const report = rma.itemsReport?.find(r => r.sku === item.sku);
+                              return (
+                                <div key={idx} className="text-xs font-medium text-slate-600 truncate flex items-center justify-between gap-1.5">
+                                  <span className="truncate">
+                                    <strong className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[10px] text-slate-600 mr-1">{item.sku}</strong>
+                                    {item.name}
+                                  </span>
+                                  <span className="font-bold text-slate-800 shrink-0">
+                                    {item.qtyOrdered} szt.
+                                    {report && (
+                                      <span className="text-[10px] text-slate-400 font-normal ml-1">
+                                        ({report.qtyResale} resale, {report.qtyDamaged} scrap)
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
 
-                      {/* Actions */}
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          
-                          {/* Quality Verification Button */}
-                          {rma.status === 'ReturnPending' && (
-                            <button
-                              onClick={() => openVerifyModal(rma)}
-                              className="inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              Weryfikacja
-                            </button>
-                          )}
+                        {/* Actions */}
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            
+                            {/* Quality Verification Button */}
+                            {rma.status === 'ReturnPending' && (
+                              <button
+                                onClick={() => openVerifyModal(rma)}
+                                className="inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                Weryfikacja
+                              </button>
+                            )}
 
-                          {/* Print Receipt Protocol */}
-                          {rma.status !== 'ReturnPending' && (
-                            <button
-                              onClick={() => triggerPrint(rma)}
-                              className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 transition-all"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                              Protokół
-                            </button>
-                          )}
-                          
-                        </div>
-                      </td>
+                            {/* Print Receipt Protocol */}
+                            {rma.status !== 'ReturnPending' && (
+                              <button
+                                onClick={() => triggerPrint(rma)}
+                                className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 transition-all"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                Protokół
+                              </button>
+                            )}
+                            
+                          </div>
+                        </td>
 
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* Right Side: Return Reasons Chart & Insights (1/3) */}
+        {(() => {
+          let cumulativePercent = 0;
+          const colors = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#64748b'];
+
+          return (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex flex-col space-y-5 h-full text-left font-sans select-none">
+              <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2 border-b border-slate-50 pb-3">
+                <RotateCcw className="w-4 h-4 text-indigo-600" />
+                Statystyki powodów zwrotów (RMA)
+              </h3>
+              
+              {reasonStats.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 flex-1 min-h-[200px]">
+                  <AlertCircle className="w-9 h-9 text-slate-350 mb-2" />
+                  <p className="font-bold text-slate-500 text-xs">Brak zwrotów w bazie</p>
+                  <p className="text-[10px] text-slate-400 mt-1 max-w-[170px] leading-relaxed font-medium">
+                    Brak aktywnych zgłoszeń RMA do sporządzenia wykresu statystyk.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col flex-1 justify-between gap-5">
+                  {/* Donut Chart SVG */}
+                  <div className="flex justify-center items-center py-3 relative shrink-0">
+                    <svg viewBox="0 0 100 100" className="w-36 h-36 transform -rotate-90">
+                      <circle cx="50" cy="50" r="35" fill="transparent" stroke="#f8fafc" strokeWidth="12" />
+                      {reasonStats.map((stat, idx) => {
+                        const dashArray = `${(stat.percentage / 100) * 220} 220`;
+                        const dashOffset = `${-(cumulativePercent / 100) * 220}`;
+                        cumulativePercent += stat.percentage;
+                        
+                        return (
+                          <circle
+                            key={idx}
+                            cx="50"
+                            cy="50"
+                            r="35"
+                            fill="transparent"
+                            stroke={colors[idx % colors.length]}
+                            strokeWidth="12"
+                            strokeDasharray={dashArray}
+                            strokeDashoffset={dashOffset}
+                            strokeLinecap={stat.percentage === 100 ? 'butt' : 'round'}
+                            className="transition-all duration-500 hover:opacity-80 cursor-pointer"
+                            title={`${stat.name}: ${stat.value} szt. (${stat.percentage}%)`}
+                          />
+                        );
+                      })}
+                    </svg>
+                    {/* Central text overlay for Donut chart */}
+                    <div className="absolute flex flex-col items-center justify-center font-sans">
+                      <span className="text-2xl font-black text-slate-900 font-mono">
+                        {reasonStats.reduce((sum, s) => sum + s.value, 0)}
+                      </span>
+                      <span className="text-[8.5px] text-slate-400 font-extrabold uppercase tracking-widest mt-0.5">Sztuk</span>
+                    </div>
+                  </div>
+
+                  {/* Legend */}
+                  <div className="space-y-3 overflow-y-auto max-h-[200px] pr-1 flex-1">
+                    {reasonStats.map((stat, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs font-semibold text-slate-600">
+                        <div className="flex items-center gap-2 truncate">
+                          <span 
+                            className="w-2.5 h-2.5 rounded-sm shrink-0" 
+                            style={{ backgroundColor: colors[idx % colors.length] }} 
+                          />
+                          <span className="truncate" title={stat.name}>{stat.name}</span>
+                        </div>
+                        <span className="font-bold text-slate-900 font-mono shrink-0 ml-2">
+                          {stat.value} szt. ({stat.percentage}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* CREATE RMA RETURN MODAL */}
