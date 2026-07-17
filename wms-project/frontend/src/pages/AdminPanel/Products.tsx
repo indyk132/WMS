@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Minus, Plus, Check, Package } from 'lucide-react';
+import { Search, RefreshCw, Minus, Plus, Check, Package, X, Percent } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { defaultImages } from '../../data/warehouseData';
+import { sounds } from '../../components/SoundEffects';
 
 const polishStatusMap: Record<string, string> = {
     'In Stock': 'Dostępny',
@@ -32,10 +33,18 @@ interface ProductsProps {
     onUpdateStock: (product: Product, delta: number) => Promise<void>;
     onRestockItem: (product: Product) => Promise<void>;
     onUpdateThreshold: (product: Product, threshold: number) => Promise<void>;
+    onUpdateBulkCategoryVat?: (category: string, vatRate: number) => void;
     highlightedSku?: string | null;
 }
 
-export default function Products({ products, onUpdateStock, onRestockItem, onUpdateThreshold, highlightedSku }: ProductsProps) {
+export default function Products({ 
+    products, 
+    onUpdateStock, 
+    onRestockItem, 
+    onUpdateThreshold, 
+    onUpdateBulkCategoryVat,
+    highlightedSku 
+}: ProductsProps) {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
@@ -44,6 +53,11 @@ export default function Products({ products, onUpdateStock, onRestockItem, onUpd
     const [pendingSku, setPendingSku] = useState('');
     const [pendingThresholdSku, setPendingThresholdSku] = useState('');
     const [stockError, setStockError] = useState('');
+
+    // State for Bulk VAT Rate Editor modal
+    const [isVatModalOpen, setIsVatModalOpen] = useState(false);
+    const [selectedVatCategory, setSelectedVatCategory] = useState('');
+    const [selectedVatRate, setSelectedVatRate] = useState<number>(23);
 
     const [productImages] = useState<Record<string, string>>(() => {
         try {
@@ -138,24 +152,37 @@ export default function Products({ products, onUpdateStock, onRestockItem, onUpd
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight border-none">Katalog Zapasów SKU</h2>
                     <p className="text-zinc-500 text-xs mt-1">Stan zapasów produktów w czasie rzeczywistym, poziomy ostrzegawcze i lokalizacje.</p>
                 </div>
-                <button
-                    onClick={async () => {
-                        setStockError('');
-
-                        try {
-                            for (const product of products) {
-                                if (product.stock < product.reorderThreshold) {
-                                    await onRestockItem(product);
-                                }
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => {
+                            if (categories.length > 0) {
+                                setSelectedVatCategory(categories[0]);
                             }
-                        } catch (error: any) {
-                            setStockError(error.message || 'Nie udało się uzupełnić braków.');
-                        }
-                    }}
-                    className="h-9 px-4 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm border-none"
-                >
-                    <RefreshCw className="w-4 h-4" /> Automatyczne uzupełnienie braków
-                </button>
+                            setIsVatModalOpen(true);
+                        }}
+                        className="h-9 px-4 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm border-none"
+                    >
+                        <Percent className="w-4 h-4" /> Masowa edycja VAT
+                    </button>
+                    <button
+                        onClick={async () => {
+                            setStockError('');
+
+                            try {
+                                for (const product of products) {
+                                    if (product.stock < product.reorderThreshold) {
+                                        await onRestockItem(product);
+                                    }
+                                }
+                            } catch (error: any) {
+                                setStockError(error.message || 'Nie udało się uzupełnić braków.');
+                            }
+                        }}
+                        className="h-9 px-4 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm border-none"
+                    >
+                        <RefreshCw className="w-4 h-4" /> Automatyczne uzupełnienie braków
+                    </button>
+                </div>
             </div>
 
             {stockError && (
@@ -219,6 +246,7 @@ export default function Products({ products, onUpdateStock, onRestockItem, onUpd
                             <th className="py-2.5 px-4 font-bold">Położenie</th>
                             <th className="py-2.5 px-4 text-right font-bold">Próg ostrzeżenia (szt.)</th>
                             <th className="py-2.5 px-4 text-right font-bold font-sans">Cena jednostkowa (PLN)</th>
+                            <th className="py-2.5 px-4 text-center font-bold">Stawka VAT</th>
                             <th className="py-2.5 px-4 text-center font-bold">Status</th>
                             <th className="py-2.5 px-4 text-right font-bold w-12">Ilość (szt.)</th>
                             <th className="py-2.5 px-4 text-right font-bold w-48">Akcje stanu</th>
@@ -286,6 +314,11 @@ export default function Products({ products, onUpdateStock, onRestockItem, onUpd
                                             </div>
                                         </td>
                                         <td className="py-3 px-4 text-right font-mono text-zinc-650">{(p.price || 199.99).toFixed(2)}</td>
+                                        <td className="py-3 px-4 text-center font-mono text-zinc-600 select-none">
+                                            <span className="bg-zinc-100 text-zinc-800 font-bold px-2 py-0.5 rounded text-[10px] border border-zinc-200">
+                                                {p.vatRate ?? 23}%
+                                            </span>
+                                        </td>
                                         <td className="py-3 px-4 text-center select-none">
                                             {(() => {
                                                 const calculatedStatus = p.stock === 0 ? 'Out of Stock' : p.stock <= p.reorderThreshold ? 'Low Stock' : 'In Stock';
@@ -360,6 +393,95 @@ export default function Products({ products, onUpdateStock, onRestockItem, onUpd
                     </table>
                 </div>
             </div>
+
+            {/* BULK VAT RATE EDITOR MODAL */}
+            {isVatModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-white w-full max-w-md rounded-2xl border border-slate-100 shadow-2xl overflow-hidden flex flex-col">
+                        {/* Modal Header */}
+                        <div className="bg-slate-50 px-5 py-3.5 border-b border-slate-150 flex items-center justify-between shrink-0 select-none">
+                            <div>
+                                <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-1.5">
+                                    <Percent className="w-4 h-4 text-indigo-655" />
+                                    Masowa edycja stawek VAT
+                                </h3>
+                                <p className="text-[10px] text-slate-500 font-medium">Zbiorcza zmiana podatku VAT dla wybranej kategorii</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsVatModalOpen(false)}
+                                className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-655 rounded-lg transition-colors border-none bg-transparent cursor-pointer"
+                            >
+                                <X className="w-4.5 h-4.5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body Form */}
+                        <div className="p-5 space-y-4 text-left">
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 select-none">Kategoria SKU</label>
+                                <select
+                                    value={selectedVatCategory}
+                                    onChange={(e) => setSelectedVatCategory(e.target.value)}
+                                    className="w-full p-2 border border-zinc-300 rounded-lg bg-white text-xs text-zinc-800 outline-none cursor-pointer font-semibold"
+                                >
+                                    {categories.map(category => (
+                                        <option key={category} value={category}>{getCategoryLabel(category)}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 select-none">Nowa stawka VAT</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[23, 8, 5, 0].map((rate) => (
+                                        <button
+                                            key={rate}
+                                            type="button"
+                                            onClick={() => setSelectedVatRate(rate)}
+                                            className={`py-2 px-3 text-xs font-bold font-mono rounded-lg border transition-all cursor-pointer ${
+                                                selectedVatRate === rate
+                                                    ? 'bg-indigo-655 border-indigo-655 text-white shadow-sm'
+                                                    : 'bg-white border-zinc-250 text-zinc-700 hover:bg-zinc-50'
+                                            }`}
+                                        >
+                                            {rate}%
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <p className="text-[10px] text-slate-400 leading-normal select-none italic pt-1.5">
+                                Uwaga: Zatwierdzenie tej operacji zaktualizuje stawkę VAT dla wszystkich istniejących produktów w strefie i kategorii "{getCategoryLabel(selectedVatCategory)}". Operacja zostanie zapamiętana w rejestrze zdarzeń WMS.
+                            </p>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="bg-slate-50 px-5 py-3 border-t border-slate-150 flex items-center justify-end gap-2.5 shrink-0 select-none">
+                            <button
+                                type="button"
+                                onClick={() => setIsVatModalOpen(false)}
+                                className="h-8.5 px-3 rounded-lg border border-zinc-250 text-zinc-650 hover:bg-zinc-100 hover:text-zinc-850 bg-white font-bold text-xs cursor-pointer transition-colors"
+                            >
+                                Anuluj
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onUpdateBulkCategoryVat && selectedVatCategory) {
+                                        sounds.playSuccess();
+                                        onUpdateBulkCategoryVat(selectedVatCategory, selectedVatRate);
+                                    }
+                                    setIsVatModalOpen(false);
+                                }}
+                                className="h-8.5 px-4.5 rounded-lg bg-indigo-600 hover:bg-indigo-750 text-white font-bold text-xs cursor-pointer shadow-sm border-none transition-colors active:scale-[0.97]"
+                            >
+                                Zatwierdź zmianę
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

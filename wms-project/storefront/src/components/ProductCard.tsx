@@ -15,6 +15,12 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, onAddToCart, onViewDetails }: ProductCardProps) {
+  const lowerStock = (product.stock || '').toLowerCase();
+  const isOutOfStock = lowerStock.includes('brak') || lowerStock.includes('out of stock') || (() => {
+    const match = lowerStock.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) <= 0 : false;
+  })();
+
   return (
     <motion.div
       id={`product-card-${product.id}`}
@@ -34,14 +40,20 @@ export default function ProductCard({ product, onAddToCart, onViewDetails }: Pro
         
         {/* Dynamic Dark Gradient Backdrop Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 transition-opacity" />
-
+ 
         {/* Floating Quick Status Badge */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 pointer-events-none">
-          <span className="inline-flex items-center px-2.5 py-1 text-[9px] font-sans font-bold uppercase tracking-wider bg-emerald-650 text-white rounded-md shadow-md">
-            Dostępne
-          </span>
+          {isOutOfStock ? (
+            <span className="inline-flex items-center px-2.5 py-1 text-[9px] font-sans font-bold uppercase tracking-wider bg-zinc-850 text-zinc-400 border border-zinc-700/60 rounded-md shadow-md">
+              Brak na stanie
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-1 text-[9px] font-sans font-bold uppercase tracking-wider bg-emerald-650 text-white rounded-md shadow-md">
+              Dostępne
+            </span>
+          )}
         </div>
-
+ 
         {/* Floating Actions on Hover */}
         <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 backdrop-blur-xs">
           <button
@@ -53,14 +65,25 @@ export default function ProductCard({ product, onAddToCart, onViewDetails }: Pro
             <Eye size={16} />
           </button>
           
-          <button
-            id={`btn-cart-${product.id}`}
-            onClick={() => onAddToCart(product)}
-            className="flex h-10 w-10 items-center justify-center bg-white text-black hover:bg-zinc-200 transition-colors cursor-pointer rounded-full"
-            title="Dodaj do koszyka"
-          >
-            <ShoppingCart size={16} />
-          </button>
+          {isOutOfStock ? (
+            <button
+              id={`btn-notify-${product.id}`}
+              onClick={() => onViewDetails(product)}
+              className="flex h-10 w-10 items-center justify-center bg-indigo-650 border border-indigo-500 text-white hover:bg-indigo-750 transition-colors cursor-pointer rounded-full animate-pulse"
+              title="Powiadom mnie o dostępności"
+            >
+              <Package size={16} />
+            </button>
+          ) : (
+            <button
+              id={`btn-cart-${product.id}`}
+              onClick={() => onAddToCart(product)}
+              className="flex h-10 w-10 items-center justify-center bg-white text-black hover:bg-zinc-200 transition-colors cursor-pointer rounded-full"
+              title="Dodaj do koszyka"
+            >
+              <ShoppingCart size={16} />
+            </button>
+          )}
         </div>
       </div>
 

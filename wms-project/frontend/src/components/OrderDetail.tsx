@@ -60,6 +60,7 @@ export interface OrderDetailStruct {
   waybillNumber: string;
   waybillPdfDate: string;
   status: string;
+  courierNote?: string;
   pickingZones: { name: string; percentage: number }[];
   activityHistory: ActivityLog[];
   changeLogs: ChangeLog[];
@@ -328,6 +329,12 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                         {order.binId}
                       </span>
                     </div>
+                  </div>
+                )}
+                {order.courierNote && (
+                  <div className="pt-3 border-t border-slate-100 mt-3 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Instrukcja dla kuriera</span>
+                    <p className="text-xs text-slate-800 font-medium italic mt-0.5 bg-slate-50 border border-slate-200 p-2.5 rounded-lg whitespace-pre-wrap">{order.courierNote}</p>
                   </div>
                 )}
               </div>

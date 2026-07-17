@@ -245,6 +245,44 @@ export default function App() {
   const [selectedColor, setSelectedColor] = useState('Srebrny');
   const [selectedSize, setSelectedSize] = useState('38mm');
 
+  // Back-in-stock notification state
+  const [backInStockEmail, setBackInStockEmail] = useState('');
+  const [subscribedProducts, setSubscribedProducts] = useState<Record<string, string[]>>(() => {
+    try {
+      const stored = localStorage.getItem('storefront_stock_subscriptions');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const isProductOutOfStock = (product: Product): boolean => {
+    const lowerStock = (product.stock || '').toLowerCase();
+    if (lowerStock.includes('brak') || lowerStock.includes('out of stock')) return true;
+    const match = lowerStock.match(/(\d+)/);
+    if (match && parseInt(match[1], 10) <= 0) return true;
+    return false;
+  };
+
+  const handleSubscribeStock = (productId: string, email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    
+    setSubscribedProducts(prev => {
+      const currentList = prev[productId] || [];
+      if (currentList.includes(trimmed)) return prev;
+      
+      const updated = {
+        ...prev,
+        [productId]: [...currentList, trimmed]
+      };
+      
+      localStorage.setItem('storefront_stock_subscriptions', JSON.stringify(updated));
+      return updated;
+    });
+    setBackInStockEmail('');
+  };
+
   // Active User session state
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return !!localStorage.getItem('wms_customer_email');
@@ -2377,10 +2415,17 @@ export default function App() {
                               </div>
                             </div>
 
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono uppercase bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-none shadow-sm h-7">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              {selectedProduct.stock}
-                            </span>
+                            {isProductOutOfStock(selectedProduct) ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono uppercase bg-red-950/25 text-red-400 border border-red-900/30 rounded-none shadow-sm h-7 select-none">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                Brak na stanie
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono uppercase bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-none shadow-sm h-7">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                {selectedProduct.stock}
+                              </span>
+                            )}
                           </div>
 
                           <SameDayCountdown />
@@ -2432,14 +2477,59 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* CTA Trigger and immediate add */}
-                          <button
-                            id="btn-add-product-cta"
-                            onClick={() => handleAddToCart(selectedProduct, selectedSize, selectedColor)}
-                            className="w-full bg-white text-black hover:bg-zinc-200 py-3.5 text-xs font-mono font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                          >
-                            <ShoppingBag size={14} /> Dodaj do koszyka
-                          </button>
+                          {/* CTA Trigger and immediate add or Back-in-stock Email notifier */}
+                          {isProductOutOfStock(selectedProduct) ? (
+                            (() => {
+                              const productSubs = subscribedProducts[selectedProduct.id] || [];
+                              const hasSubscribed = productSubs.length > 0;
+
+                              return hasSubscribed ? (
+                                <div className="w-full bg-zinc-900/60 border border-zinc-800 p-4 text-center space-y-2 select-none rounded-xl">
+                                  <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mx-auto">
+                                    <Check size={16} />
+                                  </div>
+                                  <p className="text-xs font-mono font-bold text-zinc-200">Zapisano powiadomienie!</p>
+                                  <p className="text-[10px] text-zinc-500 leading-normal max-w-xs mx-auto">
+                                    Wyślemy e-mail na adres <strong>{productSubs[productSubs.length - 1]}</strong> natychmiast, gdy produkt będzie dostępny.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="w-full bg-zinc-950/80 border border-zinc-900 p-4 space-y-3 rounded-xl">
+                                  <div className="flex items-center gap-2 text-zinc-400 select-none">
+                                    <Mail size={14} className="text-indigo-400 animate-pulse" />
+                                    <span className="text-[10px] font-mono uppercase tracking-wider font-bold">Chwilowy brak towaru</span>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-500 leading-relaxed text-left select-none">
+                                    Wpisz swój adres e-mail, aby automatycznie otrzymać powiadomienie, gdy ten produkt powróci do magazynu.
+                                  </p>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="email"
+                                      placeholder="Twój adres e-mail..."
+                                      value={backInStockEmail}
+                                      onChange={(e) => setBackInStockEmail(e.target.value)}
+                                      className="flex-1 bg-black border border-zinc-800 text-xs px-3 py-2 text-zinc-200 outline-none focus:border-zinc-700 font-sans"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSubscribeStock(selectedProduct.id, backInStockEmail)}
+                                      className="bg-white text-black hover:bg-zinc-200 px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors cursor-pointer border-none"
+                                    >
+                                      Zapisz mnie
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <button
+                              id="btn-add-product-cta"
+                              onClick={() => handleAddToCart(selectedProduct, selectedSize, selectedColor)}
+                              className="w-full bg-white text-black hover:bg-zinc-200 py-3.5 text-xs font-mono font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <ShoppingBag size={14} /> Dodaj do koszyka
+                            </button>
+                          )}
                         </div>
                       </div>
 

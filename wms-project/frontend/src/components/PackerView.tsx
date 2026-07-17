@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Barcode, Play, CheckCircle2, AlertTriangle, Layers, 
   Check, RefreshCw, Box, Printer, Scale, Timer, Award, 
-  User, Clock, RotateCcw, AlertCircle, Truck
+  User, Clock, RotateCcw, AlertCircle, Truck, FileText
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
 import { defaultImages } from '../data/warehouseData';
@@ -362,10 +362,11 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
         packedBy: workerName,
         shippingMethod: isPickupOrder ? 'Odbiór Osobisty' : pData.selectedCourier,
         waybillNumber: isPickupOrder ? (selectedOrder?.pickupCode || 'BOPIS') : pData.waybillNumber,
+        courierNote: pData.courierNote || '',
         internalNotes: `${selectedOrder?.internalNotes || ''}\n[PACKER]: Zweryfikowano i spakowano do ${pData.cartonSize} o wadze ${pData.weight.toFixed(2)}kg przez ${workerName}.${
           isPickupOrder
             ? ` Przygotowano do odbioru osobistego (BOPIS) w HUB-PL-01. PIN: ${selectedOrder?.pickupCode || 'BOPIS'}.`
-            : ` Wygenerowano etykietę ${pData.selectedCourier}. Numer listu: ${pData.waybillNumber}.`
+            : ` Wygenerowano etykietę ${pData.selectedCourier}. Numer listu: ${pData.waybillNumber}.${pData.courierNote ? ` Instrukcja dla kuriera: ${pData.courierNote}` : ''}`
         }`,
         internalNotesActor: workerName,
         waybillPdfDate: new Date().toLocaleDateString('pl-PL')
@@ -1174,6 +1175,7 @@ export function ProcessingOrderScreen({
   const [processState, setProcessState] = useState<'carrier_selection' | 'processing' | 'error' | 'success'>('carrier_selection'); 
   const [selectedCourier, setSelectedCourier] = useState<'InPost' | 'DPD' | 'DHL' | 'GLS' | 'UPS'>('DPD');
   const [waybillNumber, setWaybillNumber] = useState('');
+  const [courierNote, setCourierNote] = useState('');
   const [elapsedTime, setElapsedTime] = useState(0);
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   
@@ -1373,7 +1375,8 @@ export function ProcessingOrderScreen({
       cartonSize,
       cartonCode,
       selectedCourier,
-      waybillNumber
+      waybillNumber,
+      courierNote: courierNote.trim()
     });
   };
 
@@ -1567,6 +1570,29 @@ export function ProcessingOrderScreen({
                   })}
                 </div>
 
+                {/* COURIER NOTE EDITOR */}
+                <div className="bg-slate-50 border border-zinc-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-indigo-650" />
+                    <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-700">Instrukcja dla kuriera (Opcjonalnie)</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium leading-normal">
+                    Wpisz dodatkowe wytyczne dla kuriera, które zostaną wydrukowane na liście przewozowym (np. kod wejściowy, numer telefonu odbiorcy, informacja o uszkodzonym domofonie itp.).
+                  </p>
+                  <textarea
+                    rows={2}
+                    maxLength={150}
+                    value={courierNote}
+                    onChange={(e) => setCourierNote(e.target.value)}
+                    placeholder="Wpisz instrukcje (np. Kod do bramy: 1234)..."
+                    className="w-full bg-white border border-zinc-300 focus:border-indigo-500 rounded-lg p-2.5 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-indigo-500 font-sans resize-none placeholder-slate-400 font-medium"
+                  />
+                  <div className="flex justify-between items-center text-[9px] text-zinc-400 select-none">
+                    <span>Instrukcja zostanie dołączona do etykiety {selectedCourier}.</span>
+                    <span>{courierNote.length} / 150 znaków</span>
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-3 pt-4 border-t border-zinc-150">
                   <button
                     type="button"
@@ -1723,6 +1749,13 @@ export function ProcessingOrderScreen({
                             <p><span className="font-semibold text-slate-400 font-mono">PUDŁO:</span> <span className="font-bold text-slate-950 uppercase">{cartonSize}</span></p>
                             <p><span className="font-semibold text-slate-400 font-mono">ID KARTONU:</span> <span className="font-mono text-slate-950 font-bold">{cartonCode}</span></p>
                           </div>
+
+                          {courierNote && (
+                            <div className="pt-2 border-t border-dashed border-slate-200 space-y-1 select-none">
+                              <p className="font-semibold text-slate-400 uppercase tracking-wider text-[7.5px]">INSTRUKCJA / COURIER NOTE:</p>
+                              <p className="font-bold text-slate-950 text-[9px] leading-relaxed italic whitespace-pre-wrap">{courierNote}</p>
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded gap-1.5 mt-1 select-none pointer-events-none">

@@ -98,6 +98,50 @@ export default function CartDrawer({
               </button>
             </div>
 
+            {/* FREE SHIPPING PROGRESS BAR */}
+            {cartItems.length > 0 && (
+              <div className="px-4 py-3 bg-zinc-950/60 border-b border-zinc-900 select-none font-sans">
+                {activeSubtotal < 1000 ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-400 font-medium">
+                        Do darmowej dostawy brakuje: <strong className="font-mono text-white text-xs">{(1000 - activeSubtotal).toFixed(2)} EUR</strong>
+                      </span>
+                      <span className="text-[10px] font-bold font-mono text-zinc-500">
+                        {Math.round((activeSubtotal / 1000) * 100)}%
+                      </span>
+                    </div>
+                    {/* Progress Track */}
+                    <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden relative border border-zinc-800">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(activeSubtotal / 1000) * 100}%` }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-zinc-500 leading-normal text-left">
+                      Dodaj produkty za co najmniej <strong>1000.00 EUR</strong>, aby otrzymać darmową wysyłkę kurierską WMS.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                      <Truck size={14} className="animate-bounce" />
+                      <span>Otrzymujesz darmową wysyłkę!</span>
+                    </div>
+                    {/* Full Progress Track */}
+                    <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden relative border border-zinc-800">
+                      <div className="h-full w-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)] animate-pulse" />
+                    </div>
+                    <p className="text-[10px] text-zinc-400 leading-normal text-left">
+                      Koszt dostawy wynosi <strong>0.00 EUR</strong>. Pakowanie i wysyłka kurierska WMS w toku.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Shopping List Items Container */}
             <div className="flex-grow overflow-y-auto p-4 space-y-4">
               {cartItems.length === 0 ? (
