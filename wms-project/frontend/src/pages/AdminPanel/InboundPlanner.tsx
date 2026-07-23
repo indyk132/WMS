@@ -722,27 +722,58 @@ export default function InboundPlanner({
                       </tr>
                     </thead>
                     <tbody>
-                      {putawayRecommendations.map(item => (
-                        <tr key={item.sku} className="border-b border-slate-150">
-                          <td className="py-2.5 px-3">
-                            <span className="font-mono font-bold text-slate-800">{item.sku}</span>
-                          </td>
-                          <td className="py-2.5 px-3 font-medium text-slate-700 truncate max-w-[200px]">{item.name}</td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-505">{item.qty} szt.</td>
-                          <td className="py-2.5 px-3 text-right">
-                            <input
-                              type="number"
-                              min="0"
-                              value={receivedQtyMap[item.sku] ?? item.qty}
-                              onChange={e => setReceivedQtyMap(prev => ({
-                                ...prev,
-                                [item.sku]: Math.max(0, Number(e.target.value))
-                              }))}
-                              className="w-20 p-1 border border-slate-300 rounded text-right font-mono font-bold outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-800"
-                            />
-                          </td>
-                        </tr>
-                      ))}
+                      {putawayRecommendations.map(item => {
+                        const receivedQty = receivedQtyMap[item.sku] ?? item.qty;
+                        const hasDiscrepancy = receivedQty !== item.qty;
+                        
+                        return (
+                          <tr 
+                            key={item.sku} 
+                            className={`border-b border-slate-150 transition-colors ${
+                              hasDiscrepancy 
+                                ? 'bg-red-50/70 dark:bg-red-950/20 text-red-900 dark:text-red-200 font-semibold' 
+                                : 'hover:bg-slate-50/50 dark:hover:bg-slate-850/30'
+                            }`}
+                          >
+                            <td className="py-2.5 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-slate-800">{item.sku}</span>
+                                {hasDiscrepancy && (
+                                  <span className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none border border-red-250 dark:border-red-800">
+                                    <AlertTriangle className="w-3 h-3 text-red-500" />
+                                    Rozbieżność
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-slate-700 truncate max-w-[200px]">{item.name}</td>
+                            <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-505">{item.qty} szt.</td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {hasDiscrepancy && (
+                                  <span className="text-[10px] font-bold font-mono text-red-600 dark:text-red-400">
+                                    {receivedQty - item.qty > 0 ? `+${receivedQty - item.qty}` : receivedQty - item.qty} szt.
+                                  </span>
+                                )}
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={receivedQtyMap[item.sku] ?? item.qty}
+                                  onChange={e => setReceivedQtyMap(prev => ({
+                                    ...prev,
+                                    [item.sku]: Math.max(0, Number(e.target.value))
+                                  }))}
+                                  className={`w-20 p-1 border rounded text-right font-mono font-bold outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 ${
+                                    hasDiscrepancy 
+                                      ? 'border-red-300 dark:border-red-800 focus:border-red-500 focus:ring-red-500 bg-red-50/50 dark:bg-red-900/20' 
+                                      : 'border-slate-300 focus:border-blue-500 focus:ring-blue-500'
+                                  }`}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

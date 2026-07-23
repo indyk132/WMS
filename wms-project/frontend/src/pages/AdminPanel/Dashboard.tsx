@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Plus, Filter, TrendingUp, AlertTriangle, Layers, Database, 
   CheckCircle2, Users, Clock, Activity, ArrowUpRight, ShieldAlert,
-  Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package
+  Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package, Truck
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { defaultImages } from '../../data/warehouseData';
@@ -48,6 +48,9 @@ export default function Dashboard({
     const [chartRange, setChartRange] = useState<'today' | 'yesterday' | 'average'>('today');
     const [showPicksLine, setShowPicksLine] = useState(true);
     const [showPacksLine, setShowPacksLine] = useState(true);
+    const [qualityPeriod, setQualityPeriod] = useState<'today' | 'yesterday' | 'week'>('today');
+    const [cycleCarrier, setCycleCarrier] = useState<'all' | 'dhl' | 'dpd' | 'inpost'>('all');
+    const [deliveryCarrier, setDeliveryCarrier] = useState<'dhl' | 'dpd' | 'inpost'>('inpost');
 
     const chartData = useMemo(() => {
         const hours = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
@@ -329,38 +332,147 @@ export default function Dashboard({
                 </div>
             </div>
 
-            {/* Warehouse Staff Productivity Section */}
-            <div className="bg-white rounded-xl p-6 border border-[#e2e8f0] shadow-sm">
-                <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
-                    <Users className="w-4.5 h-4.5 text-[#2563eb]" />
-                    <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Metryki Wydajności Personelu (Dziś)</h3>
+            {/* Warehouse Staff Productivity & Packing Quality Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Metryki Wydajności Personelu (2/3 width) */}
+                <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-[#e2e8f0] shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+                            <Users className="w-4.5 h-4.5 text-[#2563eb]" />
+                            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">Metryki Wydajności Personelu (Dziś)</h3>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-center">
+                            <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] flex flex-col justify-center min-h-[90px]">
+                                <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Piki na godzinę (Avg)</span>
+                                <div className="text-xl font-bold text-slate-900 font-mono tracking-tight flex items-center justify-center gap-1">
+                                    {laborKPIs.averagePicksPerHour}
+                                    <span className="text-xs text-emerald-600 font-bold">&#8593; 3.1%</span>
+                                </div>
+                            </div>
+                            <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] flex flex-col justify-center min-h-[90px]">
+                                <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Dokładność Kompletacji</span>
+                                <div className="text-xl font-bold text-emerald-600 font-mono tracking-tight">
+                                    {laborKPIs.pickerAccuracy}%
+                                </div>
+                            </div>
+                            <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] flex flex-col justify-center min-h-[90px]">
+                                <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Spakowane Paczki (Suma)</span>
+                                <div className="text-xl font-bold text-slate-900 font-mono tracking-tight flex items-center justify-center gap-1">
+                                    {qualityPeriod === 'today' ? 322 : qualityPeriod === 'yesterday' ? 289 : 1842}
+                                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded leading-none">Norma: 98%</span>
+                                </div>
+                            </div>
+                            <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] flex flex-col justify-center min-h-[90px]">
+                                <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Czas na weryfikację</span>
+                                <div className="text-xl font-bold text-indigo-600 font-mono tracking-tight">
+                                    {laborKPIs.avgVerificationTime}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
-                        <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Piki na godzinę (Avg)</span>
-                        <div className="text-xl font-bold text-slate-900 font-mono tracking-tight flex items-center justify-center gap-1">
-                            {laborKPIs.averagePicksPerHour}
-                            <span className="text-xs text-emerald-600 font-bold">&#8593; 3.1%</span>
+                {/* Packing Quality Circular Gauge (1/3 width) */}
+                <div className="bg-white rounded-xl p-6 border border-[#e2e8f0] shadow-sm flex flex-col justify-between">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" /> Jakość Pakowania
+                            </h3>
+                            {/* Period Switcher */}
+                            <div className="flex bg-slate-100 p-0.5 rounded border border-slate-200 font-mono text-[9px] select-none">
+                                {[
+                                    { id: 'today', label: 'Dziś' },
+                                    { id: 'yesterday', label: 'Wczoraj' },
+                                    { id: 'week', label: '7 dni' }
+                                ].map(p => (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => setQualityPeriod(p.id as any)}
+                                        className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-all border-none ${
+                                            qualityPeriod === p.id 
+                                                ? 'bg-white text-slate-900 shadow-xs' 
+                                                : 'text-slate-500 hover:text-slate-900 bg-transparent'
+                                        }`}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                    <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
-                        <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Dokładność Kompletacji</span>
-                        <div className="text-xl font-bold text-emerald-600 font-mono tracking-tight">
-                            {laborKPIs.pickerAccuracy}%
+
+                        {/* Circular Gauge Visualizer */}
+                        <div className="flex flex-col items-center justify-center py-2 relative select-none">
+                            {(() => {
+                                const percentage = qualityPeriod === 'today' ? 99.6 : qualityPeriod === 'yesterday' ? 98.9 : 99.4;
+                                const radius = 50;
+                                const strokeWidth = 8;
+                                const circumference = 2 * Math.PI * radius;
+                                const offset = circumference - (percentage / 100) * circumference;
+                                
+                                return (
+                                    <div className="relative flex items-center justify-center">
+                                        <svg className="w-36 h-36 transform -rotate-90">
+                                            {/* Track circle */}
+                                            <circle
+                                                cx="72"
+                                                cy="72"
+                                                r={radius}
+                                                stroke="#f1f5f9"
+                                                strokeWidth={strokeWidth}
+                                                fill="transparent"
+                                            />
+                                            {/* Value circle */}
+                                            <circle
+                                                cx="72"
+                                                cy="72"
+                                                r={radius}
+                                                stroke="#10b981"
+                                                strokeWidth={strokeWidth}
+                                                fill="transparent"
+                                                strokeDasharray={circumference}
+                                                strokeDashoffset={offset}
+                                                strokeLinecap="round"
+                                                className="transition-all duration-700 ease-out"
+                                            />
+                                        </svg>
+                                        <div className="absolute flex flex-col items-center justify-center text-center">
+                                            <span className="text-2xl font-black text-slate-900 tracking-tight font-mono">
+                                                {percentage}%
+                                            </span>
+                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mt-0.5 font-mono">
+                                                Bezbłędność
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
-                    </div>
-                    <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
-                        <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Spakowane Paczki</span>
-                        <div className="text-xl font-bold text-slate-900 font-mono tracking-tight flex items-center justify-center gap-1">
-                            {laborKPIs.ordersPackedToday}
-                            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded leading-none">Norma: 98%</span>
-                        </div>
-                    </div>
-                    <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
-                        <span className="text-[10px] font-bold text-slate-500 block uppercase font-mono mb-1">Czas na weryfikację</span>
-                        <div className="text-xl font-bold text-indigo-600 font-mono tracking-tight">
-                            {laborKPIs.avgVerificationTime}
+
+                        {/* Stats list */}
+                        <div className="space-y-2 text-xs font-medium border-t border-slate-100 pt-3 text-slate-500">
+                            <div className="flex justify-between items-center">
+                                <span>Paczki bez reklamacji:</span>
+                                <span className="font-mono font-bold text-slate-800">
+                                    {qualityPeriod === 'today' ? '321 / 322' : qualityPeriod === 'yesterday' ? '286 / 289' : '1831 / 1842'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span>Reklamacje RMA:</span>
+                                <span className={`font-mono font-bold ${
+                                    (qualityPeriod === 'today' ? 1 : qualityPeriod === 'yesterday' ? 3 : 11) > 0 ? 'text-red-500 font-extrabold' : 'text-slate-800'
+                                }`}>
+                                    {qualityPeriod === 'today' ? '1' : qualityPeriod === 'yesterday' ? '3' : '11'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span>Główna przyczyna:</span>
+                                <span className="text-slate-700 font-bold">
+                                    {qualityPeriod === 'today' ? 'Zły gabaryt kartonu' : qualityPeriod === 'yesterday' ? 'Uszkodzenie SKU' : 'Brak etykiety'}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -525,6 +637,248 @@ export default function Dashboard({
                             );
                         })}
                     </svg>
+                </div>
+            </div>
+
+            {/* Grid of SLA and Delivery time indicators */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Wskaźnik Czasu Cyklu Zamówień (Order Cycle Time KPI) */}
+                <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col justify-between">
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <div className="text-left font-sans">
+                                <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                    <Clock className="w-4 h-4 text-blue-600" />
+                                    Czas Cyklu Zamówień (Order Cycle Time SLA)
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Średni czas trwania etapów realizacji zamówienia.
+                                </p>
+                            </div>
+
+                            {/* Carrier Selector */}
+                            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 font-mono text-[10px] select-none">
+                                {[
+                                    { id: 'all', label: 'Wszyscy' },
+                                    { id: 'dhl', label: 'DHL' },
+                                    { id: 'dpd', label: 'DPD' },
+                                    { id: 'inpost', label: 'InPost' }
+                                ].map(c => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => setCycleCarrier(c.id as any)}
+                                        className={`px-3 py-1 rounded-md font-bold cursor-pointer transition-all border-none ${
+                                            cycleCarrier === c.id
+                                                ? 'bg-white text-slate-900 shadow-xs'
+                                                : 'text-slate-555 hover:text-slate-900 bg-transparent'
+                                        }`}
+                                    >
+                                        {c.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Progress bar visualizer */}
+                        {(() => {
+                            const durations = {
+                                all: { sync: 15, pick: 28, pack: 12, dispatch: 45, label: '1 godz. 40 min' },
+                                dhl: { sync: 12, pick: 22, pack: 11, dispatch: 36, label: '1 godz. 21 min' },
+                                dpd: { sync: 18, pick: 31, pack: 13, dispatch: 48, label: '1 godz. 50 min' },
+                                inpost: { sync: 10, pick: 20, pack: 10, dispatch: 32, label: '1 godz. 12 min' }
+                            };
+                            const selected = durations[cycleCarrier] || durations.all;
+                            const total = selected.sync + selected.pick + selected.pack + selected.dispatch;
+
+                            const percentSync = (selected.sync / total) * 100;
+                            const percentPick = (selected.pick / total) * 100;
+                            const percentPack = (selected.pack / total) * 100;
+                            const percentDispatch = (selected.dispatch / total) * 100;
+
+                            return (
+                                <div className="space-y-6">
+                                    {/* Total summary */}
+                                    <div className="flex justify-between items-baseline select-none">
+                                        <span className="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">Lead Time</span>
+                                        <span className="text-xl font-black font-mono text-slate-900 tracking-tight">{selected.label}</span>
+                                    </div>
+
+                                    {/* Funnel Progress Line */}
+                                    <div className="h-6 w-full rounded-full bg-slate-100 overflow-hidden flex shadow-inner border border-slate-250/50">
+                                        <div 
+                                            className="bg-sky-500 transition-all duration-500 ease-out flex items-center justify-center text-[10px] font-bold text-white font-mono"
+                                            style={{ width: `${percentSync}%` }}
+                                            title={`Oczekiwanie: ${selected.sync} min`}
+                                        >
+                                            {percentSync > 12 && `${selected.sync}m`}
+                                        </div>
+                                        <div 
+                                            className="bg-indigo-500 transition-all duration-500 ease-out flex items-center justify-center text-[10px] font-bold text-white font-mono"
+                                            style={{ width: `${percentPick}%` }}
+                                            title={`Zbiórka (Picking): ${selected.pick} min`}
+                                        >
+                                            {percentPick > 12 && `${selected.pick}m`}
+                                        </div>
+                                        <div 
+                                            className="bg-purple-500 transition-all duration-500 ease-out flex items-center justify-center text-[10px] font-bold text-white font-mono"
+                                            style={{ width: `${percentPack}%` }}
+                                            title={`Pakowanie: ${selected.pack} min`}
+                                        >
+                                            {percentPack > 12 && `${selected.pack}m`}
+                                        </div>
+                                        <div 
+                                            className="bg-blue-650 transition-all duration-500 ease-out flex items-center justify-center text-[10px] font-bold text-white font-mono"
+                                            style={{ width: `${percentDispatch}%` }}
+                                            title={`Spedycja (Dispatch): ${selected.dispatch} min`}
+                                        >
+                                            {percentDispatch > 12 && `${selected.dispatch}m`}
+                                        </div>
+                                    </div>
+
+                                    {/* Sub stage cards in 2x2 grid */}
+                                    <div className="grid grid-cols-2 gap-3 text-left">
+                                        <div className="p-3 bg-slate-50/55 border border-slate-200/80 rounded-lg">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[9px] font-bold text-sky-700 uppercase font-mono">1. Oczekiwanie</span>
+                                                <span className="text-[11px] font-black font-mono text-slate-800">{selected.sync}m</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-slate-50/55 border border-slate-200/80 rounded-lg">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[9px] font-bold text-indigo-700 uppercase font-mono">2. Zbiórka</span>
+                                                <span className="text-[11px] font-black font-mono text-slate-800">{selected.pick}m</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-slate-50/55 border border-slate-200/80 rounded-lg">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[9px] font-bold text-purple-700 uppercase font-mono">3. Pakowanie</span>
+                                                <span className="text-[11px] font-black font-mono text-slate-800">{selected.pack}m</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-slate-50/55 border border-slate-200/80 rounded-lg">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[9px] font-bold text-blue-700 uppercase font-mono">4. Spedycja</span>
+                                                <span className="text-[11px] font-black font-mono text-slate-800">{selected.dispatch}m</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+
+                {/* Średni Czas Dostawy Kurierskiej (Average Delivery Time KPI) */}
+                <div className="bg-white rounded-xl border border-[#e2e8f0] p-6 shadow-sm flex flex-col justify-between">
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <div className="text-left font-sans">
+                                <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                    <Truck className="w-4.5 h-4.5 text-indigo-600" />
+                                    Czas Dostawy Kurierskiej (Transit Time SLA)
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Średni czas dostarczenia paczki do odbiorcy końcowego.
+                                </p>
+                            </div>
+
+                            {/* Carrier Selector */}
+                            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 font-mono text-[10px] select-none">
+                                {[
+                                    { id: 'inpost', label: 'InPost' },
+                                    { id: 'dhl', label: 'DHL' },
+                                    { id: 'dpd', label: 'DPD' }
+                                ].map(c => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => setDeliveryCarrier(c.id as any)}
+                                        className={`px-3 py-1 rounded-md font-bold cursor-pointer transition-all border-none ${
+                                            deliveryCarrier === c.id
+                                                ? 'bg-white text-slate-900 shadow-xs'
+                                                : 'text-slate-555 hover:text-slate-900 bg-transparent'
+                                        }`}
+                                    >
+                                        {c.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Summary & SVG Line Chart */}
+                        {(() => {
+                            const dataSet = {
+                                inpost: { values: [18, 15, 16, 14, 15, 17, 16], avg: '16.4 godz.', pct: '97.2%' },
+                                dhl: { values: [24, 21, 23, 20, 22, 25, 23], avg: '22.8 godz.', pct: '95.6%' },
+                                dpd: { values: [28, 24, 26, 23, 25, 27, 26], avg: '25.2 godz.', pct: '93.8%' }
+                            };
+                            const currentData = dataSet[deliveryCarrier] || dataSet.inpost;
+                            
+                            const points = currentData.values.map((val, idx) => {
+                                const x = 40 + idx * 53.3;
+                                const y = 90 - ((val - 10) / 20) * 80;
+                                return { x, y, val };
+                            });
+
+                            const linePath = points.map((p, idx) => 
+                                idx === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
+                            ).join(' ');
+
+                            const areaPath = `${linePath} L ${points[points.length - 1].x} 90 L ${points[0].x} 90 Z`;
+
+                            return (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-baseline select-none">
+                                        <span className="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">Średni czas dostawy</span>
+                                        <div className="text-right">
+                                            <span className="text-xl font-black font-mono text-slate-900 tracking-tight block">{currentData.avg}</span>
+                                            <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest font-mono">SLA: {currentData.pct} w 24h</span>
+                                        </div>
+                                    </div>
+
+                                    {/* SVG Container */}
+                                    <div className="relative w-full h-[100px] bg-slate-50/50 rounded-xl border border-slate-100 p-2 overflow-visible">
+                                        <svg className="w-full h-full overflow-visible" viewBox="0 0 400 100">
+                                            <defs>
+                                                <linearGradient id="deliveryGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2" />
+                                                    <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
+                                                </linearGradient>
+                                            </defs>
+
+                                            {/* Grid lines */}
+                                            {[15, 20, 25].map(v => {
+                                                const y = 90 - ((v - 10) / 20) * 80;
+                                                return (
+                                                    <line key={v} x1="30" y1={y} x2="380" y2={y} stroke="#e2e8f0" strokeDasharray="3,3" />
+                                                );
+                                            })}
+
+                                            {/* Area */}
+                                            <path d={areaPath} fill="url(#deliveryGrad)" />
+
+                                            {/* Line */}
+                                            <path d={linePath} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+                                            {/* Dots & Labels */}
+                                            {points.map((p, idx) => (
+                                                <g key={idx}>
+                                                    <circle cx={p.x} cy={p.y} r="3" fill="#6366f1" stroke="#ffffff" strokeWidth="1" />
+                                                    <text x={p.x} y={p.y - 8} fill="#4f46e5" className="text-[8px] font-mono font-bold" textAnchor="middle">{p.val}h</text>
+                                                </g>
+                                            ))}
+
+                                            {/* X-Axis labels */}
+                                            {['Pon', 'Wt', 'Śr', 'Cz', 'Pt', 'Sob', 'Niedz'].map((day, idx) => (
+                                                <text key={day} x={40 + idx * 53.3} y="98" fill="#94a3b8" className="text-[7.5px] font-mono font-bold" textAnchor="middle">{day}</text>
+                                            ))}
+                                        </svg>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
                 </div>
             </div>
 

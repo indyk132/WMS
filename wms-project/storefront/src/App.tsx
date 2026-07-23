@@ -217,6 +217,33 @@ export default function App() {
   // Global View Mode: 'blueprint' (Architectural Documentation) vs 'sandbox' (Interactive Shopify Plus Store)
   const [viewMode, setViewMode] = useState<'blueprint' | 'sandbox'>('sandbox');
 
+  // Promo Banner Countdown Timer State
+  const [promoTimeLeft, setPromoTimeLeft] = useState({ hours: 2, minutes: 14, seconds: 45 });
+  const [isPromoBannerVisible, setIsPromoBannerVisible] = useState(true);
+  const [couponCopyStatus, setCouponCopyStatus] = useState(false);
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const target = new Date();
+      target.setHours(24, 0, 0, 0);
+      const diff = target.getTime() - now.getTime();
+      
+      const hours = Math.max(0, Math.floor(diff / (1000 * 60 * 60)));
+      const minutes = Math.max(0, Math.floor((diff / (1000 * 60)) % 60));
+      const seconds = Math.max(0, Math.floor((diff / 1000) % 60));
+      
+      return { hours, minutes, seconds };
+    };
+
+    setPromoTimeLeft(calculateTimeLeft());
+    const interval = setInterval(() => {
+      setPromoTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Blueprint documentation state
   const [activeSpecSection, setActiveSpecSection] = useState('section_1');
   const [activeWireframe, setActiveWireframe] = useState('wire_home');
@@ -1436,6 +1463,51 @@ export default function App() {
         )}
       </AnimatePresence>
       
+      {/* Promo Banner Countdown Timer */}
+      {isPromoBannerVisible && viewMode === 'sandbox' && (
+        <div className="bg-gradient-to-r from-zinc-950 via-blue-950/30 to-zinc-950 border-b border-zinc-900 px-6 py-2 flex items-center justify-between text-[11px] font-mono text-zinc-400 select-none z-50 transition-all">
+          <div className="flex items-center gap-2 flex-wrap justify-center w-full md:w-auto">
+            <span className="text-white font-extrabold uppercase bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/25 animate-pulse text-[10px]">
+              Darmowa wysyłka
+            </span>
+            <span>Dla wszystkich zamówień! Promocja wygasa za:</span>
+            <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded font-black text-white tracking-wider flex items-center gap-1">
+              <span>{String(promoTimeLeft.hours).padStart(2, '0')}h</span>
+              <span className="text-zinc-650">:</span>
+              <span>{String(promoTimeLeft.minutes).padStart(2, '0')}m</span>
+              <span className="text-zinc-650">:</span>
+              <span className="text-blue-400">{String(promoTimeLeft.seconds).padStart(2, '0')}s</span>
+            </span>
+          </div>
+          
+          <div className="hidden md:flex items-center gap-3">
+            <button
+              onClick={() => {
+                try {
+                  navigator.clipboard.writeText('APEX24');
+                  setCouponCopyStatus(true);
+                  setTimeout(() => setCouponCopyStatus(false), 2000);
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="px-2.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-[10px] text-zinc-300 font-bold hover:text-white cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <span>Kod: <strong className="text-blue-400">APEX24</strong></span>
+              <span className="text-[9px] text-zinc-550">{couponCopyStatus ? 'Skopiowano!' : 'Kopiuj'}</span>
+            </button>
+            
+            <button 
+              onClick={() => setIsPromoBannerVisible(false)}
+              className="text-zinc-600 hover:text-zinc-400 transition-colors p-0.5 cursor-pointer bg-transparent border-none outline-none"
+              title="Zamknij powiadomienie"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Premium Shop Header Bar */}
       <header className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-900 px-6 py-4" id="global-nav">
         <div className="max-w-7xl mx-auto flex items-center justify-between">

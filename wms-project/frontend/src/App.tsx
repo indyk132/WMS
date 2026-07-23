@@ -346,6 +346,50 @@ export default function App() {
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
 
+    // Global Font Sizing Adjuster Effect
+    useEffect(() => {
+        const handleFontScale = () => {
+            try {
+                const storedScale = window.localStorage.getItem('wms-ui-font-scale') || '100%';
+                document.documentElement.style.fontSize = storedScale;
+            } catch (e) {
+                console.error('Failed to load font size scale:', e);
+            }
+        };
+        
+        handleFontScale();
+
+        window.addEventListener('storage', handleFontScale);
+        window.addEventListener('wms-font-scale-changed', handleFontScale);
+        
+        return () => {
+            window.removeEventListener('storage', handleFontScale);
+            window.removeEventListener('wms-font-scale-changed', handleFontScale);
+        };
+    }, []);
+
+    // Global Theme (Dark/Light Mode) Effect
+    useEffect(() => {
+        const handleThemeChange = () => {
+            try {
+                const storedTheme = window.localStorage.getItem('wms-ui-theme') || 'light';
+                document.documentElement.classList.toggle('dark', storedTheme === 'dark');
+            } catch (e) {
+                console.error('Failed to load theme settings:', e);
+            }
+        };
+
+        handleThemeChange();
+
+        window.addEventListener('storage', handleThemeChange);
+        window.addEventListener('wms-theme-changed', handleThemeChange);
+
+        return () => {
+            window.removeEventListener('storage', handleThemeChange);
+            window.removeEventListener('wms-theme-changed', handleThemeChange);
+        };
+    }, []);
+
     // Auto-redirect if the stored tab is not allowed for the user's role
     useEffect(() => {
         if (currentUser && sideNavItems.length > 0) {

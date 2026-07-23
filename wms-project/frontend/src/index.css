@@ -29,3 +29,113 @@ html {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* ─── Dark Mode Overrides ─── */
+html.dark {
+  --color-bg: #090d16;
+  --color-surface: #111827;
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #9ca3af;
+  --color-border: #1f2937;
+}
+
+html.dark body {
+  background-color: #090d16 !important;
+  color: #f3f4f6 !important;
+}
+
+/* Cards & Containers */
+html.dark .bg-white {
+  background-color: #111827 !important;
+}
+
+/* Background resets */
+html.dark .bg-slate-50,
+html.dark .bg-\[\#f8fafc\],
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/80,
+html.dark .bg-slate-50\/70 {
+  background-color: #1f2937 !important;
+}
+
+html.dark .bg-blue-50\/50 {
+  background-color: rgba(37, 99, 235, 0.05) !important;
+}
+
+html.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+html.dark .bg-red-50\/90 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+html.dark .bg-amber-50\/90 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+/* Text Colors */
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-slate-700,
+html.dark .text-zinc-900,
+html.dark .text-\[\#0b1c30\] {
+  color: #f3f4f6 !important;
+}
+
+html.dark .text-slate-550 {
+  color: #d1d5db !important;
+}
+
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-slate-450 {
+  color: #9ca3af !important;
+}
+
+html.dark .text-slate-650,
+html.dark .text-slate-600 {
+  color: #d1d5db !important;
+}
+
+/* Borders */
+html.dark .border-slate-200,
+html.dark .border-zinc-200,
+html.dark .border-slate-100,
+html.dark .border-slate-150,
+html.dark .border-\[\#e2e8f0\],
+html.dark .border-slate-250 {
+  border-color: #1f2937 !important;
+}
+
+/* Sidebar Specific Overrides to keep it dark slate and premium */
+html.dark .bg-\[\#0f172a\] {
+  background-color: #0b0f19 !important;
+}
+
+html.dark .border-slate-800 {
+  border-color: #1f2937 !important;
+}
+
+/* Form Inputs */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #1f2937 !important;
+  color: #f3f4f6 !important;
+  border-color: #374151 !important;
+}
+
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #3b82f6 !important;
+  background-color: #111827 !important;
+}
+
+/* Table Hover State */
+html.dark .hover\:bg-slate-50\/50:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark tr:hover {
+  background-color: #1f2937 !important;
+}
