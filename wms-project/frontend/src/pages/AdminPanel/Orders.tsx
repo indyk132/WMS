@@ -343,6 +343,7 @@ export default function Orders({
                 onUpdateStatus={onUpdateOrderStatus}
                 onAddChangeLog={onAddOrderChangeLog}
                 onUpdateOrder={onUpdateOrder}
+                orders={orders}
             />
         );
     }

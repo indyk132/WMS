@@ -78,6 +78,85 @@ export default function Settings({ highlightedField }: SettingsProps) {
     }
   });
 
+  const [fontScale, setFontScale] = useState(() => {
+    try {
+      return localStorage.getItem('wms-ui-font-scale') || '100%';
+    } catch {
+      return '100%';
+    }
+  });
+
+  const handleFontScaleChange = (scale: string) => {
+    setFontScale(scale);
+    try {
+      localStorage.setItem('wms-ui-font-scale', scale);
+      window.dispatchEvent(new Event('wms-font-scale-changed'));
+    } catch (e) {
+      console.error('Failed to dispatch font scale change:', e);
+    }
+  };
+
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('wms-ui-theme') || 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  const handleThemeChange = (newTheme: string) => {
+    setTheme(newTheme);
+    try {
+      localStorage.setItem('wms-ui-theme', newTheme);
+      window.dispatchEvent(new Event('wms-theme-changed'));
+    } catch (e) {
+      console.error('Failed to dispatch theme change:', e);
+    }
+  };
+
+  const playSystemSound = (type: 'success' | 'error' | 'alarm') => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'success') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.08); // E5
+        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.16); // G5
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+      } else if (type === 'error') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, ctx.currentTime); // Low buzz
+        osc.frequency.setValueAtTime(110, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.28);
+      } else if (type === 'alarm') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 alarm pulses
+        osc.frequency.setValueAtTime(440, ctx.currentTime + 0.15); // A4
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(440, ctx.currentTime + 0.45);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.6);
+      }
+    } catch (e) {
+      console.error('Failed to play synthetic test sound:', e);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'general' | 'picking' | 'alerts' | 'integrations' | 'users'>('general');
 
   useEffect(() => {
@@ -359,6 +438,117 @@ export default function Settings({ highlightedField }: SettingsProps) {
                       <option value="pl">PL (Paleta Euro)</option>
                       <option value="opg.">opg. (Opakowanie zbiorcze)</option>
                     </select>
+                  </div>
+
+                  {/* Skalowanie Czcionek Interfejsu (System Font Size Adjuster) */}
+                  <div className="space-y-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-lg md:col-span-2 mt-2">
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <span>Skalowanie Czcionek Systemowych</span>
+                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono select-none">
+                          {fontScale}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium">Ułatwienie dla tabletów & ekranów dotykowych</span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="90"
+                        max="120"
+                        step="10"
+                        value={fontScale === '90%' ? '90' : fontScale === '100%' ? '100' : fontScale === '115%' ? '110' : '120'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          let mapped = '100%';
+                          if (val === '90') mapped = '90%';
+                          else if (val === '100') mapped = '100%';
+                          else if (val === '110') mapped = '115%';
+                          else if (val === '120') mapped = '130%';
+                          handleFontScaleChange(mapped);
+                        }}
+                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 outline-none"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between text-[10px] text-slate-450 font-bold select-none font-mono">
+                      <span>90% (Kompaktowy)</span>
+                      <span>100% (Normalny)</span>
+                      <span>115% (Tablet)</span>
+                      <span>130% (Duży)</span>
+                    </div>
+                  </div>
+
+                  {/* Motyw Systemowy (Dark/Light mode) & Próba Dźwięków (Audio Test) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2 mt-2 select-none">
+                    {/* Dark Mode Toggle */}
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs font-bold text-slate-800">Motyw Wizualny Panelu</label>
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                          theme === 'dark' ? 'bg-slate-800 text-slate-200 border-slate-700' : 'bg-white text-slate-700 border-slate-350'
+                        }`}>
+                          {theme === 'dark' ? 'Ciemny' : 'Jasny'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Dostosuj motyw graficzny interfejsu systemu dla komfortu oczu.</p>
+                      
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => handleThemeChange('light')}
+                          className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition-all ${
+                            theme === 'light'
+                              ? 'bg-white border-blue-500 text-blue-600 shadow-sm'
+                              : 'bg-transparent border-slate-250 text-slate-650 hover:text-slate-900 hover:border-slate-350'
+                          }`}
+                        >
+                          ☀ Motyw Jasny
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleThemeChange('dark')}
+                          className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition-all ${
+                            theme === 'dark'
+                              ? 'bg-slate-800 border-blue-550 text-white shadow-sm'
+                              : 'bg-transparent border-slate-250 text-slate-650 hover:text-slate-900 hover:border-slate-350'
+                          }`}
+                        >
+                          🌙 Motyw Ciemny
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Audio Test Panel */}
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+                      <label className="text-xs font-bold text-slate-800 block">Próba Dźwięków Terminala</label>
+                      <p className="text-[10px] text-slate-400">Sprawdź działanie i głośność powiadomień dźwiękowych systemu WMS.</p>
+                      
+                      <div className="grid grid-cols-3 gap-2 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => playSystemSound('success')}
+                          className="py-2 px-1 rounded-lg border border-emerald-250 bg-emerald-50/50 hover:bg-emerald-50 text-emerald-700 font-bold cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-[0.95]"
+                        >
+                          🔊 Sukces
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => playSystemSound('error')}
+                          className="py-2 px-1 rounded-lg border border-red-250 bg-red-50/50 hover:bg-red-50 text-red-700 font-bold cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-[0.95]"
+                        >
+                          🔊 Błąd
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => playSystemSound('alarm')}
+                          className="py-2 px-1 rounded-lg border border-amber-250 bg-amber-50/50 hover:bg-amber-50 text-amber-700 font-bold cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-[0.95]"
+                        >
+                          🔊 Alarm
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

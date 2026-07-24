@@ -73,9 +73,10 @@ interface OrderDetailProps {
   onUpdateStatus: (id: string, status: string) => void;
   onAddChangeLog: (id: string, title: string, description: string) => void;
   onUpdateOrder: (id: string, fields: Partial<OrderDetailStruct>) => void;
+  orders?: any[];
 }
 
-export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onUpdateOrder }: OrderDetailProps) {
+export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onUpdateOrder, orders = [] }: OrderDetailProps) {
   const [copied, setCopied] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [noteText, setNoteText] = useState(order.internalNotes || '');
@@ -88,6 +89,59 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
       return {};
     }
   });
+
+  const customerHistory = useMemo(() => {
+    const actualOrders = (orders || []).filter(o => 
+      o.id !== order.id && 
+      (o.customer === order.customer || o.customerName === order.customerName || (o.email && o.email === order.email))
+    ).map(o => ({
+      id: o.id,
+      date: o.shipmentDate || 'Brak daty',
+      amount: o.totalValue || '120.00 PLN',
+      shippingMethod: o.shippingMethod || 'DPD',
+      status: o.status,
+      isMock: false,
+      comment: ''
+    }));
+
+    const nameHash = (order.customerName || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const mockOrders = [
+      {
+        id: `ORD-${84000 + (nameHash % 999)}`,
+        date: '14.05.2026',
+        amount: `${100 + (nameHash % 400)}.00 PLN`,
+        shippingMethod: nameHash % 2 === 0 ? 'DHL Express' : 'InPost Paczkomat',
+        status: 'Dostarczone',
+        isMock: true,
+        comment: 'Dostawa standardowa, bez zastrzeżeń.'
+      },
+      {
+        id: `ORD-${79000 + (nameHash % 999)}`,
+        date: '28.04.2026',
+        amount: `${50 + (nameHash % 150)}.50 PLN`,
+        shippingMethod: 'DPD Standard',
+        status: nameHash % 3 === 0 ? 'Zwrócone (RMA)' : 'Dostarczone',
+        isMock: true,
+        comment: nameHash % 3 === 0 ? 'Zwrot z powodu błędnego rozmiaru (VAS).' : 'Dostarczono przed czasem.'
+      }
+    ];
+
+    const combined = [...actualOrders, ...mockOrders];
+    const totalCount = combined.length + 1;
+    const returnedCount = combined.filter(o => o.status && o.status.includes('Zwrócone')).length;
+    const returnRate = Math.round((returnedCount / totalCount) * 100);
+
+    let riskLevel: 'Niski' | 'Średni' | 'Wysoki' = 'Niski';
+    if (returnRate > 40) riskLevel = 'Wysoki';
+    else if (returnRate > 15) riskLevel = 'Średni';
+
+    return {
+      orders: combined,
+      totalCount,
+      returnRate,
+      riskLevel
+    };
+  }, [orders, order]);
 
   const getImage = (sku: string) => {
     return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
@@ -479,6 +533,85 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
 
             <div className="border-t border-slate-100 pt-3.5 mt-5 text-[11px] text-slate-400 font-mono select-none">
               Ostatnia modyfikacja: <strong className="text-slate-600">{order.internalNotesActor || 'SYSTEM_OS'}</strong>
+            </div>
+          </div>
+
+          {/* Customer Delivery History Timeline */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2.5">
+              <History className="w-4.5 h-4.5 text-blue-650" /> Historia wysyłek & Profil ryzyka
+            </h3>
+
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-2 text-center select-none">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Suma zamówień</span>
+                <strong className="text-sm font-black text-slate-800 font-mono mt-0.5 block">{customerHistory.totalCount}</strong>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Wskaźnik zwrotów</span>
+                <strong className={`text-sm font-black font-mono mt-0.5 block ${
+                  customerHistory.returnRate > 30 ? 'text-red-600' : 'text-slate-800'
+                }`}>{customerHistory.returnRate}%</strong>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Poziom ryzyka</span>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase mt-1 ${
+                  customerHistory.riskLevel === 'Wysoki' ? 'bg-red-50 text-red-750 border border-red-200' :
+                  customerHistory.riskLevel === 'Średni' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
+                  'bg-emerald-50 text-emerald-700 border border-emerald-250'
+                }`}>{customerHistory.riskLevel}</span>
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+              {/* Current active order */}
+              <div className="relative pl-6 border-l-2 border-blue-500 pb-1 text-xs">
+                <div className="absolute -left-[6.5px] top-1.5 w-3 h-3 rounded-full bg-blue-500 border border-white" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-extrabold text-slate-900">BIEŻĄCE ZLECENIE ({order.id})</span>
+                    <span className="text-[10px] text-slate-450 block font-mono mt-0.5">{order.estimatedDelivery || 'W realizacji'}</span>
+                  </div>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[8.5px] uppercase tracking-wider">{order.status}</span>
+                </div>
+              </div>
+
+              {/* Past orders */}
+              {customerHistory.orders.map((prevOrder, idx) => {
+                let statusColor = 'bg-slate-100 text-slate-600 border border-slate-250';
+                let leftLineColor = 'border-slate-200';
+                let dotColor = 'bg-slate-350';
+
+                if (prevOrder.status.includes('Dostarczone') || prevOrder.status.includes('Wysłane') || prevOrder.status.includes('Gotowe')) {
+                  statusColor = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                  leftLineColor = 'border-slate-200';
+                  dotColor = 'bg-emerald-500';
+                } else if (prevOrder.status.includes('Zwrócone') || prevOrder.status.includes('RMA')) {
+                  statusColor = 'bg-red-50 text-red-700 border border-red-200';
+                  leftLineColor = 'border-slate-200';
+                  dotColor = 'bg-red-500';
+                }
+
+                return (
+                  <div key={prevOrder.id || idx} className={`relative pl-6 border-l-2 ${leftLineColor} pb-1 text-xs`}>
+                    <div className={`absolute -left-[6.5px] top-1.5 w-3 h-3 rounded-full ${dotColor} border border-white`} />
+                    <div className="flex justify-between items-start gap-1">
+                      <div>
+                        <span className="font-bold text-slate-800">{prevOrder.id}</span>
+                        <span className="text-[10px] text-slate-405 font-mono block mt-0.5">{prevOrder.date} • {prevOrder.shippingMethod}</span>
+                      </div>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded font-bold text-[8.5px] uppercase tracking-wider shrink-0 ${statusColor}`}>
+                        {prevOrder.status}
+                      </span>
+                    </div>
+                    {prevOrder.comment && (
+                      <p className="text-[10px] text-slate-500 leading-normal italic mt-1.5 bg-slate-50/50 p-1.5 rounded border border-slate-100">{prevOrder.comment}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
