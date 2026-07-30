@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   Plus, Filter, TrendingUp, AlertTriangle, Layers, Database, 
   CheckCircle2, Users, Clock, Activity, ArrowUpRight, ShieldAlert,
-  Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package, Truck
+  Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package, Truck,
+  Trophy, Award, Zap, Medal
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { defaultImages } from '../../data/warehouseData';
@@ -52,6 +53,63 @@ export default function Dashboard({
     const [cycleCarrier, setCycleCarrier] = useState<'all' | 'dhl' | 'dpd' | 'inpost'>('all');
     const [deliveryCarrier, setDeliveryCarrier] = useState<'dhl' | 'dpd' | 'inpost'>('inpost');
 
+    // Active Worker Shift Productivity Leaderboard state
+    const [leaderboardShift, setLeaderboardShift] = useState<'shift1' | 'shift2' | 'shift3'>('shift1');
+    const [leaderboardRoleFilter, setLeaderboardRoleFilter] = useState<'all' | 'picker' | 'packer'>('all');
+    const [leaderboardSortBy, setLeaderboardSortBy] = useState<'speed' | 'accuracy' | 'total'>('speed');
+
+    // Courier Pickup SLA On-Time Percentage Metric state
+    const [courierSlaTimeframe, setCourierSlaTimeframe] = useState<'today' | 'week' | 'month'>('today');
+
+    // Active Shift Staff Attendance Radial Meter state
+    const [attendanceShift, setAttendanceShift] = useState<'shift1' | 'shift2' | 'shift3'>('shift1');
+
+    const attendanceData = useMemo(() => {
+        if (attendanceShift === 'shift1') {
+            return {
+                totalAssigned: 48,
+                present: 38,
+                onBreak: 6,
+                absent: 4,
+                activePct: 79.2,
+                roles: [
+                    { role: 'Pickersi (Zbiórka)', present: 22, total: 26, color: 'bg-amber-500' },
+                    { role: 'Packersi (Pakowanie)', present: 11, total: 14, color: 'bg-blue-600' },
+                    { role: 'Operatorzy Wózków', present: 3, total: 5, color: 'bg-emerald-600' },
+                    { role: 'Logistyka & Dok', present: 2, total: 3, color: 'bg-purple-600' }
+                ]
+            };
+        } else if (attendanceShift === 'shift2') {
+            return {
+                totalAssigned: 42,
+                present: 35,
+                onBreak: 4,
+                absent: 3,
+                activePct: 83.3,
+                roles: [
+                    { role: 'Pickersi (Zbiórka)', present: 19, total: 22, color: 'bg-amber-500' },
+                    { role: 'Packersi (Pakowanie)', present: 10, total: 12, color: 'bg-blue-600' },
+                    { role: 'Operatorzy Wózków', present: 4, total: 5, color: 'bg-emerald-600' },
+                    { role: 'Logistyka & Dok', present: 2, total: 3, color: 'bg-purple-600' }
+                ]
+            };
+        } else {
+            return {
+                totalAssigned: 24,
+                present: 20,
+                onBreak: 2,
+                absent: 2,
+                activePct: 83.3,
+                roles: [
+                    { role: 'Pickersi (Zbiórka)', present: 11, total: 13, color: 'bg-amber-500' },
+                    { role: 'Packersi (Pakowanie)', present: 5, total: 6, color: 'bg-blue-600' },
+                    { role: 'Operatorzy Wózków', present: 3, total: 3, color: 'bg-emerald-600' },
+                    { role: 'Logistyka & Dok', present: 1, total: 2, color: 'bg-purple-600' }
+                ]
+            };
+        }
+    }, [attendanceShift]);
+
     const chartData = useMemo(() => {
         const hours = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
         
@@ -72,6 +130,86 @@ export default function Dashboard({
             packs: packs[i]
         }));
     }, [chartRange]);
+
+    const leaderboardData = useMemo(() => {
+        const rawWorkers = [
+            // Shift 1
+            { id: 'EMP-101', name: 'Adam Nowak', role: 'picker', shift: 'shift1', speed: 148, total: 1184, accuracy: 99.9, location: 'Strefa A (Regał A-04)', avatarBg: 'bg-amber-500' },
+            { id: 'EMP-102', name: 'Katarzyna Wiśniewska', role: 'packer', shift: 'shift1', speed: 136, total: 1088, accuracy: 99.7, location: 'Stacja Pakowania P-03', avatarBg: 'bg-blue-600' },
+            { id: 'EMP-103', name: 'Marek Kowalski', role: 'picker', shift: 'shift1', speed: 124, total: 992, accuracy: 99.4, location: 'Strefa B (Regał B-12)', avatarBg: 'bg-emerald-600' },
+            { id: 'EMP-104', name: 'Piotr Zieliński', role: 'picker', shift: 'shift1', speed: 118, total: 944, accuracy: 100.0, location: 'Dyspozytornia Doków', avatarBg: 'bg-indigo-600' },
+            { id: 'EMP-105', name: 'Ewa Kamińska', role: 'packer', shift: 'shift1', speed: 112, total: 896, accuracy: 99.2, location: 'Stacja Pakowania P-01', avatarBg: 'bg-purple-600' },
+            { id: 'EMP-107', name: 'Tomasz Lewandowski', role: 'picker', shift: 'shift1', speed: 105, total: 840, accuracy: 98.9, location: 'Przerwa (Bufet Hali)', avatarBg: 'bg-slate-600' },
+            
+            // Shift 2
+            { id: 'EMP-201', name: 'Michał Dąbrowski', role: 'packer', shift: 'shift2', speed: 152, total: 912, accuracy: 99.8, location: 'Stacja Pakowania P-02', avatarBg: 'bg-emerald-600' },
+            { id: 'EMP-202', name: 'Anna Wójcik', role: 'picker', shift: 'shift2', speed: 141, total: 846, accuracy: 99.5, location: 'Strefa C (Korytarz C-08)', avatarBg: 'bg-amber-500' },
+            { id: 'EMP-203', name: 'Jan Szymański', role: 'picker', shift: 'shift2', speed: 130, total: 780, accuracy: 99.1, location: 'Strefa A (Regał A-01)', avatarBg: 'bg-blue-600' },
+            { id: 'EMP-204', name: 'Monika Woźniak', role: 'packer', shift: 'shift2', speed: 119, total: 714, accuracy: 99.6, location: 'Stacja Pakowania P-04', avatarBg: 'bg-purple-600' },
+
+            // Shift 3
+            { id: 'EMP-301', name: 'Grzegorz Kozłowski', role: 'picker', shift: 'shift3', speed: 128, total: 640, accuracy: 99.4, location: 'Strefa Nocna Dok B', avatarBg: 'bg-indigo-600' },
+            { id: 'EMP-302', name: 'Karolina Jankowska', role: 'packer', shift: 'shift3', speed: 115, total: 575, accuracy: 99.7, location: 'Stacja Pakowania P-05', avatarBg: 'bg-amber-500' }
+        ];
+
+        let filtered = rawWorkers.filter(w => w.shift === leaderboardShift);
+
+        if (leaderboardRoleFilter !== 'all') {
+            filtered = filtered.filter(w => w.role === leaderboardRoleFilter);
+        }
+
+        filtered.sort((a, b) => {
+            if (leaderboardSortBy === 'accuracy') return b.accuracy - a.accuracy;
+            if (leaderboardSortBy === 'total') return b.total - a.total;
+            return b.speed - a.speed;
+        });
+
+        return filtered;
+    }, [leaderboardShift, leaderboardRoleFilter, leaderboardSortBy]);
+
+    const courierSlaData = useMemo(() => {
+        if (courierSlaTimeframe === 'week') {
+            return {
+                overallRate: 97.4,
+                onTimePickups: 1248,
+                totalPickups: 1281,
+                avgDelay: '10.8 min',
+                carriers: [
+                    { name: 'InPost Paczkomaty & Kurier', code: 'inpost', slaPct: 98.8, onTime: 448, total: 453, window: '16:00 - 17:00', lastArrival: '16:15 (On Time)', status: 'excellent', color: 'border-emerald-300 bg-emerald-50/50' },
+                    { name: 'DHL Express & Parcel', code: 'dhl', slaPct: 97.1, onTime: 382, total: 393, window: '16:30 - 17:30', lastArrival: '16:42 (On Time)', status: 'good', color: 'border-blue-300 bg-blue-50/50' },
+                    { name: 'DPD Polska', code: 'dpd', slaPct: 95.8, onTime: 318, total: 332, window: '15:30 - 16:30', lastArrival: '16:35 (On Time)', status: 'good', color: 'border-blue-300 bg-blue-50/50' },
+                    { name: 'FedEx / Raben Logistics', code: 'fedex', slaPct: 96.1, onTime: 100, total: 104, window: '14:00 - 15:00', lastArrival: '14:20 (On Time)', status: 'good', color: 'border-blue-300 bg-blue-50/50' }
+                ]
+            };
+        }
+        if (courierSlaTimeframe === 'month') {
+            return {
+                overallRate: 96.9,
+                onTimePickups: 5312,
+                totalPickups: 5482,
+                avgDelay: '11.5 min',
+                carriers: [
+                    { name: 'InPost Paczkomaty & Kurier', code: 'inpost', slaPct: 98.5, onTime: 1910, total: 1939, window: '16:00 - 17:00', lastArrival: '16:22 (On Time)', status: 'excellent', color: 'border-emerald-300 bg-emerald-50/50' },
+                    { name: 'DHL Express & Parcel', code: 'dhl', slaPct: 96.5, onTime: 1620, total: 1678, window: '16:30 - 17:30', lastArrival: '16:50 (On Time)', status: 'good', color: 'border-blue-300 bg-blue-50/50' },
+                    { name: 'DPD Polska', code: 'dpd', slaPct: 94.9, onTime: 1350, total: 1422, window: '15:30 - 16:30', lastArrival: '16:40 (+10 min)', status: 'warning', color: 'border-amber-300 bg-amber-50/50' },
+                    { name: 'FedEx / Raben Logistics', code: 'fedex', slaPct: 97.5, onTime: 432, total: 443, window: '14:00 - 15:00', lastArrival: '14:10 (On Time)', status: 'excellent', color: 'border-emerald-300 bg-emerald-50/50' }
+                ]
+            };
+        }
+        // Default: today
+        return {
+            overallRate: 96.8,
+            onTimePickups: 189,
+            totalPickups: 195,
+            avgDelay: '12.4 min',
+            carriers: [
+                { name: 'InPost Paczkomaty & Kurier', code: 'inpost', slaPct: 98.4, onTime: 61, total: 62, window: '16:00 - 17:00', lastArrival: '16:18 (Punktualnie)', status: 'excellent', color: 'border-emerald-300 bg-emerald-50/50' },
+                { name: 'DHL Express & Parcel', code: 'dhl', slaPct: 96.2, onTime: 51, total: 53, window: '16:30 - 17:30', lastArrival: '16:42 (Punktualnie)', status: 'good', color: 'border-blue-300 bg-blue-50/50' },
+                { name: 'DPD Polska', code: 'dpd', slaPct: 94.6, onTime: 53, total: 56, window: '15:30 - 16:30', lastArrival: '16:44 (+14 min opóźnienia)', status: 'warning', color: 'border-amber-300 bg-amber-50/50' },
+                { name: 'FedEx / Raben Logistics', code: 'fedex', slaPct: 95.8, onTime: 24, total: 24, window: '14:00 - 15:00', lastArrival: '14:15 (Punktualnie)', status: 'excellent', color: 'border-emerald-300 bg-emerald-50/50' }
+            ]
+        };
+    }, [courierSlaTimeframe]);
 
     const getPicksPath = () => {
         let path = "";
@@ -879,6 +1017,454 @@ export default function Dashboard({
                             );
                         })()}
                     </div>
+                </div>
+            </div>
+
+            {/* Courier Pickup SLA On-Time Percentage Metric Widget */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm font-sans space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-150 pb-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700 border border-blue-300">
+                                <Truck className="w-5 h-5 text-blue-600" />
+                            </span>
+                            <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                                Terminowość Podjazdów Kurierów (Courier Pickup SLA)
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-300 animate-pulse">
+                                Gate Telemetry
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                            Monitoring punktualności podjazdu ciężarówek przewoźników pod doki magazynu z weryfikacją okna awizacyjnego.
+                        </p>
+                    </div>
+
+                    {/* Timeframe selector */}
+                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold select-none">
+                        {[
+                            { id: 'today', label: 'Dzisiaj' },
+                            { id: 'week', label: 'Ostatnie 7 dni' },
+                            { id: 'month', label: 'Ten miesiąc' }
+                        ].map(t => (
+                            <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => setCourierSlaTimeframe(t.id as any)}
+                                className={`px-3 py-1 rounded cursor-pointer transition-all border-none ${
+                                    courierSlaTimeframe === t.id
+                                        ? 'bg-blue-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                                }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Overall SLA Performance Bar & Stat Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+                    <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">Ogólne SLA Podjazdów</div>
+                            <div className="font-black text-emerald-950 text-xl tracking-tight">{courierSlaData.overallRate}%</div>
+                            <div className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Cel SLA (min. 95.0%) Osiągnięty</span>
+                            </div>
+                        </div>
+                        <div className="w-12 h-12 rounded-full border-4 border-emerald-500 flex items-center justify-center text-emerald-800 font-black text-xs bg-white shadow-xs">
+                            {courierSlaData.overallRate}%
+                        </div>
+                    </div>
+
+                    <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-blue-800 font-bold uppercase tracking-wider">Podjazdy w Oknie</div>
+                            <div className="font-black text-blue-950 text-xl tracking-tight">{courierSlaData.onTimePickups} / {courierSlaData.totalPickups}</div>
+                            <div className="text-[10px] text-blue-700 font-medium mt-0.5">{(courierSlaData.totalPickups - courierSlaData.onTimePickups)} opóźnionych podjazdów</div>
+                        </div>
+                        <Clock className="w-8 h-8 text-blue-500 shrink-0" />
+                    </div>
+
+                    <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-purple-800 font-bold uppercase tracking-wider">Śr. Czas Opóźnienia</div>
+                            <div className="font-black text-purple-950 text-xl tracking-tight">{courierSlaData.avgDelay}</div>
+                            <div className="text-[10px] text-purple-700 font-medium mt-0.5">Dla spóźnionych kurierów</div>
+                        </div>
+                        <TrendingUp className="w-8 h-8 text-purple-500 shrink-0" />
+                    </div>
+                </div>
+
+                {/* Carriers SLA Breakdown Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {courierSlaData.carriers.map(c => (
+                        <div key={c.code} className={`p-4 rounded-xl border ${c.color} space-y-3 font-sans transition-all hover:shadow-md`}>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <div className="font-extrabold text-slate-900 text-sm">{c.name}</div>
+                                    <div className="text-[10px] font-mono text-slate-500 font-bold">Okno awizacji: {c.window}</div>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                    c.status === 'excellent' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                                    c.status === 'good' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                                    'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                                }`}>
+                                    SLA: {c.slaPct}%
+                                </span>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] font-mono font-bold text-slate-600">
+                                    <span>Podjazdy w normie: {c.onTime} / {c.total}</span>
+                                    <span>{c.slaPct}%</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-200/80 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                            c.slaPct >= 98 ? 'bg-emerald-500' :
+                                            c.slaPct >= 95 ? 'bg-blue-500' :
+                                            'bg-amber-500'
+                                        }`}
+                                        style={{ width: `${c.slaPct}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-200/60 flex justify-between items-center text-[11px] font-mono text-slate-600">
+                                <span>Ostatni podjazd pod dok:</span>
+                                <span className="font-bold text-slate-800">{c.lastArrival}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Active Shift Staff Attendance & Active Status Radial Meter Widget */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm font-sans space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-150 pb-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 border border-emerald-300">
+                                <Users className="w-5 h-5 text-emerald-600" />
+                            </span>
+                            <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                                Obecność i Status Pracowników Zmiany (Shift Attendance & Active Radial)
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-300 animate-pulse">
+                                Shift Status
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                            Monitoring obecności pracowników na zmianie roboczej, aktywności na stanowiskach oraz nieobecności.
+                        </p>
+                    </div>
+
+                    <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold select-none">
+                        {[
+                            { id: 'shift1', label: 'Zmiana I (06-14)' },
+                            { id: 'shift2', label: 'Zmiana II (14-22)' },
+                            { id: 'shift3', label: 'Zmiana III (22-06)' }
+                        ].map(s => (
+                            <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setAttendanceShift(s.id as any)}
+                                className={`px-3 py-1 rounded cursor-pointer transition-all border-none ${
+                                    attendanceShift === s.id
+                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                        : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                                }`}
+                            >
+                                {s.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                    {/* SVG Donut / Radial Meter */}
+                    <div className="lg:col-span-5 flex flex-col items-center justify-center p-4 bg-slate-50/70 border border-slate-150 rounded-2xl relative">
+                        <div className="relative w-44 h-44 flex items-center justify-center">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="38" fill="none" stroke="#e2e8f0" strokeWidth="12" />
+                                {/* Present Circle */}
+                                <circle
+                                    cx="50"
+                                    cy="50"
+                                    r="38"
+                                    fill="none"
+                                    stroke="#10b981"
+                                    strokeWidth="12"
+                                    strokeDasharray="238.7"
+                                    strokeDashoffset={238.7 * (1 - attendanceData.present / attendanceData.totalAssigned)}
+                                    strokeLinecap="round"
+                                    className="transition-all duration-700"
+                                />
+                                {/* On Break Circle */}
+                                <circle
+                                    cx="50"
+                                    cy="50"
+                                    r="38"
+                                    fill="none"
+                                    stroke="#f59e0b"
+                                    strokeWidth="12"
+                                    strokeDasharray="238.7"
+                                    strokeDashoffset={238.7 * (1 - attendanceData.onBreak / attendanceData.totalAssigned)}
+                                    strokeLinecap="round"
+                                    className="transition-all duration-700 opacity-80"
+                                    style={{ transformOrigin: 'center center', transform: `rotate(${(attendanceData.present / attendanceData.totalAssigned) * 360}deg)` }}
+                                />
+                            </svg>
+                            <div className="absolute flex flex-col items-center justify-center text-center">
+                                <span className="text-2xl font-black font-mono text-slate-900 tracking-tight">
+                                    {attendanceData.activePct}%
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest">
+                                    Obecność
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 mt-4 text-[11px] font-mono font-bold select-none">
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                                <span className="text-slate-700">Obecni ({attendanceData.present})</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                                <span className="text-slate-700">Przerwa ({attendanceData.onBreak})</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-3 h-3 rounded-full bg-slate-300"></span>
+                                <span className="text-slate-500">Nieobecni ({attendanceData.absent})</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Role Breakdown Bars */}
+                    <div className="lg:col-span-7 space-y-3.5 font-sans">
+                        <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
+                            Obsada Stanowiskowa w Zmianie ({attendanceData.present} / {attendanceData.totalAssigned} Osób)
+                        </h4>
+                        {attendanceData.roles.map(r => {
+                            const pct = Math.round((r.present / r.total) * 100);
+                            return (
+                                <div key={r.role} className="space-y-1">
+                                    <div className="flex justify-between text-xs font-mono font-bold">
+                                        <span className="text-slate-800">{r.role}</span>
+                                        <span className="text-slate-600">{r.present} z {r.total} ({pct}%)</span>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ${r.color}`}
+                                            style={{ width: `${pct}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Active Worker Shift Productivity Leaderboard Widget */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm font-sans space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-150 pb-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="p-1.5 rounded-lg bg-amber-100 text-amber-700 border border-amber-300">
+                                <Trophy className="w-5 h-5 text-amber-600" />
+                            </span>
+                            <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                                Leaderboard Wydajności Pracowników Zmiany WMS
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-300 animate-pulse">
+                                Live Shift Metrics
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                            Ranking najefektywniejszych zbieraczy i pakowaczy na wybranej zmianie z oceną tempa pracy oraz wskaźnikiem bezbłędności SLA.
+                        </p>
+                    </div>
+
+                    {/* Controls & Filters */}
+                    <div className="flex items-center gap-2.5 flex-wrap select-none">
+                        {/* Shift Selector */}
+                        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
+                            {[
+                                { id: 'shift1', label: 'Zmiana I (06-14)' },
+                                { id: 'shift2', label: 'Zmiana II (14-22)' },
+                                { id: 'shift3', label: 'Zmiana III (22-06)' }
+                            ].map(s => (
+                                <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => setLeaderboardShift(s.id as any)}
+                                    className={`px-2.5 py-1 rounded cursor-pointer transition-all border-none ${
+                                        leaderboardShift === s.id
+                                            ? 'bg-slate-900 text-white shadow-xs'
+                                            : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                                    }`}
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Role Selector */}
+                        <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
+                            {[
+                                { id: 'all', label: 'Wszyscy' },
+                                { id: 'picker', label: 'Zbieracze' },
+                                { id: 'packer', label: 'Pakowacze' }
+                            ].map(r => (
+                                <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => setLeaderboardRoleFilter(r.id as any)}
+                                    className={`px-2.5 py-1 rounded cursor-pointer transition-all border-none ${
+                                        leaderboardRoleFilter === r.id
+                                            ? 'bg-blue-600 text-white shadow-xs'
+                                            : 'text-slate-600 hover:text-slate-900 bg-transparent'
+                                    }`}
+                                >
+                                    {r.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Sort selector */}
+                        <select
+                            value={leaderboardSortBy}
+                            onChange={(e) => setLeaderboardSortBy(e.target.value as any)}
+                            className="p-1.5 border border-slate-250 bg-white rounded-lg text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                        >
+                            <option value="speed">Sortuj: Tempo (szt./h)</option>
+                            <option value="total">Sortuj: Łączny Wolumen</option>
+                            <option value="accuracy">Sortuj: Dokładność SLA</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Shift KPI Highlights */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-amber-800 font-bold uppercase tracking-wider">Lider Zmiany</div>
+                            <div className="font-extrabold text-amber-950 text-sm">{leaderboardData[0]?.name || 'Brak danych'}</div>
+                            <div className="text-[10px] text-amber-700 font-semibold">{leaderboardData[0]?.speed || 0} szt./godz. ({leaderboardData[0]?.accuracy}% SLA)</div>
+                        </div>
+                        <Medal className="w-8 h-8 text-amber-500 shrink-0" />
+                    </div>
+
+                    <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-blue-800 font-bold uppercase tracking-wider">Średnie Tempo Zespołu</div>
+                            <div className="font-extrabold text-blue-950 text-sm">
+                                {Math.round(leaderboardData.reduce((acc, curr) => acc + curr.speed, 0) / (leaderboardData.length || 1))} szt./godz.
+                            </div>
+                            <div className="text-[10px] text-blue-700 font-semibold">Cel operacyjny: 120 szt./h</div>
+                        </div>
+                        <Zap className="w-8 h-8 text-blue-500 shrink-0" />
+                    </div>
+
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">SLA Bezpieczeństwa</div>
+                            <div className="font-extrabold text-emerald-950 text-sm">
+                                {(leaderboardData.reduce((acc, curr) => acc + curr.accuracy, 0) / (leaderboardData.length || 1)).toFixed(2)}%
+                            </div>
+                            <div className="text-[10px] text-emerald-700 font-semibold">Błędy zbiórki: &lt; 0.1%</div>
+                        </div>
+                        <Award className="w-8 h-8 text-emerald-500 shrink-0" />
+                    </div>
+                </div>
+
+                {/* Leaderboard Workers Table */}
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50/30">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-100/80 text-slate-650 font-bold text-xs border-b border-slate-200 font-mono">
+                                <th className="py-3 px-4 w-16 text-center">Pozycja</th>
+                                <th className="py-3 px-4">Pracownik Magazynu</th>
+                                <th className="py-3 px-4">Rola / Specjalizacja</th>
+                                <th className="py-3 px-4 text-center">Tempo (szt./h)</th>
+                                <th className="py-3 px-4 text-center">Obsłużono Dzisiaj</th>
+                                <th className="py-3 px-4 text-center">Dokładność SLA</th>
+                                <th className="py-3 px-4 text-right">Lokalizacja / Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 text-xs font-semibold text-slate-800">
+                            {leaderboardData.map((worker, index) => {
+                                const rank = index + 1;
+                                const isTop1 = rank === 1;
+                                const isTop2 = rank === 2;
+                                const isTop3 = rank === 3;
+
+                                return (
+                                    <tr 
+                                        key={worker.id} 
+                                        className={`transition-colors ${
+                                            isTop1 ? 'bg-amber-50/60 font-bold hover:bg-amber-100/60' :
+                                            isTop2 ? 'bg-slate-100/60 hover:bg-slate-200/60' :
+                                            isTop3 ? 'bg-orange-50/50 hover:bg-orange-100/50' :
+                                            'hover:bg-slate-100/50 bg-white'
+                                        }`}
+                                    >
+                                        <td className="py-3 px-4 text-center select-none font-mono">
+                                            {isTop1 && <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-amber-950 font-black shadow-sm text-sm">🥇</span>}
+                                            {isTop2 && <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-900 font-black shadow-sm text-sm">🥈</span>}
+                                            {isTop3 && <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-700 text-amber-100 font-black shadow-sm text-sm">🥉</span>}
+                                            {!isTop1 && !isTop2 && !isTop3 && (
+                                                <span className="font-bold text-slate-500 font-mono text-sm">#{rank}</span>
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className={`w-8 h-8 rounded-full ${worker.avatarBg} text-white font-black text-xs flex items-center justify-center shadow-xs select-none`}>
+                                                    {worker.name.split(' ').map(n => n[0]).join('')}
+                                                </div>
+                                                <div>
+                                                    <div className="font-extrabold text-slate-900">{worker.name}</div>
+                                                    <div className="text-[10px] font-mono text-slate-500">ID: {worker.id}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 select-none">
+                                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                worker.role === 'picker' 
+                                                    ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                            }`}>
+                                                {worker.role === 'picker' ? 'Kompletujący (Picker)' : 'Pakowacz (Packer)'}
+                                            </span>
+                                        </td>
+                                        <td className="py-3 px-4 text-center font-mono font-black text-slate-900">
+                                            <div className="flex items-center justify-center gap-1">
+                                                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                                                <span>{worker.speed} szt./h</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-700">
+                                            {worker.total.toLocaleString()} szt.
+                                        </td>
+                                        <td className="py-3 px-4 text-center font-mono font-bold">
+                                            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px]">
+                                                {worker.accuracy}%
+                                            </span>
+                                        </td>
+                                        <td className="py-3 px-4 text-right font-mono text-[11px] text-slate-600">
+                                            {worker.location}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

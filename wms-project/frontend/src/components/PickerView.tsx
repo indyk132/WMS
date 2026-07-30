@@ -760,29 +760,81 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                     </div>
 
                     <div className="flex-grow p-4 overflow-y-auto space-y-4">
-                      <span className="text-[10px] font-black tracking-widest text-[#0052CC] block uppercase mb-1">PODZIAŁ DO WÓZKA SEKCYJNEGO</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black tracking-widest text-[#0052CC] block uppercase">PODZIAŁ DO WÓZKA SEKCYJNEGO (SORTING GUIDE)</span>
+                        <span className="text-[10px] font-mono text-zinc-500 font-bold">Kolorowe podświetlenie pojemnika zbiórki</span>
+                      </div>
+
+                      {/* Interactive Visual Guide: Trolley Layout & Target Tote Highlight */}
+                      <div className="bg-slate-950 text-white p-4 rounded-2xl border border-slate-800 space-y-3 font-mono shadow-lg">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                            <span className="text-xs font-extrabold uppercase text-amber-400 tracking-wider">
+                              Wizualny Przewodnik Adresowania Pojemników Wózka
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">
+                            Trolley Slots: {currentItem.allocations.length} Pojemniki
+                          </span>
+                        </div>
+
+                        {/* Interactive Trolley Slots Scheme */}
+                        <div className="grid grid-cols-3 gap-2.5 text-center select-none pt-1">
+                          {currentItem.allocations.map(alloc => {
+                            const isConfirmed = batchConfirmations[`${currentItem.sku}-${alloc.basketName}`] === true;
+                            const isTarget = isBatchSkuScanned && !isConfirmed;
+                            
+                            const basketColorClass = 
+                              alloc.basketName === 'Kosz A' ? (isTarget ? 'bg-amber-500 ring-4 ring-amber-300 text-slate-950 font-black scale-105 shadow-xl animate-pulse' : isConfirmed ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700' : 'bg-slate-900 text-amber-300 border border-amber-500/40') :
+                              alloc.basketName === 'Kosz B' ? (isTarget ? 'bg-blue-600 ring-4 ring-blue-300 text-white font-black scale-105 shadow-xl animate-pulse' : isConfirmed ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700' : 'bg-slate-900 text-blue-300 border border-blue-500/40') :
+                              (isTarget ? 'bg-purple-600 ring-4 ring-purple-300 text-white font-black scale-105 shadow-xl animate-pulse' : isConfirmed ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700' : 'bg-slate-900 text-purple-300 border border-purple-500/40');
+
+                            return (
+                              <div
+                                key={alloc.basketName}
+                                className={`p-3 rounded-xl text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${basketColorClass}`}
+                              >
+                                <span className="text-[11px] font-black uppercase tracking-wider">{alloc.basketName}</span>
+                                <span className="text-[9px] font-mono opacity-80">{alloc.orderId}</span>
+                                <span className="text-base font-black mt-0.5">{alloc.qty} szt.</span>
+                                {isConfirmed && <span className="text-[9px] text-emerald-400 font-extrabold uppercase mt-0.5">✓ ODŁOŻONE</span>}
+                                {isTarget && <span className="text-[9px] bg-slate-950 text-amber-300 px-2 py-0.5 rounded font-black uppercase tracking-widest border border-amber-400 shadow-sm mt-0.5">WŁÓŻ TUTAJ</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {currentItem.allocations.map(alloc => {
                           const isConfirmed = batchConfirmations[`${currentItem.sku}-${alloc.basketName}`] === true;
+                          const isTarget = isBatchSkuScanned && !isConfirmed;
+
                           return (
                             <div 
                               key={alloc.basketName}
                               className={`p-4 rounded-2xl border transition-all flex flex-col justify-between items-center text-center gap-3 relative overflow-hidden ${
                                 isConfirmed 
                                   ? 'bg-emerald-50/55 border-emerald-250 text-emerald-950 shadow-inner' 
+                                  : isTarget
+                                  ? alloc.basketName === 'Kosz A'
+                                    ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-400 shadow-md'
+                                    : alloc.basketName === 'Kosz B'
+                                    ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-400 shadow-md'
+                                    : 'bg-purple-50 border-purple-400 ring-2 ring-purple-400 shadow-md'
                                   : 'bg-white border-zinc-200 shadow-sm'
                               }`}
                             >
                               <div className="space-y-0.5">
-                                <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full border tracking-wide uppercase ${
+                                <span className={`text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full border tracking-wide uppercase ${
                                   isConfirmed 
                                     ? 'bg-emerald-100 border-emerald-250 text-emerald-800' 
                                     : alloc.basketName === 'Kosz A'
-                                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                    ? 'bg-amber-100 border-amber-300 text-amber-900 font-extrabold'
                                     : alloc.basketName === 'Kosz B'
-                                    ? 'bg-blue-50 border-blue-200 text-blue-800'
-                                    : 'bg-purple-50 border-purple-200 text-purple-800'
+                                    ? 'bg-blue-100 border-blue-300 text-blue-900 font-extrabold'
+                                    : 'bg-purple-100 border-purple-300 text-purple-900 font-extrabold'
                                 }`}>
                                   {alloc.basketName}
                                 </span>
@@ -803,6 +855,8 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                                 className={`w-full h-9 rounded-xl font-black text-[10px] uppercase border transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
                                   isConfirmed 
                                     ? 'bg-emerald-600 border-emerald-650 hover:bg-emerald-700 text-white' 
+                                    : isTarget
+                                    ? 'bg-slate-900 border-slate-950 hover:bg-slate-800 text-white font-extrabold animate-pulse'
                                     : 'bg-slate-900 border-slate-950 hover:bg-slate-800 text-white disabled:opacity-30 disabled:cursor-not-allowed'
                                 }`}
                               >

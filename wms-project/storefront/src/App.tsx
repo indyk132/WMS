@@ -41,7 +41,8 @@ import {
   Menu,
   ChevronDown,
   Settings,
-  X
+  X,
+  Building2
 } from 'lucide-react';
 
 import { Product, Category, CartItem, Order, Address } from './types';
@@ -347,6 +348,55 @@ export default function App() {
   const [giftWrapping, setGiftWrapping] = useState(false);
   const [giftStyle, setGiftStyle] = useState('Klasyczny czerwony z wstążką');
   const [giftMessage, setGiftMessage] = useState('');
+
+  // Invoice VAT & GUS Auto-Finder state
+  const [wantInvoice, setWantInvoice] = useState(false);
+  const [nipNumber, setNipNumber] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [companyRegon, setCompanyRegon] = useState('');
+  const [isGusLoading, setIsGusLoading] = useState(false);
+  const [gusStatusMsg, setGusStatusMsg] = useState('');
+  const [gusSuccess, setGusSuccess] = useState(false);
+
+  const handleFetchGusData = async () => {
+    const cleanNip = nipNumber.replace(/[\s-]/g, '');
+    if (!cleanNip || cleanNip.length < 10) {
+      setGusStatusMsg('Wprowadź prawidłowy 10-cyfrowy NIP firmy (np. 5261040828).');
+      setGusSuccess(false);
+      return;
+    }
+
+    setIsGusLoading(true);
+    setGusStatusMsg('');
+    setGusSuccess(false);
+
+    const knownCompanies: Record<string, { name: string; street: string; zip: string; city: string; regon: string }> = {
+      '5261040828': { name: 'ORLEN Spółka Akcyjna', street: 'ul. Chemików 7', zip: '09-411', city: 'Płock', regon: '000001657' },
+      '5252604877': { name: 'Allegro.eu Sp. z o.o.', street: 'ul. Żelazna 51/53', zip: '00-841', city: 'Warszawa', regon: '360487700' },
+      '7740001454': { name: 'InPost Sp. z o.o.', street: 'ul. Wielicka 28', zip: '30-552', city: 'Kraków', regon: '356598210' },
+      '5213627240': { name: 'DHL Express (Polska) Sp. z o.o.', street: 'ul. Osmańska 2', zip: '02-823', city: 'Warszawa', regon: '146039201' },
+      '5272639800': { name: 'PKO Bank Polski S.A.', street: 'ul. Puławska 15', zip: '02-515', city: 'Warszawa', regon: '012102900' }
+    };
+
+    setTimeout(() => {
+      setIsGusLoading(false);
+      const company = knownCompanies[cleanNip] || {
+        name: `PRZEDSIĘBIORSTWO USŁUGOWO-HANDLOWE LOGISTICS (NIP ${cleanNip})`,
+        street: 'ul. Przemysłowa 14/2',
+        zip: '01-234',
+        city: 'Warszawa',
+        regon: '142857390'
+      };
+
+      setCompanyName(company.name);
+      setCompanyRegon(company.regon);
+      setStreetAddress(company.street);
+      setPostalCode(company.zip);
+      setCity(company.city);
+      setGusSuccess(true);
+      setGusStatusMsg(`Pobrano dane z rejestru GUS: ${company.name}, ${company.street}, ${company.zip} ${company.city}`);
+    }, 700);
+  };
 
   // Login Form State
   const [loginEmail, setLoginEmail] = useState('');
@@ -2815,6 +2865,90 @@ export default function App() {
                                 <label className="text-[10px] font-mono uppercase text-zinc-500">Telefon kontaktowy</label>
                                 <input type="text" required value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-black border border-zinc-855 text-xs text-white p-2 text-zinc-300 font-mono focus:outline-none focus:border-zinc-500" />
                               </div>
+                            </div>
+
+                            {/* Step B.1: Invoice VAT & GUS Auto-Finder */}
+                            <div className="bg-zinc-950 border border-zinc-905 p-5 space-y-4 font-mono">
+                              <label className="flex items-center justify-between cursor-pointer select-none">
+                                <span className="flex items-center gap-2 text-xs font-bold text-zinc-200">
+                                  <Building2 className="w-4 h-4 text-blue-400" />
+                                  Chcę otrzymać fakturę VAT (Zakup na firmę)
+                                </span>
+                                <input
+                                  type="checkbox"
+                                  checked={wantInvoice}
+                                  onChange={(e) => setWantInvoice(e.target.checked)}
+                                  className="rounded bg-black border-zinc-800 text-blue-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                                />
+                              </label>
+
+                              {wantInvoice && (
+                                <div className="pt-3 border-t border-zinc-900 space-y-3">
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] uppercase text-zinc-400 block font-bold">
+                                      Numer NIP Firmy (GUS Auto-Finder)
+                                    </label>
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        placeholder="np. 5261040828 lub 5252604877"
+                                        value={nipNumber}
+                                        onChange={(e) => setNipNumber(e.target.value)}
+                                        className="flex-1 bg-black border border-zinc-800 text-xs text-white px-3 py-2 rounded-none focus:outline-none focus:border-blue-500 font-mono tracking-wider"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={handleFetchGusData}
+                                        disabled={isGusLoading}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded-none cursor-pointer flex items-center gap-1.5 border-none transition-all"
+                                      >
+                                        {isGusLoading ? (
+                                          <>
+                                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                            Szukanie...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Search className="w-3.5 h-3.5" />
+                                            Pobierz z GUS
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                    <span className="text-[9px] text-zinc-500 block">
+                                      Wpisz NIP i kliknij przycisk, aby automatycznie pobrać dane z rejestru REGON / GUS.
+                                    </span>
+                                  </div>
+
+                                  {gusStatusMsg && (
+                                    <div className={`p-2.5 text-xs font-mono border ${
+                                      gusSuccess ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300' : 'bg-amber-950/40 border-amber-800/80 text-amber-300'
+                                    }`}>
+                                      {gusStatusMsg}
+                                    </div>
+                                  )}
+
+                                  {companyName && (
+                                    <div className="space-y-3 pt-1">
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] uppercase text-zinc-500 block">Pełna nazwa firmy (zweryfikowana w GUS)</label>
+                                        <input
+                                          type="text"
+                                          value={companyName}
+                                          onChange={(e) => setCompanyName(e.target.value)}
+                                          className="w-full bg-black border border-zinc-850 text-xs text-white p-2 font-mono"
+                                        />
+                                      </div>
+
+                                      {companyRegon && (
+                                        <div className="text-[10px] text-zinc-400 font-mono">
+                                          <strong>Numer REGON:</strong> {companyRegon}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             {/* Step C: Shipping method courier logs */}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange } from 'lucide-react';
+import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange, AlertCircle, StickyNote } from 'lucide-react';
 import { OrderDetail } from '../../components/OrderDetail';
 import { Product } from '../../services/inventoryApi';
 
@@ -204,13 +204,18 @@ export default function Orders({
         document.body.removeChild(link);
     };
 
+    const [hasNotesOnly, setHasNotesOnly] = useState(false);
+
     const filteredOrders = orders.filter(order => {
+        const customerInstruction = order.customerNotes || order.specialInstructions || order.deliveryNote || order.customerInstruction || order.customerNote;
+        const matchesNotesOnly = hasNotesOnly ? Boolean(customerInstruction && String(customerInstruction).trim().length > 0) : true;
         const matchesStatus = statusFilter ? order.status === statusFilter : true;
         const matchesPriority = priorityFilter ? order.priority === priorityFilter : true;
         const matchesSearch = searchQuery
             ? (order.id && String(order.id).toLowerCase().includes(searchQuery.toLowerCase())) ||
             (order.customer && String(order.customer).toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (order.destination && String(order.destination).toLowerCase().includes(searchQuery.toLowerCase()))
+            (order.destination && String(order.destination).toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (customerInstruction && String(customerInstruction).toLowerCase().includes(searchQuery.toLowerCase()))
             : true;
 
         let matchesDate = true;
@@ -221,7 +226,7 @@ export default function Orders({
             matchesDate = isDateWithinLastNDays(order.shipmentDate, 7);
         }
 
-        return matchesStatus && matchesPriority && matchesSearch && matchesDate;
+        return matchesStatus && matchesPriority && matchesSearch && matchesDate && matchesNotesOnly;
     });
 
     React.useEffect(() => {
@@ -417,6 +422,21 @@ export default function Orders({
                             <option value="Wysoki">Wysoki</option>
                             <option value="Normalny">Normalny</option>
                         </select>
+
+                        <button
+                            type="button"
+                            onClick={() => setHasNotesOnly(!hasNotesOnly)}
+                            className={`h-8 px-3 rounded border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                hasNotesOnly 
+                                    ? 'bg-amber-400 border-amber-500 text-slate-950 shadow-xs' 
+                                    : 'bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+                            }`}
+                            title="Filtruj tylko zamówienia z instrukcjami klienta"
+                        >
+                            <StickyNote className={`w-3.5 h-3.5 ${hasNotesOnly ? 'text-slate-950' : 'text-amber-600'}`} />
+                            <span>Uwagi klienta</span>
+                            {hasNotesOnly && <span className="w-2 h-2 rounded-full bg-slate-950 animate-pulse"></span>}
+                        </button>
                     </div>
 
                     <div className="ml-auto flex items-center border border-zinc-305 rounded bg-white overflow-hidden h-8 text-xs font-semibold select-none">
@@ -530,7 +550,23 @@ export default function Orders({
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="py-3 px-4 font-bold text-zinc-900">{order.customer}</td>
+                                        <td className="py-3 px-4 font-bold text-zinc-900">
+                                            <div>{order.customer}</div>
+                                            {(() => {
+                                                const custNote = order.customerNotes || order.specialInstructions || order.deliveryNote || order.customerInstruction || order.customerNote;
+                                                if (custNote) {
+                                                    return (
+                                                        <div className="mt-1 px-2 py-1 bg-amber-100 border border-amber-300 rounded text-[10.5px] font-extrabold text-amber-950 flex items-center gap-1.5 shadow-2xs">
+                                                            <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0 animate-pulse" />
+                                                            <span className="truncate max-w-[200px]" title={custNote}>
+                                                                Uwagi: {custNote}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </td>
                                         <td className="py-3 px-4 text-zinc-650">{order.destination}</td>
                                         <td className="py-3 px-4 text-zinc-800">
                                             {renderItems(order.items)}

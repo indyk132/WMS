@@ -195,10 +195,21 @@ const generateMockOrders = () => {
       actor = packer;
     }
     
+    const sampleCustomerNotes = [
+      'Proszę dzwonić domofonem 12 (uszkodzony dzwonek).',
+      'Dostawa wyłącznie w godzinach 08:00 - 14:00.',
+      'Zostawić paczkę u sąsiada w lokalu nr 4 w razie nieobecności.',
+      'Ostrożnie z zawartością - delikatny sprzęt pomiarowy.',
+      'Proszę nie zginać opakowania dokumentacji technicznej.',
+      'Wjazd od ulicy Przemysłowej przez bramę nr 3.'
+    ];
+    const customerNotes = rand() < 0.28 ? sampleCustomerNotes[Math.floor(rand() * sampleCustomerNotes.length)] : undefined;
+
     ordersList.push({
       id: orderId,
       customer: cust,
       destination: dest,
+      customerNotes,
       status,
       priority: prio,
       shipmentDate,
@@ -389,6 +400,39 @@ export default function App() {
             window.removeEventListener('wms-theme-changed', handleThemeChange);
         };
     }, []);
+
+    // Global Force Logout Listener Effect
+    useEffect(() => {
+        const checkForcedLogout = (e?: any) => {
+            if (!currentUser) return;
+            try {
+                const forcedListRaw = window.localStorage.getItem('wms-forced-logouts');
+                const forcedList: string[] = forcedListRaw ? JSON.parse(forcedListRaw) : [];
+                
+                const curId = currentUser.employeeId || currentUser.id;
+                const curEmail = currentUser.email || '';
+                
+                const isTarget = (e?.detail && (e.detail.staffId === curId || e.detail.email === curEmail)) ||
+                                 forcedList.includes(curId) ||
+                                 (curEmail && forcedList.includes(curEmail));
+                
+                if (isTarget) {
+                    addToast('Sesja unieważniona', 'Administrator wymusił wylogowanie Twojej aktywnej sesji z systemu WMS.', 'error');
+                    handleLogout();
+                }
+            } catch (err) {
+                console.error('Error checking forced logout:', err);
+            }
+        };
+
+        window.addEventListener('storage', checkForcedLogout);
+        window.addEventListener('wms-forced-logout-event', checkForcedLogout);
+
+        return () => {
+            window.removeEventListener('storage', checkForcedLogout);
+            window.removeEventListener('wms-forced-logout-event', checkForcedLogout);
+        };
+    }, [currentUser]);
 
     // Auto-redirect if the stored tab is not allowed for the user's role
     useEffect(() => {
@@ -2499,6 +2543,14 @@ export default function App() {
                             onUpdateStaff={handleUpdateStaff}
                             onDeleteStaff={handleDeleteStaff}
                             usersSync={usersSync}
+                            addToast={addToast}
+                            logActivity={logActivity}
+                            onForceLogoutUser={(staffId, staffName) => {
+                                if (currentUser && (currentUser.employeeId === staffId || currentUser.id === staffId)) {
+                                    addToast('Sesja unieważniona', `Twoja sesja została wylogowana przez administratora (${staffName}).`, 'error');
+                                    handleLogout();
+                                }
+                            }}
                         />
                     )}
 
