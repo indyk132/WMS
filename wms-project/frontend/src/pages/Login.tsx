@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ArrowRight, ShieldCheck, Warehouse } from 'lucide-react';
-import { loginUser } from '../services/usersApi';
+import { Lock, Mail, ArrowRight, ShieldCheck, Warehouse, KeyRound, CheckCircle2 } from 'lucide-react';
+import { loginUser, updateUser } from '../services/usersApi';
 
 interface LoginProps {
     onLoginSuccess: (user: any) => void;
@@ -12,6 +12,47 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Password reset requirement state
+    const [pendingResetUser, setPendingResetUser] = useState<any | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+    const [resetError, setResetError] = useState('');
+    const [isResetSubmitting, setIsResetSubmitting] = useState(false);
+
+    const checkPasswordResetRequired = (user: any) => {
+        try {
+            const rawReq = window.localStorage.getItem('wms-password-reset-required');
+            const reqList: string[] = rawReq ? JSON.parse(rawReq) : [];
+            const emId = user.employeeId || user.id;
+            const emEmail = user.email || '';
+
+            return user.requirePasswordReset || reqList.includes(emId) || (emEmail && reqList.includes(emEmail));
+        } catch {
+            return false;
+        }
+    };
+
+    const recordFailedLoginAttempt = (targetEmail: string) => {
+        if (!targetEmail) return;
+        try {
+            const raw = window.localStorage.getItem('wms-failed-login-attempts');
+            const data: Record<string, { count: number; lastAttempt: string; ip: string }> = raw ? JSON.parse(raw) : {};
+            const key = targetEmail.toLowerCase();
+            const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 16);
+            
+            const existing = data[key] || { count: 0, lastAttempt: nowStr, ip: '192.168.1.105 (Terminal Bramowy)' };
+            data[key] = {
+                count: existing.count + 1,
+                lastAttempt: nowStr,
+                ip: existing.ip || '192.168.1.105 (Terminal Bramowy)'
+            };
+            window.localStorage.setItem('wms-failed-login-attempts', JSON.stringify(data));
+            window.dispatchEvent(new CustomEvent('wms-failed-logins-updated', { detail: { email: key } }));
+        } catch (e) {
+            console.error('Failed recording login attempt:', e);
+        }
+    };
+
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         setError('');
@@ -19,11 +60,61 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         try {
             const user = await loginUser({ email, password });
-            onLoginSuccess(user);
+            if (checkPasswordResetRequired(user)) {
+                setPendingResetUser(user);
+            } else {
+                onLoginSuccess(user);
+            }
         } catch (err: any) {
             setError(err.message || 'Błędny email lub hasło.');
+            recordFailedLoginAttempt(email);
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handlePasswordResetSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setResetError('');
+
+        if (newPassword.length < 4) {
+            setResetError('Nowe hasło musi składać się z co najmniej 4 znaków.');
+            return;
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            setResetError('Podane hasła nie są identyczne.');
+            return;
+        }
+
+        setIsResetSubmitting(true);
+        try {
+            const emId = pendingResetUser.employeeId || pendingResetUser.id;
+            const emEmail = pendingResetUser.email || '';
+
+            // Remove from requirement list
+            try {
+                const rawReq = window.localStorage.getItem('wms-password-reset-required');
+                const reqList: string[] = rawReq ? JSON.parse(rawReq) : [];
+                const updated = reqList.filter(id => id !== emId && id !== emEmail);
+                window.localStorage.setItem('wms-password-reset-required', JSON.stringify(updated));
+            } catch (e) {
+                console.error(e);
+            }
+
+            // Update user password via API / localStorage
+            try {
+                await updateUser(emId, { password: newPassword, requirePasswordReset: false } as any);
+            } catch (e) {
+                console.warn('Backend update error, updating local:', e);
+            }
+
+            const updatedUser = { ...pendingResetUser, password: newPassword, requirePasswordReset: false };
+            onLoginSuccess(updatedUser);
+        } catch (err: any) {
+            setResetError(err.message || 'Wystąpił błąd podczas zmiany hasła.');
+        } finally {
+            setIsResetSubmitting(false);
         }
     };
 
@@ -56,6 +147,89 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setPassword('auditor');
         setError('');
     };
+
+    if (pendingResetUser) {
+        return (
+            <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden animate-fadeIn">
+                <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10 select-none">
+                    <div className="mx-auto h-12 w-12 rounded bg-blue-600 flex items-center justify-center text-white shadow-lg mb-4">
+                        <KeyRound className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <h2 className="text-2xl font-black text-zinc-950 tracking-tight">
+                        Wymagana zmiana hasła
+                    </h2>
+                    <p className="mt-1.5 text-zinc-500 text-xs font-medium max-w-sm mx-auto">
+                        Administrator serwera Logistics OS zobowiązał Cię do zdefiniowania nowego bezpiecznego hasła przed uzyskaniem dostępu.
+                    </p>
+                </div>
+
+                <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md z-10">
+                    <div className="bg-white py-8 px-4 shadow-2xl rounded-lg sm:px-10 border border-blue-200">
+                        <form className="space-y-4" onSubmit={handlePasswordResetSubmit}>
+                            {resetError && (
+                                <div className="bg-red-50 border border-red-200 text-red-750 p-3 rounded text-xs font-semibold leading-relaxed">
+                                    {resetError}
+                                </div>
+                            )}
+
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs font-semibold text-blue-900">
+                                Zalogowano jako: <strong>{pendingResetUser.firstName} {pendingResetUser.lastName}</strong> ({pendingResetUser.email})
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                                    Nowe hasło
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
+                                        <Lock className="w-4 h-4" />
+                                    </span>
+                                    <input
+                                        type="password"
+                                        required
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        className="w-full pl-9 pr-3 py-2 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-zinc-900 bg-zinc-50"
+                                        placeholder="Min. 4 znaki..."
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                                    Potwierdź nowe hasło
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
+                                        <Lock className="w-4 h-4" />
+                                    </span>
+                                    <input
+                                        type="password"
+                                        required
+                                        value={confirmNewPassword}
+                                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                        className="w-full pl-9 pr-3 py-2 border border-zinc-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-zinc-900 bg-zinc-50"
+                                        placeholder="Powtórz nowe hasło..."
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={isResetSubmitting}
+                                    className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded shadow-sm text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none cursor-pointer active:scale-95 transition-all"
+                                >
+                                    {isResetSubmitting ? 'Zapisywanie...' : 'Zapisz nowe hasło i przejdź do systemu'}
+                                    <CheckCircle2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#f5f7fa] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans text-sm relative overflow-hidden animate-fadeIn">

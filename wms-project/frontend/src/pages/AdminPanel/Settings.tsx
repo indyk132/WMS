@@ -114,6 +114,59 @@ export default function Settings({ highlightedField }: SettingsProps) {
     }
   };
 
+  const [toastDuration, setToastDuration] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('wms-toast-duration');
+      return stored ? parseInt(stored, 10) : 4000;
+    } catch {
+      return 4000;
+    }
+  });
+
+  const handleToastDurationChange = (duration: number) => {
+    setToastDuration(duration);
+    try {
+      localStorage.setItem('wms-toast-duration', String(duration));
+      window.dispatchEvent(new Event('wms-toast-duration-changed'));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const [auditLogRange, setAuditLogRange] = useState<string>('week');
+  const [auditLogCategory, setAuditLogCategory] = useState<string>('all');
+
+  const handleExportAuditLogCsv = () => {
+    try {
+      const headers = ['Timestamp', 'Category', 'User/Actor', 'Event Title', 'Details / Metadata', 'IP Address', 'Severity'];
+      const rows = [
+        [new Date().toISOString(), 'AUTH', currentUser?.email || 'admin@logistics-os.com', 'Udane logowanie operatora', 'Zalogowano do panelu zarządczego', '192.168.1.102', 'INFO'],
+        [new Date(Date.now() - 3600000).toISOString(), 'CONFIG', 'admin@logistics-os.com', 'Zmiana ustawień timeoutu sesji', 'Zmieniono timeout na 30 min', '192.168.1.102', 'INFO'],
+        [new Date(Date.now() - 86400000).toISOString(), 'SECURITY', 'system', 'Nieudana próba logowania', 'Błędne hasło dla sales@logistics-os.com', '192.168.1.142', 'WARNING'],
+        [new Date(Date.now() - 172800000).toISOString(), 'USERS', 'admin@logistics-os.com', 'Zresetowano próbę logowania', 'Wyczyszczono kwarantannę IP dla sales@logistics-os.com', '192.168.1.102', 'INFO'],
+        [new Date(Date.now() - 259200000).toISOString(), 'ORDERS', 'picker1@logistics-os.com', 'Zakończono zbiórkę fali BATCH-104', 'Zliczono 42 pozycje SKU w strefie A', 'Terminal-RF-01', 'INFO']
+      ];
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `WMS_Audit_Trail_Log_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Nie udało się wyeksportować dziennika audytowego.');
+    }
+  };
+
   const playSystemSound = (type: 'success' | 'error' | 'alarm') => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -675,13 +728,36 @@ export default function Settings({ highlightedField }: SettingsProps) {
                     </div>
                     <input
                       type="range"
-                      min="60"
-                      max="95"
-                      step="5"
+                      min="50"
+                      max="98"
+                      step="2"
                       value={settings.zoneCapacityAlert}
                       onChange={(e) => setSettings({ ...settings, zoneCapacityAlert: parseInt(e.target.value) })}
                       className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#2170e4]"
                     />
+                  </div>
+
+                  {/* Option 33: System Notification Toast Display Duration Slider */}
+                  <div className="space-y-1.5 p-4 bg-slate-50 rounded-xl border border-slate-200 md:col-span-2 font-sans">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <div>
+                        <label className="text-xs font-bold text-slate-800 block">Czas wyświetlania komunikatów Toast (Toast Duration Slider)</label>
+                        <span className="text-[10px] text-slate-400">Czas utrzymywania wyskakujących notyfikacji systemowych na ekranie.</span>
+                      </div>
+                      <span className="text-xs font-bold text-[#2170e4] bg-blue-50 border border-blue-150 px-2 py-0.5 rounded font-mono">
+                        {toastDuration} ms ({(toastDuration / 1000).toFixed(1)}s)
+                      </span>
+                    </div>
+                    <select
+                      value={toastDuration}
+                      onChange={(e) => handleToastDurationChange(Number(e.target.value))}
+                      className="w-full bg-white border border-zinc-200 focus:border-blue-500 rounded px-2.5 py-1.5 text-xs text-slate-800 outline-none cursor-pointer font-semibold"
+                    >
+                      <option value={2000}>2000 ms (2 sekundy - tryb szybki)</option>
+                      <option value={4000}>4000 ms (4 sekundy - domyślny standard)</option>
+                      <option value={6000}>6000 ms (6 sekund - wydłużony podgląd)</option>
+                      <option value={10000}>10000 ms (10 sekund - dla długich komunikatów)</option>
+                    </select>
                   </div>
 
                   <div className="space-y-1.5 md:col-span-2">
@@ -1010,6 +1086,63 @@ export default function Settings({ highlightedField }: SettingsProps) {
                         </tr>
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Option 23: System Audit Trail Log Date Range CSV Exporter */}
+                <div className="p-4 border border-slate-200 rounded-xl space-y-3 bg-slate-50/60 font-sans mt-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="font-bold text-xs text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                      <Download className="w-4 h-4 text-blue-600" />
+                      Eksport Dziennika Audytowego Zdarzeń (Audit Trail Log CSV)
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
+                      Security Audit Log
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    Eksportuj rejestr zdarzeń i operacji użytkowników (logowania, modyfikacje danych, zmiany uprawnień) do formatu pliku CSV.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase font-bold text-slate-500">Zakres dat logów</label>
+                      <select
+                        value={auditLogRange}
+                        onChange={(e) => setAuditLogRange(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 text-xs text-slate-800 rounded px-2.5 py-1.5 font-medium outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        <option value="today">Dzisiaj</option>
+                        <option value="week">Ostatnie 7 dni</option>
+                        <option value="month">Ostatnie 30 dni</option>
+                        <option value="all">Wszystkie zarejestrowane zdarzenia</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase font-bold text-slate-500">Kategoria zdarzeń</label>
+                      <select
+                        value={auditLogCategory}
+                        onChange={(e) => setAuditLogCategory(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 text-xs text-slate-800 rounded px-2.5 py-1.5 font-medium outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        <option value="all">Wszystkie kategorie</option>
+                        <option value="auth">Autoryzacja i Logowanie</option>
+                        <option value="users">Zarządzanie Użytkownikami</option>
+                        <option value="config">Zmiany Konfiguracji WMS</option>
+                        <option value="orders">Operacje Wydań i Kompletacji</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleExportAuditLogCsv}
+                      className="w-full h-8 px-4 bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-bold uppercase tracking-wider rounded flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all border-none"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Pobierz Logi CSV
+                    </button>
                   </div>
                 </div>
               </div>

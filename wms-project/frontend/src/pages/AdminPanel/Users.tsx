@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, ShieldCheck, UserCheck, UserX, Edit2, Trash2, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, ShieldCheck, UserCheck, UserX, Edit2, Trash2, Search, LogOut, AlertTriangle, Radio, KeyRound, ShieldAlert, Globe, Wifi } from 'lucide-react';
 import { User } from '../../services/usersApi';
 
 interface UsersPermissionsProps {
@@ -8,6 +8,9 @@ interface UsersPermissionsProps {
     onUpdateStaff: (id: string, updates: any) => Promise<User>;
     onDeleteStaff: (id: string) => Promise<void>;
     usersSync: { isLoading: boolean; error: string };
+    addToast?: (title: string, text: string, type: 'error' | 'warning' | 'info' | 'success') => void;
+    logActivity?: (msg: string, type: string, details?: string) => void;
+    onForceLogoutUser?: (staffId: string, staffName: string) => void;
 }
 
 export default function UsersPermissions({ 
@@ -15,11 +18,159 @@ export default function UsersPermissions({
     onAddStaff, 
     onUpdateStaff, 
     onDeleteStaff, 
-    usersSync 
+    usersSync,
+    addToast,
+    logActivity,
+    onForceLogoutUser
 }: UsersPermissionsProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const [forceLogoutStaff, setForceLogoutStaff] = useState<User | null>(null);
+    const [resetPasswordStaff, setResetPasswordStaff] = useState<User | null>(null);
+
+    const [forcedLoggedOutIds, setForcedLoggedOutIds] = useState<string[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-forced-logouts');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const [passwordResetRequiredIds, setPasswordResetRequiredIds] = useState<string[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-password-reset-required');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const [failedLogins, setFailedLogins] = useState<Record<string, { count: number; lastAttempt: string; ip: string }>>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-failed-login-attempts');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        
+        // Seed initial demo data for failed login attempt security indicator
+        const seedData: Record<string, { count: number; lastAttempt: string; ip: string }> = {
+            'sales@logistics-os.com': { count: 3, lastAttempt: '2026-07-27 10:41', ip: '192.168.1.142 (Stacja Sales-02)' },
+            'auditor@logistics-os.com': { count: 1, lastAttempt: '2026-07-27 09:15', ip: '192.168.1.188 (Mobilne IP)' }
+        };
+        try {
+            window.localStorage.setItem('wms-failed-login-attempts', JSON.stringify(seedData));
+        } catch {}
+        return seedData;
+    });
+
+    useEffect(() => {
+        const handleFailedLoginsUpdate = () => {
+            try {
+                const saved = window.localStorage.getItem('wms-failed-login-attempts');
+                if (saved) setFailedLogins(JSON.parse(saved));
+            } catch {}
+        };
+        window.addEventListener('storage', handleFailedLoginsUpdate);
+        window.addEventListener('wms-failed-logins-updated', handleFailedLoginsUpdate);
+        return () => {
+            window.removeEventListener('storage', handleFailedLoginsUpdate);
+            window.removeEventListener('wms-failed-logins-updated', handleFailedLoginsUpdate);
+        };
+    }, []);
+
+    const handleClearFailedLogins = (emailOrId: string) => {
+        const updated = { ...failedLogins };
+        const key = emailOrId.toLowerCase();
+        delete updated[key];
+        setFailedLogins(updated);
+        try {
+            window.localStorage.setItem('wms-failed-login-attempts', JSON.stringify(updated));
+        } catch (e) {
+            console.error(e);
+        }
+        if (addToast) {
+            addToast('Zresetowano licznik nieudanych prób', `Wyczyszczono ostrzeżenie bezpieczeństwa dla ${emailOrId}.`, 'success');
+        }
+        if (logActivity) {
+            logActivity(`Zresetowano nieudane próby logowania dla ${emailOrId}`, 'info');
+        }
+    };
+
+    // IP Whitelist Policy state and handlers
+    const [ipPolicyModalStaff, setIpPolicyModalStaff] = useState<User | null>(null);
+    const [ipPolicyInputIp, setIpPolicyInputIp] = useState('192.168.1.100');
+    const [ipPolicyInputStatus, setIpPolicyInputStatus] = useState<'whitelisted' | 'vpn' | 'unauthorized'>('whitelisted');
+    const [ipPolicyInputSubnet, setIpPolicyInputSubnet] = useState('192.168.1.0/24 (LAN WMS)');
+    const [ipPolicyInputLocation, setIpPolicyInputLocation] = useState('Magazyn Centralny');
+
+    const [ipPolicyMap, setIpPolicyMap] = useState<Record<string, { ip: string; status: 'whitelisted' | 'vpn' | 'unauthorized'; subnet: string; location: string }>>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-user-ip-whitelist');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+
+        const defaultSeed: Record<string, { ip: string; status: 'whitelisted' | 'vpn' | 'unauthorized'; subnet: string; location: string }> = {
+            'admin@logistics-os.com': { ip: '192.168.1.100', status: 'whitelisted', subnet: '192.168.1.0/24 (LAN WMS)', location: 'Hala Główna - Serwerownia' },
+            'manager@logistics-os.com': { ip: '192.168.1.104', status: 'whitelisted', subnet: '192.168.1.0/24 (LAN WMS)', location: 'Biuro Kierownika' },
+            'sales@logistics-os.com': { ip: '84.10.22.14', status: 'vpn', subnet: 'VPN Secure Tunnel', location: 'Dostęp Zdalny / Biuro Handlowe' },
+            'planner@logistics-os.com': { ip: '192.168.1.112', status: 'whitelisted', subnet: '192.168.1.0/24 (LAN WMS)', location: 'Dyspozytornia Doków' },
+            'auditor@logistics-os.com': { ip: '185.220.101.5', status: 'unauthorized', subnet: 'Niezidentyfikowana podsieć WAN', location: 'Zewnętrzny adres IP (Alert Security)' }
+        };
+        try {
+            window.localStorage.setItem('wms-user-ip-whitelist', JSON.stringify(defaultSeed));
+        } catch {}
+        return defaultSeed;
+    });
+
+    const handleOpenIpPolicyModal = (staff: User) => {
+        setIpPolicyModalStaff(staff);
+        const emId = (staff.employeeId || staff.id).toLowerCase();
+        const emEmail = (staff.email || '').toLowerCase();
+        const existing = ipPolicyMap[emEmail] || ipPolicyMap[emId] || {
+            ip: '192.168.1.105',
+            status: 'whitelisted',
+            subnet: '192.168.1.0/24 (LAN WMS)',
+            location: 'Stacja Robocza Magazynu'
+        };
+        setIpPolicyInputIp(existing.ip);
+        setIpPolicyInputStatus(existing.status);
+        setIpPolicyInputSubnet(existing.subnet);
+        setIpPolicyInputLocation(existing.location);
+    };
+
+    const handleSaveIpPolicy = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!ipPolicyModalStaff) return;
+        const emId = (ipPolicyModalStaff.employeeId || ipPolicyModalStaff.id).toLowerCase();
+        const emEmail = (ipPolicyModalStaff.email || '').toLowerCase();
+
+        const updated = {
+            ...ipPolicyMap,
+            [emEmail || emId]: {
+                ip: ipPolicyInputIp,
+                status: ipPolicyInputStatus,
+                subnet: ipPolicyInputSubnet,
+                location: ipPolicyInputLocation
+            }
+        };
+        setIpPolicyMap(updated);
+        try {
+            window.localStorage.setItem('wms-user-ip-whitelist', JSON.stringify(updated));
+        } catch (err) {
+            console.error(err);
+        }
+
+        const staffName = `${ipPolicyModalStaff.firstName} ${ipPolicyModalStaff.lastName}`;
+        if (addToast) {
+            addToast('Zapisano politykę IP Whitelist', `Zaktualizowano regułę autoryzacji IP dla ${staffName}.`, 'success');
+        }
+        if (logActivity) {
+            logActivity(`Zaktualizowano politykę IP dla ${staffName}`, 'info', `Status: ${ipPolicyInputStatus}, IP: ${ipPolicyInputIp}`);
+        }
+
+        setIpPolicyModalStaff(null);
+    };
 
     const polishRoleMap: Record<string, string> = {
         'Picker': 'Kompletujący (Picker)',
@@ -104,8 +255,79 @@ export default function UsersPermissions({
         setIsModalOpen(true);
     };
 
-    const handleDeleteClick = (staffId: string) => {
-        setDeleteConfirmId(staffId);
+    const handleConfirmForceLogout = () => {
+        if (!forceLogoutStaff) return;
+        const emId = forceLogoutStaff.employeeId || forceLogoutStaff.id;
+        const staffName = `${forceLogoutStaff.firstName} ${forceLogoutStaff.lastName}`;
+        const email = forceLogoutStaff.email || '';
+
+        const updated = Array.from(new Set([...forcedLoggedOutIds, emId, email].filter(Boolean)));
+        setForcedLoggedOutIds(updated);
+        try {
+            window.localStorage.setItem('wms-forced-logouts', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('wms-forced-logout-event', {
+                detail: { staffId: emId, email }
+            }));
+        } catch (e) {
+            console.error('Failed to dispatch forced logout:', e);
+        }
+
+        if (logActivity) {
+            logActivity(
+                `Unieważniono sesję użytkownika ${staffName}`,
+                'warning',
+                `ID Pracownika: ${emId}, E-mail: ${email}. Administratorkie wymuszenie wylogowania.`
+            );
+        }
+
+        if (addToast) {
+            addToast(
+                'Wymuszono wylogowanie sesji',
+                `Sygnał rozłączenia sesji został wyemitowany dla ${staffName}.`,
+                'warning'
+            );
+        }
+
+        if (onForceLogoutUser) {
+            onForceLogoutUser(emId, staffName);
+        }
+
+        setForceLogoutStaff(null);
+    };
+
+    const handleConfirmRequirePasswordReset = async () => {
+        if (!resetPasswordStaff) return;
+        const emId = resetPasswordStaff.employeeId || resetPasswordStaff.id;
+        const staffName = `${resetPasswordStaff.firstName} ${resetPasswordStaff.lastName}`;
+        const email = resetPasswordStaff.email || '';
+
+        const updated = Array.from(new Set([...passwordResetRequiredIds, emId, email].filter(Boolean)));
+        setPasswordResetRequiredIds(updated);
+
+        try {
+            window.localStorage.setItem('wms-password-reset-required', JSON.stringify(updated));
+            await onUpdateStaff(emId, { requirePasswordReset: true });
+        } catch (e) {
+            console.error('Failed to update password reset requirement:', e);
+        }
+
+        if (logActivity) {
+            logActivity(
+                `Wymuszono zmianę hasła dla ${staffName}`,
+                'info',
+                `ID Pracownika: ${emId}, E-mail: ${email}. Zobowiązano użytkownika do zmiany hasła przy logowaniu.`
+            );
+        }
+
+        if (addToast) {
+            addToast(
+                'Wymuszono zmianę hasła',
+                `Użytkownik ${staffName} zostanie poproszony o ustawienie nowego hasła przy najbliższym logowaniu.`,
+                'info'
+            );
+        }
+
+        setResetPasswordStaff(null);
     };
 
     const handleSubmit = async (event: React.FormEvent) => {
@@ -250,6 +472,16 @@ export default function UsersPermissions({
                         {filteredStaff.map((staff) => {
                             const isActive = staff.status === 'Active';
                             const emId = staff.employeeId || staff.id;
+                            const isSessionRevoked = forcedLoggedOutIds.includes(emId) || (staff.email && forcedLoggedOutIds.includes(staff.email));
+                            const isResetRequired = passwordResetRequiredIds.includes(emId) || (staff.email && passwordResetRequiredIds.includes(staff.email)) || (staff as any).requirePasswordReset;
+                            
+                            const failedData = (staff.email && failedLogins[staff.email.toLowerCase()]) || failedLogins[emId.toLowerCase()];
+                            const ipData = (staff.email && ipPolicyMap[staff.email.toLowerCase()]) || ipPolicyMap[emId.toLowerCase()] || {
+                                ip: '192.168.1.105',
+                                status: 'whitelisted',
+                                subnet: '192.168.1.0/24 (LAN WMS)',
+                                location: 'Magazyn Centralny'
+                            };
 
                             return (
                                 <tr key={emId} className="hover:bg-zinc-50/70 transition-colors">
@@ -266,17 +498,113 @@ export default function UsersPermissions({
                                     </td>
                                     <td className="py-3 px-4 text-zinc-650 font-mono">{getPolishZoneAssignment(staff.zoneAssignment)}</td>
                                     <td className="py-3 px-4 text-right select-none">
-                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold shadow-3xs ${
-                                            isActive
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                : 'bg-red-50 text-red-700 border-red-200'
-                                        }`}>
-                                            {isActive ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-                                            {getPolishStatus(staff.status)}
-                                        </span>
+                                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                            {ipData && (
+                                                <div className="relative group inline-block text-left">
+                                                    {ipData.status === 'whitelisted' && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[9px] font-bold cursor-help shadow-2xs">
+                                                            <Wifi className="w-3 h-3 text-emerald-600" />
+                                                            IP Autoryzowane
+                                                        </span>
+                                                    )}
+                                                    {ipData.status === 'vpn' && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-300 text-[9px] font-bold cursor-help shadow-2xs">
+                                                            <Globe className="w-3 h-3 text-blue-600" />
+                                                            IP Zdalne (VPN)
+                                                        </span>
+                                                    )}
+                                                    {ipData.status === 'unauthorized' && (
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-300 text-[9px] font-bold cursor-help shadow-2xs animate-pulse">
+                                                            <ShieldAlert className="w-3 h-3 text-red-600" />
+                                                            IP Nieautoryzowane
+                                                        </span>
+                                                    )}
+
+                                                    <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover:block w-64 p-3 bg-zinc-950 text-white rounded-lg shadow-2xl text-[10px] z-50 font-mono space-y-1 text-left border border-zinc-800 leading-normal">
+                                                        <div className="font-extrabold text-blue-400 border-b border-zinc-800 pb-1 flex items-center justify-between uppercase tracking-wider">
+                                                            <span>POLITYKA IP WHITELIST</span>
+                                                            <Globe className="w-3.5 h-3.5 text-blue-400" />
+                                                        </div>
+                                                        <div><strong className="text-zinc-400">Ostatni IP:</strong> <span className="text-white font-bold">{ipData.ip}</span></div>
+                                                        <div><strong className="text-zinc-400">Podsieć WAN/LAN:</strong> {ipData.subnet}</div>
+                                                        <div><strong className="text-zinc-400">Lokalizacja:</strong> {ipData.location}</div>
+                                                        <div><strong className="text-zinc-400">Status IT:</strong> <span className={ipData.status === 'unauthorized' ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>{ipData.status === 'whitelisted' ? 'Zgodne z polityką LAN' : (ipData.status === 'vpn' ? 'Tunel Zdalny VPN' : 'NIEZGODNE (Alert)')}</span></div>
+                                                        <div className="pt-1 text-[9px] text-zinc-500 italic">Kliknij przycisk kuli ziemskiej w akcjach, aby zmienić reguły IP.</div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {failedData && failedData.count > 0 && (
+                                                <div className="relative group inline-block text-left">
+                                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 border border-red-300 text-[9px] font-bold cursor-help shadow-2xs">
+                                                        <ShieldAlert className="w-3 h-3 text-red-600 animate-pulse" />
+                                                        Nieudane logowania: {failedData.count}
+                                                    </span>
+                                                    <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover:block w-64 p-3 bg-zinc-950 text-white rounded-lg shadow-2xl text-[10px] z-50 font-mono space-y-1 text-left border border-zinc-800 leading-normal">
+                                                        <div className="font-extrabold text-red-400 border-b border-zinc-800 pb-1 flex items-center justify-between uppercase tracking-wider">
+                                                            <span>Ostrzeżenie bezpieczeństwa</span>
+                                                            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                                                        </div>
+                                                        <div><strong className="text-zinc-400">Liczba błędnych prób:</strong> <span className="text-red-400 font-bold">{failedData.count}</span></div>
+                                                        <div><strong className="text-zinc-400">Data ostatniej próby:</strong> {failedData.lastAttempt}</div>
+                                                        <div><strong className="text-zinc-400">Źródło / Adres IP:</strong> {failedData.ip}</div>
+                                                        <div className="pt-1 text-[9px] text-zinc-500 italic">Kliknij przycisk zielonej tarczy w akcjach, aby wyczyścić ten alert.</div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {isResetRequired && (
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300 text-[9px] font-bold">
+                                                    <KeyRound className="w-3 h-3 text-blue-600" />
+                                                    Reset hasła
+                                                </span>
+                                            )}
+                                            {isSessionRevoked && (
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 text-[9px] font-bold">
+                                                    <Radio className="w-3 h-3 animate-pulse text-amber-600" />
+                                                    Sesja wygaszona
+                                                </span>
+                                            )}
+                                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold shadow-3xs ${
+                                                isActive
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : 'bg-red-50 text-red-700 border-red-200'
+                                            }`}>
+                                                {isActive ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                                                {getPolishStatus(staff.status)}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td className="py-3 px-4 text-center">
-                                        <div className="flex justify-center gap-3">
+                                        <div className="flex justify-center gap-1.5">
+                                            <button
+                                                onClick={() => handleOpenIpPolicyModal(staff)}
+                                                className="p-1.5 rounded hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200 bg-white transition-all cursor-pointer shadow-sm"
+                                                title={`Konfiguruj politykę IP Whitelist (${ipData.ip} - ${ipData.status})`}
+                                            >
+                                                <Globe className="w-3.5 h-3.5 text-zinc-600" />
+                                            </button>
+                                            {failedData && failedData.count > 0 && (
+                                                <button
+                                                    onClick={() => handleClearFailedLogins(staff.email || emId)}
+                                                    className="p-1.5 rounded hover:bg-emerald-100 text-emerald-700 border border-emerald-300 bg-emerald-50/80 transition-all cursor-pointer shadow-sm animate-bounce"
+                                                    title={`Resetuj licznik nieudanych prób (${failedData.count} nieudanych prób, ostatnia: ${failedData.lastAttempt}, IP: ${failedData.ip})`}
+                                                >
+                                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setResetPasswordStaff(staff)}
+                                                className="p-1.5 rounded hover:bg-blue-100 text-blue-700 border border-blue-250 bg-blue-50/60 transition-all cursor-pointer shadow-sm"
+                                                title="Wymuś zmianę hasła przy kolejnym logowaniu"
+                                            >
+                                                <KeyRound className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => setForceLogoutStaff(staff)}
+                                                className="p-1.5 rounded hover:bg-amber-100 text-amber-700 border border-amber-250 bg-amber-50/60 transition-all cursor-pointer shadow-sm"
+                                                title="Wymuś wylogowanie aktywnej sesji"
+                                            >
+                                                <LogOut className="w-3.5 h-3.5" />
+                                            </button>
                                             <button
                                                 onClick={() => handleEditClick(staff)}
                                                 className="p-1.5 rounded hover:bg-blue-50 text-zinc-500 hover:text-blue-600 border border-zinc-200 bg-white transition-all cursor-pointer shadow-sm"
@@ -459,6 +787,222 @@ export default function UsersPermissions({
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Force Logout Confirmation Modal */}
+            {forceLogoutStaff && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fadeIn">
+                    <div className="bg-white rounded-lg border border-amber-300 w-full max-w-md shadow-2xl overflow-hidden font-sans text-sm pb-1">
+                        <div className="px-5 py-3.5 bg-amber-600 text-white flex justify-between items-center select-none font-bold">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-200 animate-pulse" />
+                                <span>WYMUSZENIE WYLOGOWANIA SESJI</span>
+                            </div>
+                            <button
+                                onClick={() => setForceLogoutStaff(null)}
+                                className="text-amber-200 hover:text-white cursor-pointer font-bold text-lg bg-transparent border-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <p className="text-zinc-700 font-medium leading-relaxed">
+                                Czy na pewno chcesz natychmiast unieważnić aktywną sesję pracownika:
+                            </p>
+                            
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1 text-xs">
+                                <div className="font-extrabold text-amber-950">
+                                    {forceLogoutStaff.firstName} {forceLogoutStaff.lastName}
+                                </div>
+                                <div className="font-mono text-amber-800 text-[11px]">
+                                    ID: {forceLogoutStaff.employeeId || forceLogoutStaff.id} | Rola: {getPolishRole(forceLogoutStaff.role)}
+                                </div>
+                                <div className="font-mono text-amber-700 text-[11px]">
+                                    {forceLogoutStaff.email}
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-zinc-500 leading-normal">
+                                System wyemituje sygnał unieważnienia sesji (`wms-forced-logout-event`). Pracownik zostanie natychmiast rozłączony z systemem WMS i przekierowany do ekranu logowania.
+                            </p>
+
+                            <div className="pt-2 flex justify-end gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setForceLogoutStaff(null)}
+                                    className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold rounded text-xs cursor-pointer bg-white"
+                                >
+                                    Anuluj
+                                </button>
+                                <button
+                                    onClick={handleConfirmForceLogout}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-xs cursor-pointer shadow border-none flex items-center gap-1.5 active:scale-95 transition-all"
+                                >
+                                    <LogOut className="w-3.5 h-3.5" />
+                                    Wymuś wylogowanie sesji
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Password Reset Requirement Modal */}
+            {resetPasswordStaff && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fadeIn">
+                    <div className="bg-white rounded-lg border border-blue-300 w-full max-w-md shadow-2xl overflow-hidden font-sans text-sm pb-1">
+                        <div className="px-5 py-3.5 bg-blue-600 text-white flex justify-between items-center select-none font-bold">
+                            <div className="flex items-center gap-2">
+                                <KeyRound className="w-4 h-4 text-blue-200" />
+                                <span>WYMUSZENIE ZMIANY HASŁA</span>
+                            </div>
+                            <button
+                                onClick={() => setResetPasswordStaff(null)}
+                                className="text-blue-200 hover:text-white cursor-pointer font-bold text-lg bg-transparent border-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <p className="text-zinc-700 font-medium leading-relaxed">
+                                Czy chcesz wymusić ponowne ustawienie hasła dla pracownika:
+                            </p>
+                            
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-1 text-xs">
+                                <div className="font-extrabold text-blue-950">
+                                    {resetPasswordStaff.firstName} {resetPasswordStaff.lastName}
+                                </div>
+                                <div className="font-mono text-blue-800 text-[11px]">
+                                    ID: {resetPasswordStaff.employeeId || resetPasswordStaff.id} | Rola: {getPolishRole(resetPasswordStaff.role)}
+                                </div>
+                                <div className="font-mono text-blue-700 text-[11px]">
+                                    {resetPasswordStaff.email}
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-zinc-500 leading-normal">
+                                Użytkownik zostanie zobowiązany do wprowadzenia i zatwierdzenia nowego bezpiecznego hasła przed uzyskaniem dostępu do portalu WMS przy kolejnym logowaniu.
+                            </p>
+
+                            <div className="pt-2 flex justify-end gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setResetPasswordStaff(null)}
+                                    className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold rounded text-xs cursor-pointer bg-white"
+                                >
+                                    Anuluj
+                                </button>
+                                <button
+                                    onClick={handleConfirmRequirePasswordReset}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs cursor-pointer shadow border-none flex items-center gap-1.5 active:scale-95 transition-all"
+                                >
+                                    <KeyRound className="w-3.5 h-3.5" />
+                                    Wymuś zmianę hasła
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* IP Whitelist Policy Config Modal */}
+            {ipPolicyModalStaff && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fadeIn">
+                    <div className="bg-white rounded-lg border border-zinc-300 w-full max-w-md shadow-2xl overflow-hidden font-sans text-sm pb-1">
+                        <div className="px-5 py-3.5 bg-zinc-900 text-white flex justify-between items-center select-none font-bold">
+                            <div className="flex items-center gap-2">
+                                <Globe className="w-4 h-4 text-blue-400" />
+                                <span>POLITYKA BEZPIECZEŃSTWA IP WHITELIST</span>
+                            </div>
+                            <button
+                                onClick={() => setIpPolicyModalStaff(null)}
+                                className="text-zinc-400 hover:text-white cursor-pointer font-bold text-lg bg-transparent border-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveIpPolicy} className="p-5 space-y-4">
+                            <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg text-xs space-y-1">
+                                <div className="font-bold text-zinc-900">
+                                    {ipPolicyModalStaff.firstName} {ipPolicyModalStaff.lastName}
+                                </div>
+                                <div className="font-mono text-zinc-600 text-[11px]">
+                                    ID: {ipPolicyModalStaff.employeeId || ipPolicyModalStaff.id} | {ipPolicyModalStaff.email}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                                    Adres IP Logowania
+                                </label>
+                                <input
+                                    required
+                                    value={ipPolicyInputIp}
+                                    onChange={(e) => setIpPolicyInputIp(e.target.value)}
+                                    className="w-full p-2 border border-zinc-300 rounded font-mono text-xs outline-none focus:ring-1 focus:ring-blue-500 text-zinc-900 bg-white"
+                                    placeholder="np. 192.168.1.105"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                                    Status Autoryzacji IT
+                                </label>
+                                <select
+                                    value={ipPolicyInputStatus}
+                                    onChange={(e) => setIpPolicyInputStatus(e.target.value as any)}
+                                    className="w-full p-2 border border-zinc-300 rounded text-xs outline-none text-zinc-900 bg-white"
+                                >
+                                    <option value="whitelisted">IP Autoryzowane (Wewnętrzna Sieć LAN Magazynu)</option>
+                                    <option value="vpn">IP Zdalne (Zabezpieczony Tunel VPN)</option>
+                                    <option value="unauthorized">IP Nieautoryzowane (Brak dostępu / Alert)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                                    Przypisana Podsieć
+                                </label>
+                                <input
+                                    value={ipPolicyInputSubnet}
+                                    onChange={(e) => setIpPolicyInputSubnet(e.target.value)}
+                                    className="w-full p-2 border border-zinc-300 rounded font-mono text-xs outline-none focus:ring-1 focus:ring-blue-500 text-zinc-900 bg-white"
+                                    placeholder="np. 192.168.1.0/24 (LAN WMS)"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
+                                    Opis Lokalizacji Terminala
+                                </label>
+                                <input
+                                    value={ipPolicyInputLocation}
+                                    onChange={(e) => setIpPolicyInputLocation(e.target.value)}
+                                    className="w-full p-2 border border-zinc-300 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 text-zinc-900 bg-white"
+                                    placeholder="np. Hala A / Biuro Obsługi"
+                                />
+                            </div>
+
+                            <div className="pt-3 border-t border-zinc-200 flex justify-end gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setIpPolicyModalStaff(null)}
+                                    className="px-4 py-2 border border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold rounded text-xs cursor-pointer bg-white"
+                                >
+                                    Anuluj
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs cursor-pointer shadow border-none flex items-center gap-1.5 active:scale-95 transition-all"
+                                >
+                                    <Globe className="w-3.5 h-3.5" />
+                                    Zapisz politykę IP
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
