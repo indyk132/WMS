@@ -93,7 +93,13 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     return () => clearInterval(interval);
   }, [selectedOrderId]);
 
-  const activeOrders = orders.filter(o => o.status === 'Oczekuje na pakowanie' || o.status === 'Spakowane');
+  const activeOrders = orders.filter(o => 
+    o.status === 'Oczekuje na pakowanie' || 
+    o.status === 'Spakowane' || 
+    o.status === 'W kompletacji' || 
+    o.status === 'Do kompletacji' || 
+    o.status === 'Oczekujące'
+  );
   const selectedOrder = orders.find(o => o.id === selectedOrderId);
 
   const areAllItemsPacked = selectedOrder 

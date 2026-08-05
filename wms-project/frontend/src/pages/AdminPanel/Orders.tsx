@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange, AlertCircle, StickyNote } from 'lucide-react';
 import { OrderDetail } from '../../components/OrderDetail';
-import { Product } from '../../services/inventoryApi';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const polishMonthMap: Record<string, number> = {
     'Sty': 0, 'Lut': 1, 'Mar': 2, 'Kwi': 3, 'Maj': 4, 'Cze': 5,
@@ -138,6 +138,7 @@ export default function Orders({
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const debouncedSearchQuery = useDebounce(searchQuery, 300);
     const [dateFilter, setDateFilter] = useState('all');
 
     const [clientName, setClientName] = useState('');
@@ -211,11 +212,11 @@ export default function Orders({
         const matchesNotesOnly = hasNotesOnly ? Boolean(customerInstruction && String(customerInstruction).trim().length > 0) : true;
         const matchesStatus = statusFilter ? order.status === statusFilter : true;
         const matchesPriority = priorityFilter ? order.priority === priorityFilter : true;
-        const matchesSearch = searchQuery
-            ? (order.id && String(order.id).toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (order.customer && String(order.customer).toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (order.destination && String(order.destination).toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (customerInstruction && String(customerInstruction).toLowerCase().includes(searchQuery.toLowerCase()))
+        const matchesSearch = debouncedSearchQuery
+            ? (order.id && String(order.id).toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
+            (order.customer && String(order.customer).toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
+            (order.destination && String(order.destination).toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
+            (customerInstruction && String(customerInstruction).toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
             : true;
 
         let matchesDate = true;

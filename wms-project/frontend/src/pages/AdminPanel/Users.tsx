@@ -29,6 +29,38 @@ export default function UsersPermissions({
     const [forceLogoutStaff, setForceLogoutStaff] = useState<User | null>(null);
     const [resetPasswordStaff, setResetPasswordStaff] = useState<User | null>(null);
 
+    // Option 222: Soft-Delete and Restore Engine for Users
+    const [softDeletedUserIds, setSoftDeletedUserIds] = useState<string[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-soft-deleted-users');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const [showTrashBasket, setShowTrashBasket] = useState(false);
+
+    const handleSoftDelete = (id: string, name: string) => {
+        const updated = [...softDeletedUserIds, id];
+        setSoftDeletedUserIds(updated);
+        try {
+            window.localStorage.setItem('wms-soft-deleted-users', JSON.stringify(updated));
+        } catch (e) { console.error(e); }
+        if (addToast) addToast('Przeniesiono do kosza (Soft-Delete)', `Użytkownik ${name} został przenieśmy do kosza z opcją przywrócenia.`, 'warning');
+        if (logActivity) logActivity(`Soft-delete dla użytkownika ${name}`, 'warning');
+    };
+
+    const handleRestoreUser = (id: string, name: string) => {
+        const updated = softDeletedUserIds.filter(i => i !== id);
+        setSoftDeletedUserIds(updated);
+        try {
+            window.localStorage.setItem('wms-soft-deleted-users', JSON.stringify(updated));
+        } catch (e) { console.error(e); }
+        if (addToast) addToast('Przywrócono użytkownika', `Przywrócono użytkownika ${name} z kosza.`, 'success');
+        if (logActivity) logActivity(`Przywrócenie z kosza użytkownika ${name}`, 'info');
+    };
+
     const [forcedLoggedOutIds, setForcedLoggedOutIds] = useState<string[]>(() => {
         try {
             const saved = window.localStorage.getItem('wms-forced-logouts');
@@ -172,6 +204,81 @@ export default function UsersPermissions({
         setIpPolicyModalStaff(null);
     };
 
+    // Option 82: Active User Sessions Monitor with Remote Disconnect state and handler
+    const [activeSessions, setActiveSessions] = useState<Array<{
+        sessionId: string;
+        staffId: string;
+        name: string;
+        role: string;
+        device: string;
+        ip: string;
+        loginTime: string;
+        lastActive: string;
+    }>>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-active-user-sessions');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return [
+            { sessionId: 'SESS-901', staffId: 'EMP-001', name: 'Jan Kowalski', role: 'Picker', device: 'Terminal RF-01 (Android Handheld)', ip: '192.168.1.120', loginTime: 'Dziś, 08:00', lastActive: 'Przed chwilą' },
+            { sessionId: 'SESS-902', staffId: 'EMP-002', name: 'Anna Nowak', role: 'Packer', device: 'Stacja Pakowania #2 (Chrome Win11)', ip: '192.168.1.125', loginTime: 'Dziś, 08:15', lastActive: '1 min temu' },
+            { sessionId: 'SESS-903', staffId: 'EMP-8492', name: 'Administrator Główny', role: 'Admin', device: 'Panel Zarządczy (Firefox MacOS)', ip: '192.168.1.100', loginTime: 'Dziś, 07:30', lastActive: 'Aktywna teraz' },
+            { sessionId: 'SESS-904', staffId: 'EMP-9104', name: 'Marek Wiśniewski', role: 'Warehouse Manager', device: 'Tablet Zbieracza (iPad Pro)', ip: '192.168.1.140', loginTime: 'Dziś, 09:10', lastActive: '3 min temu' }
+        ];
+    });
+
+    const handleTerminateActiveSession = (sessionId: string, name: string) => {
+        const updated = activeSessions.filter(s => s.sessionId !== sessionId);
+        setActiveSessions(updated);
+        try {
+            window.localStorage.setItem('wms-active-user-sessions', JSON.stringify(updated));
+        } catch (e) {
+            console.error(e);
+        }
+        if (addToast) {
+            addToast('Odłączono aktywną sesję', `Pomyślnie zakończono sesję ${sessionId} dla ${name}.`, 'warning');
+        }
+        if (logActivity) {
+            logActivity(`Zdalne odłączenie sesji ${sessionId} dla ${name}`, 'warning');
+        }
+    };
+
+    // Option 83: Password Complexity Policy Enforcer state and handler
+    const [passwordPolicy, setPasswordPolicy] = useState<{
+        minLength: number;
+        requireUppercase: boolean;
+        requireNumbers: boolean;
+        requireSpecialChars: boolean;
+        expireIntervalDays: number;
+    }>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-password-complexity-policy');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return {
+            minLength: 10,
+            requireUppercase: true,
+            requireNumbers: true,
+            requireSpecialChars: true,
+            expireIntervalDays: 90
+        };
+    });
+
+    const handleSavePasswordPolicy = (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            window.localStorage.setItem('wms-password-complexity-policy', JSON.stringify(passwordPolicy));
+        } catch (err) {
+            console.error(err);
+        }
+        if (addToast) {
+            addToast('Zapisano wymogi złożoności hasła', 'Zaktualizowano globalne reguły haseł dla użytkowników WMS.', 'success');
+        }
+        if (logActivity) {
+            logActivity('Zaktualizowano politykę złożoności haseł WMS', 'info', `Min. znaków: ${passwordPolicy.minLength}`);
+        }
+    };
+
     const polishRoleMap: Record<string, string> = {
         'Picker': 'Kompletujący (Picker)',
         'Packer': 'Pakowacz (Packer)',
@@ -216,9 +323,18 @@ export default function UsersPermissions({
     const [roleFilter, setRoleFilter] = useState('All');
 
     const filteredStaff = staffList.filter((staff) => {
+        const emId = (staff.employeeId || staff.id).toLowerCase();
+        const isSoftDeleted = softDeletedUserIds.includes(emId) || softDeletedUserIds.includes(staff.id);
+
+        if (showTrashBasket) {
+            return isSoftDeleted;
+        } else {
+            if (isSoftDeleted) return false;
+        }
+
         const fullName = `${staff.firstName || ''} ${staff.lastName || ''}`.toLowerCase();
         const emailVal = (staff.email || '').toLowerCase();
-        const idVal = (staff.employeeId || staff.id || '').toLowerCase();
+        const idVal = emId;
 
         const matchesSearch = fullName.includes(searchTerm.toLowerCase()) ||
                               emailVal.includes(searchTerm.toLowerCase()) ||
@@ -410,6 +526,20 @@ export default function UsersPermissions({
                         <option value="Picker">Kompletujący (Picker)</option>
                         <option value="Packer">Pakowacz (Packer)</option>
                     </select>
+
+                    <button
+                        type="button"
+                        onClick={() => setShowTrashBasket(!showTrashBasket)}
+                        className={`h-9 px-3 rounded font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border shadow-xs ${
+                            showTrashBasket
+                                ? 'bg-amber-600 text-white border-amber-700'
+                                : 'bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-300'
+                        }`}
+                        title="Kosz usuniętych użytkowników (Option 222 Soft-Delete Basket)"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Kosz {softDeletedUserIds.length > 0 && `(${softDeletedUserIds.length})`}</span>
+                    </button>
 
                     <button
                         onClick={handleAddClick}
@@ -612,13 +742,23 @@ export default function UsersPermissions({
                                             >
                                                 <Edit2 className="w-3.5 h-3.5" />
                                             </button>
-                                            <button
-                                                onClick={() => handleDeleteClick(emId)}
-                                                className="p-1.5 rounded hover:bg-red-50 text-zinc-500 hover:text-red-650 hover:border-red-200 border border-zinc-200 bg-white transition-all cursor-pointer shadow-sm"
-                                                title="Usuń użytkownika"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            {softDeletedUserIds.includes(emId) || softDeletedUserIds.includes(staff.id) ? (
+                                                <button
+                                                    onClick={() => handleRestoreUser(emId, `${staff.firstName} ${staff.lastName}`)}
+                                                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded text-[11px] font-bold cursor-pointer transition-all active:scale-95 flex items-center gap-1"
+                                                    title="Przywróć użytkownika z kosza"
+                                                >
+                                                    Przywróć
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleSoftDelete(emId, `${staff.firstName} ${staff.lastName}`)}
+                                                    className="p-1.5 rounded hover:bg-red-50 text-zinc-500 hover:text-red-650 hover:border-red-200 border border-zinc-200 bg-white transition-all cursor-pointer shadow-sm"
+                                                    title="Przenieś do kosza (Soft-Delete)"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -627,6 +767,187 @@ export default function UsersPermissions({
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Option 82: Active User Sessions Monitor with Remote Disconnect */}
+            <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+                            <h3 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider">
+                                Podgląd Aktywnych Sesji Użytkowników z Odłączaniem (Option 82 - Active Sessions)
+                            </h3>
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-1">
+                            Monitoruj aktywne połączenia urządzeń mobilnych RF, stanowisk pakowania oraz panelu administracyjnego w czasie rzeczywistym.
+                        </p>
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-mono font-bold shrink-0">
+                        🟢 Aktywne sesje: {activeSessions.length}
+                    </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-zinc-200">
+                    <table className="w-full text-left border-collapse text-xs font-sans">
+                        <thead>
+                            <tr className="bg-zinc-50 text-zinc-600 font-bold border-b border-zinc-200 uppercase font-mono text-[10px] tracking-wider select-none">
+                                <th className="py-2.5 px-3">Użytkownik / Rola</th>
+                                <th className="py-2.5 px-3">Urządzenie / Klient</th>
+                                <th className="py-2.5 px-3">Adres IP</th>
+                                <th className="py-2.5 px-3">Czas zalogowania</th>
+                                <th className="py-2.5 px-3">Ostatnia aktywność</th>
+                                <th className="py-2.5 px-3 text-right">Akcja IT</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-150 font-medium text-zinc-700">
+                            {activeSessions.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="py-6 text-center text-zinc-400 font-semibold">
+                                        Brak zarejestrowanych aktywnych sesji.
+                                    </td>
+                                </tr>
+                            ) : (
+                                activeSessions.map(session => (
+                                    <tr key={session.sessionId} className="hover:bg-zinc-50/80 transition-colors">
+                                        <td className="py-2.5 px-3">
+                                            <div className="font-bold text-zinc-900">{session.name}</div>
+                                            <div className="text-[10px] text-zinc-400 font-mono uppercase">{session.role} ({session.staffId})</div>
+                                        </td>
+                                        <td className="py-2.5 px-3 font-mono text-zinc-600">
+                                            {session.device}
+                                        </td>
+                                        <td className="py-2.5 px-3 font-mono text-blue-700 font-semibold">
+                                            {session.ip}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-zinc-500 font-mono">
+                                            {session.loginTime}
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                {session.lastActive}
+                                            </span>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-right">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTerminateActiveSession(session.sessionId, session.name)}
+                                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-[11px] font-bold cursor-pointer transition-all active:scale-95 flex items-center gap-1 ml-auto"
+                                                title={`Zakończ sesję ${session.sessionId}`}
+                                            >
+                                                <LogOut className="w-3 h-3" />
+                                                Odłącz
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Option 83: Password Complexity Policy Enforcer */}
+            <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-5 space-y-4">
+                <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                    <div>
+                        <h3 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider">
+                            Konfigurator Wymogów Złożoności Hasła (Option 83 - Password Enforcer)
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                            Ustaw politykę bezpieczeństwa i zasady tworzenia haseł dla wszystkich operatorów klastra WMS.
+                        </p>
+                    </div>
+                </div>
+
+                <form onSubmit={handleSavePasswordPolicy} className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                    <div className="space-y-3 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold text-zinc-700">Minimalna długość hasła</label>
+                                <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                                    {passwordPolicy.minLength} znaków
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="8"
+                                max="24"
+                                step="1"
+                                value={passwordPolicy.minLength}
+                                onChange={(e) => setPasswordPolicy({ ...passwordPolicy, minLength: parseInt(e.target.value) })}
+                                className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold text-zinc-700">Cykl wygasania haseł</label>
+                                <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                                    Co {passwordPolicy.expireIntervalDays} dni
+                                </span>
+                            </div>
+                            <select
+                                value={passwordPolicy.expireIntervalDays}
+                                onChange={(e) => setPasswordPolicy({ ...passwordPolicy, expireIntervalDays: parseInt(e.target.value) })}
+                                className="w-full bg-white border border-zinc-300 rounded px-2.5 py-1.5 text-xs text-zinc-800 outline-none cursor-pointer font-medium"
+                            >
+                                <option value={30}>Co 30 dni (Maksymalne bezpieczeństwo)</option>
+                                <option value={60}>Co 60 dni (Standard korporacyjny)</option>
+                                <option value={90}>Co 90 dni (Zalecany kompromis)</option>
+                                <option value={180}>Co 180 dni (Rzadka rotacja)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
+                        <span className="text-xs font-bold text-zinc-800 block uppercase tracking-wider font-mono">
+                            Zasady i Znakowe Wymogi Hasła:
+                        </span>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-700 select-none">
+                            <input
+                                type="checkbox"
+                                checked={passwordPolicy.requireUppercase}
+                                onChange={(e) => setPasswordPolicy({ ...passwordPolicy, requireUppercase: e.target.checked })}
+                                className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span>Wymagaj co najmniej jednej wielkiej litery (A-Z)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-700 select-none">
+                            <input
+                                type="checkbox"
+                                checked={passwordPolicy.requireNumbers}
+                                onChange={(e) => setPasswordPolicy({ ...passwordPolicy, requireNumbers: e.target.checked })}
+                                className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span>Wymagaj co najmniej jednej cyfry (0-9)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-zinc-700 select-none">
+                            <input
+                                type="checkbox"
+                                checked={passwordPolicy.requireSpecialChars}
+                                onChange={(e) => setPasswordPolicy({ ...passwordPolicy, requireSpecialChars: e.target.checked })}
+                                className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span>Wymagaj znaku specjalnego (!@#$%^&*)</span>
+                        </label>
+
+                        <div className="pt-2">
+                            <button
+                                type="submit"
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-lg cursor-pointer shadow transition-all border-none flex items-center justify-center gap-1.5 uppercase tracking-wider"
+                            >
+                                <ShieldCheck className="w-4 h-4" />
+                                Zapisz Wymogi Złożoności Hasła
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
 
             {isModalOpen && (

@@ -150,7 +150,14 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     }
   }, [isBinModalOpen]);
 
-  const activeOrders = orders.filter(o => o.status === 'Do kompletacji' || o.status === 'W kompletacji');
+  const activeOrders = orders.filter(o => 
+    o.status === 'Do kompletacji' || 
+    o.status === 'W kompletacji' || 
+    o.status === 'Oczekujące' || 
+    o.status === 'Nowe' || 
+    !o.status || 
+    o.status === 'Do wysyłki'
+  );
   const selectedOrder = orders.find(o => o.id === selectedOrderId);
 
   // Trigger non-blocking audio-visual alerts
