@@ -427,12 +427,14 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
         />
       )}
 
-      {activeTab === "worker_terminal" && currentUser && (
-        currentUser.role === "picker" ? (
+      {activeTab === "worker_terminal" && (
+        !currentUser ? (
+          <WorkerLogin workersList={WORKERS} staffList={staffList} onLoginSelected={handleLogin} />
+        ) : currentUser.role === "picker" ? (
           <PickerView 
             orders={orders} 
             onUpdateOrder={onUpdateOrder} 
-            workerName={currentUser.name}
+            workerName={currentUser?.name || "Operator WMS"}
             products={products}
             onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
           />
@@ -440,7 +442,7 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
           <PackerView 
             orders={orders} 
             onUpdateOrder={onUpdateOrder} 
-            workerName={currentUser.name}
+            workerName={currentUser?.name || "Operator WMS"}
             currentUser={currentUser}
             onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
           />

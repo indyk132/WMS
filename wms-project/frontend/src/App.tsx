@@ -22,6 +22,7 @@ import YardManager from './pages/AdminPanel/YardManager';
 import ReorderPlanner from './pages/AdminPanel/ReorderPlanner';
 import SpaceCompactor from './pages/AdminPanel/SpaceCompactor';
 import PredictiveRelocation from './pages/AdminPanel/PredictiveRelocation';
+import TemplatesCenter from './pages/AdminPanel/TemplatesCenter';
 import DockScheduling from './pages/AdminPanel/DockScheduling';
 import WavePicking from './pages/AdminPanel/WavePicking';
 import PutawayAssistant from './pages/AdminPanel/PutawayAssistant';
@@ -335,6 +336,7 @@ export default function App() {
                     { id: 'products', label: 'Katalog Produktów', icon: Layers },
                     { id: 'zones', label: 'Strefy Magazynowe', icon: Map },
                     { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
+                    { id: 'templates', label: 'Centrum Szablonów (10)', icon: FileText },
                     { id: 'adr_manager', label: 'Zgodność Chemiczna (ADR)', icon: AlertTriangle },
                     { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
@@ -2550,6 +2552,15 @@ export default function App() {
                                     addToast('Sesja unieważniona', `Twoja sesja została wylogowana przez administratora (${staffName}).`, 'error');
                                     handleLogout();
                                 }
+                            }}
+                        />
+                    )}
+
+                    {currentTab === 'templates' && isTabAllowed('templates') && (
+                        <TemplatesCenter 
+                            addToast={addToast}
+                            logActivity={(message, type, details) => {
+                                logActivity('system', currentUser ? currentUser.name : 'System', message, details || '');
                             }}
                         />
                     )}
