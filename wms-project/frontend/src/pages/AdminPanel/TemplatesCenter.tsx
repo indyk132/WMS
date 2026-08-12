@@ -48,6 +48,9 @@ export default function TemplatesCenter({ addToast, logActivity }: TemplatesCent
     { id: 23, name: '23. Reguła Przydziału Fali Zbiórkowej', category: 'Reguły WMS', icon: Layers, tag: 'Wave Preset' },
     { id: 24, name: '24. Reguła Wyboru Najtańszego Kuriera', category: 'Reguły WMS', icon: Code, tag: 'Rate Engine' },
     { id: 25, name: '25. Plan Inwentaryzacji Ciągłej', category: 'Reguły WMS', icon: Clock, tag: 'Cycle Schedule' },
+    { id: 26, name: '26. E-mail: Potwierdzenie Przyjęcia Zwrotu RMA', category: 'Powiadomienia E-mail', icon: RefreshCw, tag: 'RMA Email' },
+    { id: 27, name: '27. Raport Przepustowości Stacji Pakowania (SLA)', category: 'Ekran & UI Layout', icon: Barcode, tag: 'Packer SLA' },
+    { id: 28, name: '28. E-mail: Ostrzeżenie o Zmianie Adresu Dostawy', category: 'Powiadomienia E-mail', icon: Mail, tag: 'Address Alert' },
   ];
 
   const handleCopyCode = (codeText: string, label: string) => {
@@ -579,6 +582,75 @@ export default function TemplatesCenter({ addToast, logActivity }: TemplatesCent
                 <div>Strefa A (Towary A-rotujące): <strong>Co 14 dni</strong></div>
                 <div>Strefa B (Towary B-rotujące): <strong>Co 30 dni</strong></div>
                 <div>Strefa C (Towary C-rotujące): <strong>Co 90 dni</strong></div>
+              </div>
+            </div>
+          )}
+
+          {/* TEMPLATE 26 (Option 711): E-mail Potwierdzenie Przyjęcia Zwrotu RMA */}
+          {selectedTemplateId === 26 && (
+            <div className="space-y-4 animate-fadeIn font-sans bg-white border border-zinc-200 p-5 rounded-2xl shadow-sm text-xs">
+              <div className="bg-zinc-900 text-white p-4 rounded-xl flex justify-between items-center font-bold">
+                <span className="text-sm font-display">Dział Reklamacji i Zwrotów WMS</span>
+                <span className="text-emerald-400 font-mono text-xs">STATUS: PRZYJĘTE W MAGAZYNIE</span>
+              </div>
+              <div className="space-y-2 text-zinc-700">
+                <p className="font-bold text-sm">Witaj {sampleCustomer},</p>
+                <p>Informujemy, że Twoja paczka ze zwrotem do zamówienia <strong>{sampleOrderNo}</strong> wpłynęła do naszego centrum logistycznego.</p>
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg font-mono text-[11px] space-y-1">
+                  <div>Numer RMA: <strong>RMA-2026-9812</strong></div>
+                  <div>Data przyjęcia: <strong>{new Date().toISOString().slice(0, 10)}</strong></div>
+                  <div>Inspekcja jakości: <strong className="text-emerald-600">Pozytywna (Brak uszkodzeń)</strong></div>
+                  <div>Kwota zwrotu: <strong>{sampleAmount}</strong></div>
+                </div>
+                <p className="text-zinc-500 text-[11px]">Środki zostaną zwrócone tą samą metodą płatności w ciągu 1-3 dni roboczych.</p>
+              </div>
+            </div>
+          )}
+
+          {/* TEMPLATE 27 (Option 742): Raport Przepustowości Stacji Pakowania SLA */}
+          {selectedTemplateId === 27 && (
+            <div className="space-y-4 animate-fadeIn font-sans bg-white border border-zinc-200 p-5 rounded-2xl shadow-sm text-xs">
+              <div className="flex justify-between items-center border-b border-zinc-200 pb-3">
+                <h3 className="font-black text-sm uppercase tracking-wider text-zinc-900 font-mono">
+                  RAPORT PRZEPUSTOWOŚCI STACJI PAKOWANIA (PACKER SLA & THROUGHPUT)
+                </h3>
+                <span className="px-2.5 py-1 bg-blue-100 text-blue-800 font-bold font-mono text-[10px] rounded-md">
+                  WYDRUK SZEFA ZMIANY
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 font-mono text-center">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="text-[10px] text-blue-700 font-bold">Średni czas pakowania / paczka:</div>
+                  <div className="text-xl font-black text-blue-900">42.5 s</div>
+                </div>
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div className="text-[10px] text-emerald-700 font-bold">Spakowane zamówienia (Zmiana A):</div>
+                  <div className="text-xl font-black text-emerald-900">348 paczek</div>
+                </div>
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                  <div className="text-[10px] text-purple-700 font-bold">Wskaźnik Bez-Błędność (SLA):</div>
+                  <div className="text-xl font-black text-purple-900">99.8%</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TEMPLATE 28 (Option 746): E-mail Ostrzeżenie o Zmianie Adresu Dostawy */}
+          {selectedTemplateId === 28 && (
+            <div className="space-y-4 animate-fadeIn font-sans bg-white border border-zinc-200 p-5 rounded-2xl shadow-sm text-xs">
+              <div className="bg-amber-500 text-slate-950 p-4 rounded-xl flex justify-between items-center font-bold">
+                <span className="text-sm font-display">⚠️ ALERT: ZMIANA ADRESU DOSTAWY ZAMÓWIENIA</span>
+                <span className="font-mono text-xs">ORD-98421</span>
+              </div>
+              <div className="space-y-2 text-zinc-700">
+                <p className="font-bold text-sm">Witaj {sampleCustomer},</p>
+                <p>Otrzymaliśmy prośbę o aktualizację adresu dostawy dla Twojego zamówienia <strong>{sampleOrderNo}</strong>.</p>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg font-mono text-[11px] space-y-1 text-amber-900">
+                  <div>Poprzedni adres: ul. Marszałkowska 10, Warszawa</div>
+                  <div><strong>Nowy Zaktualizowany Adres:</strong> ul. Główna 45/2, Kraków</div>
+                  <div>Numer śledzenia przesyłki: <strong>{sampleTrackingNo}</strong> ({sampleCarrier})</div>
+                </div>
+                <p className="text-zinc-500 text-[11px]">Jeśli to nie Ty zgłosiłeś zmianę adresu, natychmiast skontaktuj się z naszą infolinią.</p>
               </div>
             </div>
           )}
