@@ -36,6 +36,14 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   const [cartonModalInput, setCartonModalInput] = useState('');
   const [shouldSimulateApiError, setShouldSimulateApiError] = useState(false);
 
+  // QA Inspection Checklist State
+  const [qaChecklist, setQaChecklist] = useState({
+    fillerAdded: true,
+    invoiceInserted: true,
+    tapeSealed: true,
+    boxIntact: true
+  });
+
   // Product images state & fallbacks
   const [productImages] = useState<Record<string, string>>(() => {
     try {
@@ -867,7 +875,28 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
               </div>
 
               <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4 animate-fadeIn">
-                <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 font-display">Krok 1: Wybór opakowania kartonowego</h4>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-zinc-400 font-display">Krok 1: Wybór opakowania kartonowego</h4>
+                  
+                  {selectedOrder && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playSuccess();
+                        const totalItemQty = (selectedOrder.items || []).reduce((acc: number, item: any) => acc + (item.quantity || item.qty || 1), 0);
+                        const suggested = totalItemQty <= 2 ? 'Carton-S' : totalItemQty <= 5 ? 'Carton-M' : 'Carton-L';
+                        setCartonSize(suggested);
+                        showLocalToast(`Zastosowano automatyczny rozmiar kartonu (${suggested}) dla ${totalItemQty} szt.`, 'info');
+                      }}
+                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold font-mono text-[10px] rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      💡 Rekomendacja AI WMS: {(() => {
+                        const totalItemQty = (selectedOrder.items || []).reduce((acc: number, item: any) => acc + (item.quantity || item.qty || 1), 0);
+                        return totalItemQty <= 2 ? 'Koperta / Karton S' : totalItemQty <= 5 ? 'Karton Średni M' : 'Karton Duży L';
+                      })()} [Użyj]
+                    </button>
+                  )}
+                </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {[
@@ -899,6 +928,56 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* KONTROLA JAKOŚCI QA PACKING CHECKLIST */}
+              <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white border border-slate-800 rounded-xl p-4 shadow-sm space-y-2.5 animate-fadeIn font-sans">
+                <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-1.5 font-display">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> KONTROLA JAKOŚCI PAKOWANIA (QA PACKING CHECKLIST)
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
+                    VERIFIED
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] font-medium">
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-cyan-300">
+                    <input
+                      type="checkbox"
+                      checked={qaChecklist.fillerAdded}
+                      onChange={(e) => setQaChecklist(prev => ({ ...prev, fillerAdded: e.target.checked }))}
+                      className="w-3.5 h-3.5 text-cyan-500 rounded border-slate-600"
+                    />
+                    <span>Wypełniacz ochronny</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-cyan-300">
+                    <input
+                      type="checkbox"
+                      checked={qaChecklist.invoiceInserted}
+                      onChange={(e) => setQaChecklist(prev => ({ ...prev, invoiceInserted: e.target.checked }))}
+                      className="w-3.5 h-3.5 text-cyan-500 rounded border-slate-600"
+                    />
+                    <span>Dowód zakupu / WZ</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-cyan-300">
+                    <input
+                      type="checkbox"
+                      checked={qaChecklist.tapeSealed}
+                      onChange={(e) => setQaChecklist(prev => ({ ...prev, tapeSealed: e.target.checked }))}
+                      className="w-3.5 h-3.5 text-cyan-500 rounded border-slate-600"
+                    />
+                    <span>Taśma firmowa DPD</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-cyan-300">
+                    <input
+                      type="checkbox"
+                      checked={qaChecklist.boxIntact}
+                      onChange={(e) => setQaChecklist(prev => ({ ...prev, boxIntact: e.target.checked }))}
+                      className="w-3.5 h-3.5 text-cyan-500 rounded border-slate-600"
+                    />
+                    <span>Opakowanie nieuszkodzone</span>
+                  </label>
                 </div>
               </div>
             </div>

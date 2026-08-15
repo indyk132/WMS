@@ -31,11 +31,14 @@ import TruckLoader3D from './pages/AdminPanel/TruckLoader3D';
 import ClickCollect from './pages/AdminPanel/ClickCollect';
 import PickPathOptimizer from './pages/AdminPanel/PickPathOptimizer';
 import AdrManager from './pages/AdminPanel/AdrManager';
+import OmnichannelHub from './pages/AdminPanel/OmnichannelHub';
+import SecurityAuditHub from './pages/AdminPanel/SecurityAuditHub';
+import SystemOptimizerAndTemplates from './pages/AdminPanel/SystemOptimizerAndTemplates';
 import { adjustInventoryStock, fetchInventoryProducts, Product, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct } from './services/inventoryApi';
 import { createUser, fetchUsers, updateUser, deleteUser, User } from './services/usersApi';
 import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrder as updateOrderApi, deleteOrder as deleteOrderApi } from './services/ordersApi';
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
-import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag, Compass, ChevronDown, ChevronRight, MapPin } from 'lucide-react';
+import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag, Compass, ChevronDown, ChevronRight, MapPin, Globe } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
@@ -338,6 +341,8 @@ export default function App() {
                     { id: 'permissions', label: 'Uprawnienia Użytkowników', icon: ShieldAlert },
                     { id: 'templates', label: 'Centrum Szablonów (10)', icon: FileText },
                     { id: 'adr_manager', label: 'Zgodność Chemiczna (ADR)', icon: AlertTriangle },
+                    { id: 'omnichannel', label: 'Omnichannel & Trade (6)', icon: Globe },
+                    { id: 'security_hub', label: 'Bezpieczeństwo & Audyt (4)', icon: ShieldAlert },
                     { id: 'settings', label: 'Ustawienia Systemu', icon: SettingsNavIcon },
                     { id: 'storefront', label: 'Sklep Internetowy ↗', icon: ShoppingBag, isExternal: true },
                 ];
@@ -2558,6 +2563,24 @@ export default function App() {
 
                     {currentTab === 'templates' && isTabAllowed('templates') && (
                         <TemplatesCenter 
+                            addToast={addToast}
+                            logActivity={(message, type, details) => {
+                                logActivity('system', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                        />
+                    )}
+
+                    {currentTab === 'omnichannel' && isTabAllowed('omnichannel') && (
+                        <OmnichannelHub 
+                            addToast={addToast}
+                            logActivity={(message, type, details) => {
+                                logActivity('system', currentUser ? currentUser.name : 'System', message, details || '');
+                            }}
+                        />
+                    )}
+
+                    {currentTab === 'security_hub' && isTabAllowed('security_hub') && (
+                        <SecurityAuditHub 
                             addToast={addToast}
                             logActivity={(message, type, details) => {
                                 logActivity('system', currentUser ? currentUser.name : 'System', message, details || '');
