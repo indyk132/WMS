@@ -44,6 +44,14 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     boxIntact: true
   });
 
+  // Visual Red Flash Alert State (828)
+  const [isRedFlashActive, setIsRedFlashActive] = useState(false);
+
+  const triggerRedFlash = () => {
+    setIsRedFlashActive(true);
+    setTimeout(() => setIsRedFlashActive(false), 700);
+  };
+
   // Product images state & fallbacks
   const [productImages] = useState<Record<string, string>>(() => {
     try {
@@ -208,17 +216,26 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     }
   };
 
+  const sanitizeBarcode = (code: string) => {
+    return code.replace(/[\s\-_]/g, '').toUpperCase().trim();
+  };
+
   const handleProcessGlobalScan = (scannedSku: string) => {
     sounds.playBeep();
-    const cleanSku = scannedSku.toUpperCase().trim();
+    const rawClean = scannedSku.trim();
+    const cleanSku = sanitizeBarcode(scannedSku);
     
     if (!selectedOrder) return;
     
-    const matchedItem = (selectedOrder.items || []).find((item: any) => item.sku.toUpperCase().trim() === cleanSku);
+    const matchedItem = (selectedOrder.items || []).find((item: any) => {
+      const targetClean = sanitizeBarcode(item.sku);
+      return targetClean === cleanSku || item.sku.toUpperCase().trim() === rawClean.toUpperCase();
+    });
     
     if (!matchedItem) {
       sounds.playError();
-      showLocalToast(`BŁĄD SKANOWANIA! Towar o kodzie SKU "${scannedSku}" nie należy do tego zlecenia!`, 'error');
+      triggerRedFlash();
+      showLocalToast(`⚠️ BŁĄD SKANOWANIA! Kod "${scannedSku}" nie należy do tego zlecenia. Sprawdź etykietę towaru lub odłóż do strefy wyjasnień!`, 'error');
       return;
     }
     
@@ -228,25 +245,44 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     
     if (currentStatus.finalized) {
       sounds.playError();
+      triggerRedFlash();
       showLocalToast(`Towar SKU "${sku}" został już oznaczony jako spakowany!`, 'error');
       return;
     }
 
     if (currentStatus.qty >= targetQty) {
       sounds.playError();
-      showLocalToast(`BŁĄD: Ilość dla SKU "${sku}" została już w pełni zweryfikowana!`, 'error');
+      triggerRedFlash();
+      showLocalToast(`BŁĄD: Wymagana ilość dla SKU "${sku}" została już w pełni zweryfikowana!`, 'error');
       return;
     }
     
     sounds.playSuccess();
     const nextQty = currentStatus.qty + 1;
-    setPackedItems(prev => ({
-      ...prev,
-      [sku]: {
-        qty: nextQty,
-        finalized: nextQty === targetQty
+    const isThisItemFinal = nextQty === targetQty;
+    
+    setPackedItems(prev => {
+      const nextPacked = {
+        ...prev,
+        [sku]: {
+          qty: nextQty,
+          finalized: isThisItemFinal
+        }
+      };
+
+      // Check if all items are now finalized
+      const allDone = (selectedOrder.items || []).every((item: any) => {
+        if (item.sku === sku) return isThisItemFinal;
+        return nextPacked[item.sku]?.finalized;
+      });
+
+      if (allDone) {
+        sounds.playVictoryChime();
+        showLocalToast('🎉 Brawo! Wszystkie pozycje zlecenia zostały pomyślnie spakowane. Możesz wydrukować etykietę.', 'success');
       }
-    }));
+
+      return nextPacked;
+    });
 
     if (nextQty === targetQty) {
       setFocusedSku(null);
@@ -420,7 +456,16 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
   }
 
   return (
-    <div className="w-full flex-grow bg-[#f5f7fa] text-zinc-800 flex flex-col font-sans" onClick={() => setFocusedSku(null)}>
+    <div className={`w-full flex-grow bg-[#f5f7fa] text-zinc-800 flex flex-col font-sans relative transition-all ${
+      isRedFlashActive ? 'ring-8 ring-red-500 ring-inset bg-red-100/50 animate-pulse' : ''
+    }`} onClick={() => setFocusedSku(null)}>
+      {isRedFlashActive && (
+        <div className="absolute inset-0 bg-red-600/20 z-50 pointer-events-none animate-pulse flex items-center justify-center">
+          <div className="bg-red-600 text-white font-black text-sm px-4 py-2 rounded-xl shadow-2xl uppercase tracking-widest border border-white">
+            ⚠️ BŁĄD SKANOWANIA / NIEPRAWIDŁOWY KOD
+          </div>
+        </div>
+      )}
       <header className="bg-white border-b border-zinc-200 px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-3">
           <button 
