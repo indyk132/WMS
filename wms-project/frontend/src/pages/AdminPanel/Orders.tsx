@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange, AlertCircle, StickyNote } from 'lucide-react';
+import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange, AlertCircle, StickyNote, Copy, Check, Sparkles, Clock, Star, CheckCircle2 } from 'lucide-react';
 import { OrderDetail } from '../../components/OrderDetail';
 import { useDebounce } from '../../hooks/useDebounce';
+import { sounds } from '../../components/SoundEffects';
+import { Product } from '../../services/inventoryApi';
 
 const polishMonthMap: Record<string, number> = {
     'Sty': 0, 'Lut': 1, 'Mar': 2, 'Kwi': 3, 'Maj': 4, 'Cze': 5,
@@ -192,20 +194,79 @@ export default function Orders({
         setOrderPriority('Normalny');
     };
 
+    const [hasNotesOnly, setHasNotesOnly] = useState(false);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [activePreset, setActivePreset] = useState<string>('all');
+
+    const copyToClipboard = (text: string, label: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        navigator.clipboard.writeText(text);
+        sounds.playSuccess();
+        setCopiedId(text);
+        setTimeout(() => setCopiedId(null), 2500);
+    };
+
     const triggerCsvExport = () => {
-        const header = 'Order ID,Customer,Destination,Status,Priority,Shipment Date\n';
-        const rows = orders.map(o => `${o.id},${o.customer},${o.destination},${o.status},${o.priority},${o.shipmentDate}`).join('\n');
-        const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+        sounds.playSuccess();
+        const header = 'ID Zamówienia,Klient,Adres Przeznaczenia,Status,Priorytet,Data Wysyłki,Pozycje SKU,Liczba Sztuk,Kurier,Numer Listu\n';
+        const rows = orders.map(o => {
+            const itemsStr = (o.items || []).map((i: any) => `${i.sku || i.name} (${i.quantity || i.qty || 1}szt)`).join('; ');
+            const totalQty = (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || i.qty || 1), 0);
+            return `"${o.id}","${o.customer || o.customerName || ''}","${o.destination || o.shippingAddress || ''}","${o.status || ''}","${o.priority || 'Normalny'}","${o.shipmentDate || ''}","${itemsStr}","${totalQty}","${o.shippingMethod || 'DPD'}","${o.waybillNumber || ''}"`;
+        }).join('\n');
+        
+        const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `Active_Orders_LogisticsOS_${new Date().toISOString().slice(0,10)}.csv`);
+        link.setAttribute('download', `WMS_Zamowienia_${new Date().toISOString().slice(0,10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
-    const [hasNotesOnly, setHasNotesOnly] = useState(false);
+    const applyPreset = (presetId: string) => {
+        sounds.playBeep();
+        setActivePreset(presetId);
+        switch (presetId) {
+            case 'to_pick':
+                setStatusFilter('Do kompletacji');
+                setPriorityFilter('');
+                setHasNotesOnly(false);
+                break;
+            case 'picking':
+                setStatusFilter('W kompletacji');
+                setPriorityFilter('');
+                setHasNotesOnly(false);
+                break;
+            case 'packed':
+                setStatusFilter('Spakowane');
+                setPriorityFilter('');
+                setHasNotesOnly(false);
+                break;
+            case 'shipped':
+                setStatusFilter('Wysłane');
+                setPriorityFilter('');
+                setHasNotesOnly(false);
+                break;
+            case 'high_priority':
+                setStatusFilter('');
+                setPriorityFilter('Wysoki');
+                setHasNotesOnly(false);
+                break;
+            case 'notes_only':
+                setStatusFilter('');
+                setPriorityFilter('');
+                setHasNotesOnly(true);
+                break;
+            case 'all':
+            default:
+                setStatusFilter('');
+                setPriorityFilter('');
+                setHasNotesOnly(false);
+                break;
+        }
+    };
 
     const filteredOrders = orders.filter(order => {
         const customerInstruction = order.customerNotes || order.specialInstructions || order.deliveryNote || order.customerInstruction || order.customerNote;
@@ -354,6 +415,10 @@ export default function Orders({
         );
     }
 
+    const totalOrdersCount = orders.length;
+    const completedOrdersCount = orders.filter(o => o.status === 'Wysłane' || o.status === 'Dostarczone' || o.isPacked).length;
+    const progressPercent = totalOrdersCount > 0 ? Math.round((completedOrdersCount / totalOrdersCount) * 100) : 0;
+
     return (
         <div className="space-y-6 font-sans text-sm text-[#0b1c30] animate-fadeIn">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
@@ -365,6 +430,7 @@ export default function Orders({
                     <button
                         onClick={triggerCsvExport}
                         className="h-10 px-4 rounded-lg border border-slate-300 text-slate-700 font-bold text-xs flex items-center gap-2 hover:bg-slate-50 transition-all shadow-3xs bg-white cursor-pointer"
+                        title="Pobierz wszystkie aktywne zamówienia w formacie CSV"
                     >
                         <Download className="w-4 h-4 text-slate-500" /> Eksportuj CSV
                     </button>
@@ -376,6 +442,70 @@ export default function Orders({
                         <Plus className="w-4 h-4" /> Nowe Zamówienie
                     </button>
                 </div>
+            </div>
+
+            {/* FULFILLMENT PROGRESS BAR WIDGET (851) */}
+            <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-xl p-4 shadow-sm border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-sm shrink-0">
+                        {progressPercent}%
+                    </div>
+                    <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-2">
+                            <span>Postęp Realizacji Dnia:</span>
+                            <span className="text-emerald-400 font-mono">{completedOrdersCount} / {totalOrdersCount} zrealizowanych</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                            {progressPercent >= 80 ? '🔥 Wysoka wydajność kompletacji na zmianie!' : 'Przetwarzanie bieżącej kolejki zleceń wysyłkowych.'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="w-full md:w-72 flex flex-col gap-1 shrink-0">
+                    <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                        <span>Wskaźnik SLA</span>
+                        <span className="text-blue-400 font-bold">{progressPercent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-700">
+                        <div 
+                            className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercent}%` }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* SAVED VIEW PRESETS BAR (844) */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs select-none">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+                    <Star className="w-3 h-3 text-amber-500 fill-amber-400" /> Widoki:
+                </span>
+                {[
+                    { id: 'all', label: 'Wszystkie', count: orders.length },
+                    { id: 'to_pick', label: 'Do kompletacji', count: orders.filter(o => o.status === 'Do kompletacji').length },
+                    { id: 'picking', label: 'W kompletacji', count: orders.filter(o => o.status === 'W kompletacji').length },
+                    { id: 'packed', label: 'Spakowane', count: orders.filter(o => o.status === 'Spakowane').length },
+                    { id: 'shipped', label: 'Wysłane', count: orders.filter(o => o.status === 'Wysłane' || o.status === 'Dostarczone').length },
+                    { id: 'high_priority', label: '⚡ Pilne VIP', count: orders.filter(o => o.priority === 'Wysoki').length },
+                    { id: 'notes_only', label: '📝 Z Uwagami', count: orders.filter(o => o.customerNotes || o.specialInstructions || o.deliveryNote).length },
+                ].map(preset => (
+                    <button
+                        key={preset.id}
+                        onClick={() => applyPreset(preset.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 border ${
+                            activePreset === preset.id
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                    >
+                        <span>{preset.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                            activePreset === preset.id ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                            {preset.count}
+                        </span>
+                    </button>
+                ))}
             </div>
 
             <div className="bg-white rounded border border-[#e5e7eb] shadow-sm flex flex-col overflow-hidden">
@@ -542,6 +672,18 @@ export default function Orders({
                                                         className="font-mono font-bold text-[#0058be] hover:underline text-left cursor-pointer outline-none bg-transparent border-none"
                                                     >
                                                         {order.id}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => copyToClipboard(order.id, 'Numer zamówienia', e)}
+                                                        className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors cursor-pointer bg-transparent border-none"
+                                                        title="Kopiuj numer zamówienia do schowka"
+                                                    >
+                                                        {copiedId === order.id ? (
+                                                            <Check className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
+                                                        ) : (
+                                                            <Copy className="w-3.5 h-3.5" />
+                                                        )}
                                                     </button>
                                                 </div>
                                                 {order.binId && (

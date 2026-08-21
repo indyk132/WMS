@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone, RefreshCw } from 'lucide-react';
+import { Volume2, VolumeX, Search, Bell, Settings, HelpCircle, Menu, Home, LogOut, AlertCircle, AlertTriangle, Info, BookOpen, PlayCircle, Terminal, Headphones, Mail, Phone, RefreshCw, Sun, Moon, Type } from 'lucide-react';
 import { sounds } from './SoundEffects';
 
 interface HeaderProps {
@@ -18,6 +18,11 @@ interface HeaderProps {
     isRefreshing?: boolean;
     soundEnabled?: boolean;
     onToggleSound?: () => void;
+    onOpenCommandPalette?: () => void;
+    isDarkMode?: boolean;
+    onToggleDarkMode?: () => void;
+    fontScale?: string;
+    onChangeFontScale?: (scale: string) => void;
 }
 
 export default function Header({
@@ -36,12 +41,18 @@ export default function Header({
     isRefreshing = false,
     soundEnabled = true,
     onToggleSound,
+    onOpenCommandPalette,
+    isDarkMode = false,
+    onToggleDarkMode,
+    fontScale = '100%',
+    onChangeFontScale,
 }: HeaderProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
     const [helpSearchQuery, setHelpSearchQuery] = useState('');
     const [activeHelpTopic, setActiveHelpTopic] = useState<string | null>(null);
+    const [fontScaleDropdownOpen, setFontScaleDropdownOpen] = useState(false);
 
     const [selectedLanguage, setSelectedLanguage] = useState<'PL' | 'UA' | 'EN'>('PL');
     const [langDropdownOpen, setLangDropdownOpen] = useState(false);
@@ -113,40 +124,102 @@ export default function Header({
                 </span>
             </div>
 
-            <div className="flex items-center gap-4">
-                <div className="relative hidden md:block group">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-blue-600 transition-colors" />
+            <div className="flex items-center gap-3">
+                {/* Search Bar / Command Palette Launcher */}
+                <div 
+                    onClick={() => onOpenCommandPalette && onOpenCommandPalette()}
+                    className="relative hidden md:flex items-center group cursor-pointer"
+                    title="Kliknij lub naciśnij Ctrl + K aby otworzyć okno szybkiego wyszukiwania"
+                >
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-hover:text-blue-600 transition-colors" />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="h-9 w-64 pl-9 pr-12 rounded border border-zinc-200 bg-zinc-50 font-sans text-xs text-zinc-800 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-400 shadow-inner"
-                        placeholder="Szukaj SKU, zamówień, personelu..."
+                        className="h-9 w-64 pl-9 pr-14 rounded-lg border border-zinc-200 dark:border-slate-700 bg-zinc-50 dark:bg-slate-800/80 font-sans text-xs text-zinc-800 dark:text-zinc-200 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-400 shadow-xs cursor-pointer"
+                        placeholder="Szukaj (Ctrl + K)..."
                     />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-0.5 pointer-events-none">
-                        <kbd className="px-1 py-0.5 text-[9px] font-mono text-zinc-400 bg-zinc-200/60 rounded border border-zinc-300">⌘</kbd>
-                        <kbd className="px-1 py-0.5 text-[9px] font-mono text-zinc-400 bg-zinc-200/60 rounded border border-zinc-300">K</kbd>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 pointer-events-none">
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 bg-zinc-200/70 dark:bg-slate-700 rounded border border-zinc-300 dark:border-slate-600">Ctrl</kbd>
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 bg-zinc-200/70 dark:bg-slate-700 rounded border border-zinc-300 dark:border-slate-600">K</kbd>
                     </div>
                 </div>
 
-                <div className="flex gap-1 text-zinc-500">
+                <div className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
+                    {/* Dark Mode Toggle */}
+                    {onToggleDarkMode && (
+                        <button
+                            onClick={onToggleDarkMode}
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center justify-center text-zinc-600 dark:text-amber-400"
+                            title={isDarkMode ? "Przełącz na tryb jasny" : "Przełącz na tryb nocny (Dark Mode)"}
+                        >
+                            {isDarkMode ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+                        </button>
+                    )}
+
+                    {/* Font Density Scaling Dropdown */}
+                    {onChangeFontScale && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setFontScaleDropdownOpen(!fontScaleDropdownOpen)}
+                                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center justify-center text-zinc-600 dark:text-zinc-300"
+                                title={`Rozmiar czcionki i gęstość UI (Aktualnie: ${fontScale})`}
+                            >
+                                <Type className="w-4.5 h-4.5" />
+                            </button>
+
+                            {fontScaleDropdownOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setFontScaleDropdownOpen(false)} />
+                                    <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-slate-800 border border-zinc-200 dark:border-slate-700 rounded-xl shadow-xl z-50 p-2 space-y-1 text-xs font-sans animate-fadeIn">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-2 py-1">
+                                            Gęstość Interfejsu:
+                                        </div>
+                                        {[
+                                            { scale: '90%', label: 'Kompaktowy (90%)' },
+                                            { scale: '100%', label: 'Standardowy (100%)' },
+                                            { scale: '110%', label: 'Powiększony (110%)' }
+                                        ].map(item => (
+                                            <button
+                                                key={item.scale}
+                                                onClick={() => {
+                                                    sounds.playSuccess();
+                                                    onChangeFontScale(item.scale);
+                                                    setFontScaleDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between cursor-pointer transition-all ${
+                                                    fontScale === item.scale
+                                                        ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold'
+                                                        : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-slate-700'
+                                                }`}
+                                            >
+                                                <span>{item.label}</span>
+                                                {fontScale === item.scale && <span className="text-blue-600">✓</span>}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {onRefreshData && (
                         <button 
                             onClick={onRefreshData}
                             disabled={isRefreshing}
-                            className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50" 
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center justify-center disabled:opacity-50" 
                             title="Odśwież dane z bazy"
                         >
-                            <RefreshCw className={`w-4.5 h-4.5 text-zinc-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`w-4.5 h-4.5 text-zinc-600 dark:text-zinc-300 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </button>
                     )}
                     {onToggleSound && (
                         <button 
                             onClick={onToggleSound}
-                            className="p-1.5 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer flex items-center justify-center"
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
                             title={soundEnabled ? "Wycisz dźwięki powiadomień" : "Włącz dźwięki powiadomień"}
                         >
-                            {soundEnabled ? <Volume2 className="w-4.5 h-4.5 text-zinc-600" /> : <VolumeX className="w-4.5 h-4.5 text-zinc-400" />}
+                            {soundEnabled ? <Volume2 className="w-4.5 h-4.5 text-zinc-600 dark:text-zinc-300" /> : <VolumeX className="w-4.5 h-4.5 text-zinc-400" />}
                         </button>
                     )}
                     <div className="relative">

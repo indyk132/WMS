@@ -40,6 +40,9 @@ import { fetchOrders as fetchOrdersApi, createOrder as createOrderApi, updateOrd
 import { fetchActivities, logActivityApi } from './services/activitiesApi';
 import { LayoutDashboard, FileText, Map, ShieldAlert, Boxes, LogOut, Package, Home as HomeIcon, BarChart3, Settings as SettingsNavIcon, Layers, ShoppingBag, Truck, Info, AlertCircle, AlertTriangle, CheckCircle2, RotateCcw, Send, Combine, ShoppingCart, Shrink, Sparkles, Calendar, GitMerge, CornerDownRight, Tag, Compass, ChevronDown, ChevronRight, MapPin, Globe } from 'lucide-react';
 import { sounds } from './components/SoundEffects';
+import CommandPalette from './components/CommandPalette';
+import UndoActionBar, { UndoAction } from './components/UndoActionBar';
+import BookmarksBar from './components/BookmarksBar';
 
 const getRelativeDateStr = (daysAgo: number, timeStr: string) => {
     const d = new Date();
@@ -363,6 +366,84 @@ export default function App() {
 
     const [inLobby, setInLobby] = useState(() => readStoredInLobby());
     const [currentTab, setCurrentTab] = useState(() => readStoredTab());
+
+    // UX & Usability Features State
+    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        try {
+            return window.localStorage.getItem('wms-ui-theme') === 'dark';
+        } catch {
+            return false;
+        }
+    });
+    const [fontScale, setFontScale] = useState(() => {
+        try {
+            return window.localStorage.getItem('wms-ui-font-scale') || '100%';
+        } catch {
+            return '100%';
+        }
+    });
+    const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
+
+    const toggleDarkMode = () => {
+        setIsDarkMode(prev => {
+            const next = !prev;
+            try {
+                window.localStorage.setItem('wms-ui-theme', next ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', next);
+                window.dispatchEvent(new Event('wms-theme-changed'));
+            } catch (e) {}
+            sounds.playSuccess();
+            return next;
+        });
+    };
+
+    const handleFontScaleChange = (scale: string) => {
+        setFontScale(scale);
+        try {
+            window.localStorage.setItem('wms-ui-font-scale', scale);
+            document.documentElement.style.fontSize = scale;
+            window.dispatchEvent(new Event('wms-font-scale-changed'));
+        } catch (e) {}
+    };
+
+    // Global Ctrl+K / Cmd+K listener (801)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setIsCommandPaletteOpen(prev => !prev);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // Global Unsaved Changes Guard (885)
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            const hasUnsaved = window.sessionStorage.getItem('wms-has-unsaved-changes');
+            if (hasUnsaved === 'true') {
+                e.preventDefault();
+                e.returnValue = 'Masz niezapisane zmiany w formularzu. Czy na pewno chcesz opuścić stronę?';
+                return e.returnValue;
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
+
+    // Recents Tracker (804)
+    useEffect(() => {
+        if (currentTab) {
+            try {
+                const stored = localStorage.getItem('wms-recent-items');
+                const recents: string[] = stored ? JSON.parse(stored) : [];
+                const filtered = [currentTab, ...recents.filter(id => id !== currentTab)].slice(0, 8);
+                localStorage.setItem('wms-recent-items', JSON.stringify(filtered));
+            } catch (e) {}
+        }
+    }, [currentTab]);
 
     // Global Font Sizing Adjuster Effect
     useEffect(() => {
@@ -2264,13 +2345,30 @@ export default function App() {
                     isRefreshing={isRefreshing}
                     soundEnabled={soundEnabled}
                     onToggleSound={toggleSound}
+                    onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+                    isDarkMode={isDarkMode}
+                    onToggleDarkMode={toggleDarkMode}
+                    fontScale={fontScale}
+                    onChangeFontScale={handleFontScaleChange}
                 />
+
+                <div className="mt-14">
+                    <BookmarksBar
+                        currentTab={currentTab}
+                        onNavigate={(tabId) => {
+                            setCurrentTab(tabId);
+                            window.localStorage.setItem('wms-current-tab', tabId);
+                        }}
+                        sideNavItems={sideNavItems}
+                        addToast={addToast}
+                    />
+                </div>
 
                 {isMobileMenuOpen && (
                     <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
                 )}
 
-                <main className="mt-14 p-6 flex-grow max-w-[1600px] w-full mx-auto flex flex-col gap-6">
+                <main className="p-6 flex-grow max-w-[1600px] w-full mx-auto flex flex-col gap-6">
                     {inventorySync.isLoading && (
                         <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-xs font-semibold animate-pulse select-none">
                             Łączenie z backendem..."
@@ -2658,6 +2756,29 @@ export default function App() {
                     );
                 })}
             </div>
+
+            {/* Global Command Palette Modal (Ctrl + K) (801, 802, 804, 814, 841, 842) */}
+            <CommandPalette
+                isOpen={isCommandPaletteOpen}
+                onClose={() => setIsCommandPaletteOpen(false)}
+                onNavigate={(tabId) => {
+                    setCurrentTab(tabId);
+                    window.localStorage.setItem('wms-current-tab', tabId);
+                }}
+                currentTab={currentTab}
+                sideNavItems={sideNavItems}
+                isDarkMode={isDarkMode}
+                onToggleDarkMode={toggleDarkMode}
+                fontScale={fontScale}
+                onChangeFontScale={handleFontScaleChange}
+                addToast={addToast}
+            />
+
+            {/* Global Undo Action Bar (818) */}
+            <UndoActionBar
+                action={undoAction}
+                onDismiss={() => setUndoAction(null)}
+            />
         </div>
     );
 }
