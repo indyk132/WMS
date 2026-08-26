@@ -110,6 +110,59 @@ export default function DockScheduling({
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleHour, setRescheduleHour] = useState('');
 
+  // ----------------------------------------------------
+  // OPTION 904: Red/Green Dock Lights & Wheel Chock Safety Interlock State
+  // ----------------------------------------------------
+  const [dockSafetyInterlocks, setDockSafetyInterlocks] = useState<Record<string, { chocksEngaged: boolean; doorOpen: boolean; signalLight: 'RED' | 'GREEN' }>>({
+    'D1': { chocksEngaged: true, doorOpen: true, signalLight: 'GREEN' },
+    'D2': { chocksEngaged: false, doorOpen: false, signalLight: 'RED' },
+    'D3': { chocksEngaged: true, doorOpen: true, signalLight: 'GREEN' }
+  });
+
+  const toggleWheelChock = (dockId: string) => {
+    sounds.playBeep();
+    setDockSafetyInterlocks(prev => {
+      const current = prev[dockId] || { chocksEngaged: false, doorOpen: false, signalLight: 'RED' };
+      const nextChocks = !current.chocksEngaged;
+      const nextLight: 'RED' | 'GREEN' = nextChocks ? 'GREEN' : 'RED';
+      const nextDoor = nextChocks ? current.doorOpen : false;
+
+      if (nextLight === 'GREEN') {
+        sounds.playSuccess();
+        addToast(`Dok ${dockId}: Kliny zablokowane!`, 'Sygnalizator świetlny ZIELONY. Brama rampy odblokowana do bezpiecznego załadunku.', 'success');
+        logActivity(`Sygnalizator doku ${dockId} przełączony na ZIELONY (Kliny aktywne).`, 'info');
+      } else {
+        sounds.playError();
+        addToast(`Dok ${dockId}: Kliny zdjęte!`, 'Sygnalizator CZERWONY! Zakaz wjazdu wózkami do naczepy!', 'warning');
+        logActivity(`Sygnalizator doku ${dockId} przełączony na CZERWONY (Kliny usunięte).`, 'warning');
+      }
+
+      return {
+        ...prev,
+        [dockId]: { chocksEngaged: nextChocks, doorOpen: nextDoor, signalLight: nextLight }
+      };
+    });
+  };
+
+  const toggleDockDoor = (dockId: string) => {
+    sounds.playBeep();
+    setDockSafetyInterlocks(prev => {
+      const current = prev[dockId] || { chocksEngaged: false, doorOpen: false, signalLight: 'RED' };
+      if (!current.chocksEngaged) {
+        sounds.playError();
+        addToast('Blokada Bezpieczeństwa!', `Nie można otworzyć bramy Doku ${dockId} bez uprzedniego założenia klinów pod koła ciężarówki!`, 'error');
+        return prev;
+      }
+      const nextDoor = !current.doorOpen;
+      sounds.playSuccess();
+      addToast(`Dok ${dockId}: Brama ${nextDoor ? 'Otwarta' : 'Zamknięta'}`, `Stan śluzy przeładunkowej zaktualizowany.`, 'info');
+      return {
+        ...prev,
+        [dockId]: { ...current, doorOpen: nextDoor }
+      };
+    });
+  };
+
   // Calculate current week dates (Monday to Friday)
   const activeMonday = useMemo(() => getMonday(currentDate), [currentDate]);
   
@@ -562,6 +615,94 @@ export default function DockScheduling({
           </div>
         </div>
 
+      </div>
+
+      {/* SYGNALIZATORY ŚWIETLNE DOKÓW I BLOKADA KLINÓW KOŁA (OPTION 904) */}
+      <div className="bg-gradient-to-r from-zinc-950 via-zinc-900 to-black border border-zinc-850 p-5 shadow-xl font-mono">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+              Sygnalizatory Świetlne Ramp i Blokada Kół (Interlock 904)
+            </h3>
+          </div>
+          <span className="text-[10px] text-zinc-400">
+            Automatyczna ochrona przed odjazdem naczepy podczas załadunku wózkiem
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {['D1', 'D2', 'D3'].map(dockId => {
+            const interlock = dockSafetyInterlocks[dockId] || { chocksEngaged: false, doorOpen: false, signalLight: 'RED' };
+            const isGreen = interlock.signalLight === 'GREEN';
+            return (
+              <div 
+                key={dockId}
+                className={`p-4 border transition-all ${
+                  isGreen 
+                    ? 'bg-emerald-950/20 border-emerald-800/80 shadow-emerald-950/50 shadow-md' 
+                    : 'bg-rose-950/20 border-rose-800/80 shadow-rose-950/50 shadow-md'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="text-xs font-black text-white">DOK {dockId}</span>
+                    <span className="text-[9px] text-zinc-400 block">{dockId === 'D1' ? 'Rampa ADR' : dockId === 'D2' ? 'Rampa Chłodnia' : 'Rampa Standard'}</span>
+                  </div>
+
+                  {/* Red/Green Signal Light Display */}
+                  <div className="flex items-center gap-1.5 bg-black/80 px-2.5 py-1 rounded-full border border-zinc-800">
+                    <div className={`w-3.5 h-3.5 rounded-full transition-all ${
+                      !isGreen ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e] animate-pulse' : 'bg-zinc-800 opacity-40'
+                    }`} title="Czerwone światło - zakaz wjazdu" />
+                    <div className={`w-3.5 h-3.5 rounded-full transition-all ${
+                      isGreen ? 'bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse' : 'bg-zinc-800 opacity-40'
+                    }`} title="Zielone światło - bezpieczny załadunek" />
+                    <span className={`text-[10px] font-bold ml-1 ${isGreen ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {isGreen ? 'ZIELONE' : 'CZERWONE'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-[10px]">
+                  <div className="flex items-center justify-between text-zinc-300">
+                    <span>Czujnik klinów kół:</span>
+                    <span className={`font-bold ${interlock.chocksEngaged ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {interlock.chocksEngaged ? '✓ ZABLOKOWANE' : '✕ BRAK KLINÓW'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-zinc-300">
+                    <span>Brama rampy:</span>
+                    <span className={`font-bold ${interlock.doorOpen ? 'text-blue-400' : 'text-zinc-500'}`}>
+                      {interlock.doorOpen ? 'OTWARTA' : 'ZAMKNIĘTA'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={() => toggleWheelChock(dockId)}
+                    className={`py-1.5 px-2 text-[10px] font-bold rounded cursor-pointer transition-all border ${
+                      interlock.chocksEngaged 
+                        ? 'bg-rose-900/60 hover:bg-rose-800 text-rose-200 border-rose-700' 
+                        : 'bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border-emerald-700'
+                    }`}
+                  >
+                    {interlock.chocksEngaged ? 'Zdejmij Kliny' : 'Załóż Kliny'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleDockDoor(dockId)}
+                    className="py-1.5 px-2 text-[10px] font-bold rounded cursor-pointer transition-all border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                  >
+                    {interlock.doorOpen ? 'Zamknij Bramę' : 'Otwórz Bramę'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* View Switcher and Ramps Grid Card */}

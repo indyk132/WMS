@@ -728,6 +728,178 @@ export default function PickPathOptimizer({
 
       </div>
 
+      {/* OPTION 902: CYFROWY SYSTEM PICK-TO-LIGHT (SYMULATOR KONTROLEK LED NA REGAŁACH) */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-950 text-white p-6 rounded-2xl border border-indigo-900/60 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-800/50 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+              <h3 className="text-base font-black uppercase tracking-wider text-white font-display">
+                Cyfrowy System Pick-to-Light (Symulator Diod LED na Regałach 902)
+              </h3>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              Interaktywny symulator kontrolek świetlnych i 7-segmentowych wyświetlaczy ilościowych montowanych na gniazdach regałowych.
+            </p>
+          </div>
+
+          <span className="text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-lg border border-emerald-500/30">
+            Aktywne Połączenie Pick-to-Light: Online
+          </span>
+        </div>
+
+        <PickToLightRackSimulator
+          addToast={addToast}
+          logActivity={logActivity}
+        />
+      </div>
+
+    </div>
+  );
+}
+
+// Dedicated Interactive Subcomponent for Pick-to-Light Simulator (Option 902)
+function PickToLightRackSimulator({ addToast, logActivity }: { addToast: any; logActivity: any }) {
+  const [pickBins, setPickBins] = useState([
+    { id: 'BIN-A01-1', label: 'Gniazdo A-01-1', sku: 'SKU-001', name: 'Klocki hamulcowe przód', qtyRequired: 2, picked: 0, state: 'ACTIVE' as 'ACTIVE' | 'NEXT' | 'DONE' | 'IDLE' },
+    { id: 'BIN-A01-2', label: 'Gniazdo A-01-2', sku: 'SKU-002', name: 'Tarcze hamulcowe 280mm', qtyRequired: 4, picked: 0, state: 'NEXT' as 'ACTIVE' | 'NEXT' | 'DONE' | 'IDLE' },
+    { id: 'BIN-A01-3', label: 'Gniazdo A-01-3', sku: 'SKU-003', name: 'Płyn hamulcowy DOT-4', qtyRequired: 1, picked: 0, state: 'IDLE' as 'ACTIVE' | 'NEXT' | 'DONE' | 'IDLE' },
+    { id: 'BIN-B02-1', label: 'Gniazdo B-02-1', sku: 'SKU-004', name: 'Filtr oleju silnikowego', qtyRequired: 3, picked: 0, state: 'IDLE' as 'ACTIVE' | 'NEXT' | 'DONE' | 'IDLE' },
+    { id: 'BIN-B02-2', label: 'Gniazdo B-02-2', sku: 'SKU-005', name: 'Świece zapłonowe Iridium', qtyRequired: 4, picked: 0, state: 'IDLE' as 'ACTIVE' | 'NEXT' | 'DONE' | 'IDLE' },
+    { id: 'BIN-B02-3', label: 'Gniazdo B-02-3', sku: 'SKU-006', name: 'Pasek rozrządu wzmocniony', qtyRequired: 1, picked: 0, state: 'IDLE' as 'ACTIVE' | 'NEXT' | 'DONE' | 'IDLE' }
+  ]);
+
+  const handleConfirmBinPick = (binId: string) => {
+    sounds.playSuccess();
+    setPickBins(prev => {
+      const idx = prev.findIndex(b => b.id === binId);
+      if (idx === -1) return prev;
+
+      const updated = prev.map((b, i) => {
+        if (i === idx) {
+          return { ...b, picked: b.qtyRequired, state: 'DONE' as const };
+        }
+        if (i === idx + 1) {
+          return { ...b, state: 'ACTIVE' as const };
+        }
+        if (i === idx + 2) {
+          return { ...b, state: 'NEXT' as const };
+        }
+        return b;
+      });
+
+      const nextActive = updated.find(b => b.state === 'ACTIVE');
+      if (nextActive) {
+        if (addToast) addToast(`Potwierdzono Pobranie (${prev[idx].label})`, `Dioda LED zapaliła się w gnieździe ${nextActive.label} (Pobierz: ${nextActive.qtyRequired} szt.)`, 'success');
+      } else {
+        sounds.playVictoryChime();
+        if (addToast) addToast('Ukończono Zbiórkę Pick-to-Light!', 'Wszystkie pozycje z fali zostały pomyślnie pobrane i potwierdzone przyciskami LED.', 'success');
+      }
+
+      return updated;
+    });
+  };
+
+  const handleResetSimulator = () => {
+    sounds.playBeep();
+    setPickBins([
+      { id: 'BIN-A01-1', label: 'Gniazdo A-01-1', sku: 'SKU-001', name: 'Klocki hamulcowe przód', qtyRequired: 2, picked: 0, state: 'ACTIVE' },
+      { id: 'BIN-A01-2', label: 'Gniazdo A-01-2', sku: 'SKU-002', name: 'Tarcze hamulcowe 280mm', qtyRequired: 4, picked: 0, state: 'NEXT' },
+      { id: 'BIN-A01-3', label: 'Gniazdo A-01-3', sku: 'SKU-003', name: 'Płyn hamulcowy DOT-4', qtyRequired: 1, picked: 0, state: 'IDLE' },
+      { id: 'BIN-B02-1', label: 'Gniazdo B-02-1', sku: 'SKU-004', name: 'Filtr oleju silnikowego', qtyRequired: 3, picked: 0, state: 'IDLE' },
+      { id: 'BIN-B02-2', label: 'Gniazdo B-02-2', sku: 'SKU-005', name: 'Świece zapłonowe Iridium', qtyRequired: 4, picked: 0, state: 'IDLE' },
+      { id: 'BIN-B02-3', label: 'Gniazdo B-02-3', sku: 'SKU-006', name: 'Pasek rozrządu wzmocniony', qtyRequired: 1, picked: 0, state: 'IDLE' }
+    ]);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {pickBins.map((bin) => {
+          const isActive = bin.state === 'ACTIVE';
+          const isNext = bin.state === 'NEXT';
+          const isDone = bin.state === 'DONE';
+
+          return (
+            <div
+              key={bin.id}
+              className={`p-4 rounded-xl border transition-all relative overflow-hidden ${
+                isActive
+                  ? 'bg-gradient-to-b from-emerald-950/80 to-black border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] ring-2 ring-emerald-400'
+                  : isNext
+                  ? 'bg-gradient-to-b from-amber-950/50 to-black border-amber-500/80 shadow-md'
+                  : isDone
+                  ? 'bg-slate-900/60 border-slate-700 opacity-60'
+                  : 'bg-black/60 border-slate-800'
+              }`}
+            >
+              {/* LED Status Indicator Lamp Header */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-4 h-4 rounded-full transition-all ${
+                      isActive
+                        ? 'bg-emerald-400 shadow-[0_0_12px_#34d399] animate-ping'
+                        : isNext
+                        ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]'
+                        : isDone
+                        ? 'bg-blue-400'
+                        : 'bg-slate-700'
+                    }`}
+                  />
+                  <span className="text-xs font-mono font-bold text-slate-200">{bin.label}</span>
+                </div>
+
+                {/* 7-Segment Digital Pick Display */}
+                <div className="bg-black border border-slate-700 px-3 py-1 rounded font-mono font-black text-sm">
+                  {isDone ? (
+                    <span className="text-blue-400">✓ OK</span>
+                  ) : (
+                    <span className={isActive ? 'text-emerald-400 animate-pulse' : isNext ? 'text-amber-400' : 'text-slate-500'}>
+                      POBIERZ: {String(bin.qtyRequired).padStart(2, '0')}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1 text-xs font-mono mb-4">
+                <div className="font-bold text-white text-[13px]">{bin.name}</div>
+                <div className="text-slate-400 text-[11px]">{bin.sku}</div>
+              </div>
+
+              {/* Physical / Touch Confirmation Button on Shelf Module */}
+              {isActive ? (
+                <button
+                  type="button"
+                  onClick={() => handleConfirmBinPick(bin.id)}
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider rounded-lg shadow-lg cursor-pointer transition-all border-none flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <CheckCircle2 className="w-4 h-4 stroke-[3]" />
+                  [✓ POTWIERDŹ POBRANIE W GNIEŹDZIE]
+                </button>
+              ) : isDone ? (
+                <div className="w-full py-2 bg-slate-800 text-slate-400 font-mono text-center text-[11px] rounded border border-slate-700">
+                  Pobrano: {bin.picked} / {bin.qtyRequired} szt.
+                </div>
+              ) : (
+                <div className="w-full py-2 bg-black/40 text-slate-500 font-mono text-center text-[11px] rounded border border-slate-800">
+                  {isNext ? '🟡 Następne w kolejce' : 'Oczekuje na sygnał'}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-end pt-2">
+        <button
+          type="button"
+          onClick={handleResetSimulator}
+          className="px-4 py-2 bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 text-xs font-bold rounded-lg cursor-pointer transition-all border border-indigo-700"
+        >
+          Resetuj Cykl Symulatora Pick-to-Light
+        </button>
+      </div>
     </div>
   );
 }
