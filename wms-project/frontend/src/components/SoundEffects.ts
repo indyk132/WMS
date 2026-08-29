@@ -10,6 +10,30 @@ class SoundEffects {
         }
     }
 
+    // OPTION 993: Quiet Hours & Night Shift Mode
+    isQuietHoursActive(): boolean {
+        try {
+            const manualOverride = localStorage.getItem('wms-quiet-hours-active');
+            if (manualOverride !== null) {
+                return manualOverride === 'true';
+            }
+            const curHour = new Date().getHours();
+            return curHour >= 22 || curHour < 6; // Domyślnie 22:00 - 06:00
+        } catch {
+            return false;
+        }
+    }
+
+    getVolumeMultiplier(): number {
+        if (!this.isQuietHoursActive()) return 1.0;
+        try {
+            const storedVol = localStorage.getItem('wms-quiet-hours-volume');
+            return storedVol ? Number(storedVol) / 100 : 0.25; // 25% głośności w nocy
+        } catch {
+            return 0.25;
+        }
+    }
+
     playTone(freq: number, type: OscillatorType, duration: number, delay = 0) {
         try {
             this.init();
@@ -19,13 +43,16 @@ class SoundEffects {
                 this.ctx.resume();
             }
 
+            const mult = this.getVolumeMultiplier();
+            if (mult <= 0.01) return; // Muted in quiet hours
+
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
 
             osc.type = type;
             osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
 
-            gain.gain.setValueAtTime(0.08, this.ctx.currentTime + delay);
+            gain.gain.setValueAtTime(0.08 * mult, this.ctx.currentTime + delay);
             gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + delay + duration);
 
             osc.connect(gain);

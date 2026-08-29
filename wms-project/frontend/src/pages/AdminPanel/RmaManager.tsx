@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   RotateCcw, Plus, Search, X, CheckCircle, AlertCircle, 
-  Filter, FileText, Calendar, Printer, ShieldAlert, ArrowLeftRight, Check, Trash2, Package, Sparkles
+  Filter, FileText, Calendar, Printer, ShieldAlert, ArrowLeftRight, Check, Trash2, Package, Sparkles,
+  Award, ShieldCheck, AlertTriangle, Tag, Sliders, HelpCircle, CheckSquare, Ban, Eye, Fingerprint, Lock
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { sounds } from '../../components/SoundEffects';
@@ -48,6 +49,9 @@ export default function RmaManager({
   onCreateRmaReturn,
   onReceiveRmaReturn
 }: RmaManagerProps) {
+  // Navigation Sections: RMA standard list vs 5A Grade Triage vs 5B Anti-Fraud Verifier
+  const [activeSection, setActiveSection] = useState<'rma_list' | 'grade_triage' | 'anti_fraud'>('rma_list');
+
   // Lists
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -56,6 +60,201 @@ export default function RmaManager({
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
+
+  // ----------------------------------------------------
+  // OPTION 5A: Decision Tree for Visual Grading Triage (Grade A/B/C/D)
+  // ----------------------------------------------------
+  const [triageHistory, setTriageHistory] = useState([
+    {
+      id: 'TRG-2026-081',
+      rmaId: 'RMA-ORD-10492',
+      sku: 'SKU-001',
+      name: 'Klocki hamulcowe przód (A1)',
+      grade: 'Grade A (100% Nowy)',
+      condition: 'Pudełko nienaruszone, brak śladów montażu, 100% akcesoriów',
+      destination: 'Regał Główny A-01 (Pełnowartościowy magazyn)',
+      priceModifier: '100% Ceny Bazowej (Brak obniżki)',
+      date: '2026-08-26',
+      inspector: 'Marta N. (Kontrola Jakości)'
+    },
+    {
+      id: 'TRG-2026-082',
+      rmaId: 'RMA-ORD-10495',
+      sku: 'SKU-004',
+      name: 'Filtr oleju silnikowego',
+      grade: 'Grade B (Outlet / Open-Box)',
+      condition: 'Pudełko rozerwane, produkt w 100% sprawny, drobne ryski na obudowie',
+      destination: 'Strefa OUTLET / Stół B-03',
+      priceModifier: 'Rabat -20% (Cena Outlet)',
+      date: '2026-08-26',
+      inspector: 'Piotr W. (Kontrola Jakości)'
+    },
+    {
+      id: 'TRG-2026-083',
+      rmaId: 'RMA-ORD-10512',
+      sku: 'SKU-006',
+      name: 'Pasek rozrządu wzmocniony',
+      grade: 'Grade D (Złom / Kasacja)',
+      condition: 'Pasek naderwany, ślady montażu i zatarcia, produkt nienaprawialny',
+      destination: 'Kwarantanna Złom / Odpis Strat',
+      priceModifier: '0% (Wycena zerowa - Koszt dostawcy)',
+      date: '2026-08-25',
+      inspector: 'Marta N. (Kontrola Jakości)'
+    }
+  ]);
+
+  // Interactive Triage Wizard State
+  const [triageSku, setTriageSku] = useState('SKU-002');
+  const [triagePackage, setTriagePackage] = useState<'INTACT' | 'DAMAGED' | 'MISSING'>('INTACT');
+  const [triagePhysical, setTriagePhysical] = useState<'PERFECT' | 'SCRATCHED' | 'HEAVY_USE' | 'BROKEN'>('PERFECT');
+  const [triageAccessories, setTriageAccessories] = useState<'FULL' | 'MISSING_MINOR' | 'MISSING_CRITICAL'>('FULL');
+  const [triageFunction, setTriageFunction] = useState<'WORKING' | 'DEFECTIVE'>('WORKING');
+
+  const computedGrade = useMemo(() => {
+    if (triageFunction === 'DEFECTIVE' || triagePhysical === 'BROKEN') {
+      return {
+        grade: 'Grade D (Złom / Kasacja)',
+        badgeColor: 'bg-rose-600 text-white',
+        destination: 'Strefa Kwarantanny / Odpis Strat',
+        discount: 'Wycena zerowa (Kasacja)',
+        action: 'Sporządź protokół zniszczenia i obciąż dostawcę/kuriera.'
+      };
+    }
+    if (triagePhysical === 'HEAVY_USE' || triageAccessories === 'MISSING_CRITICAL') {
+      return {
+        grade: 'Grade C (Refurbished / Serwis)',
+        badgeColor: 'bg-amber-600 text-white',
+        destination: 'Stół Naprawczy / Serwis Gwarancyjny',
+        discount: 'Rabat -50% po renowacji',
+        action: 'Skieruj do strefy Rework w celu skompletowania akcesoriów i testów.'
+      };
+    }
+    if (triagePackage !== 'INTACT' || triagePhysical === 'SCRATCHED' || triageAccessories === 'MISSING_MINOR') {
+      return {
+        grade: 'Grade B (Outlet / Open-Box)',
+        badgeColor: 'bg-blue-600 text-white',
+        destination: 'Strefa OUTLET / Półka B-03',
+        discount: 'Rabat -20% (Wyprzedaż Outlet)',
+        action: 'Przepakuj w worek foliowy, naklej etykietę SKU-OUTLET i wystaw na sprzedaż.'
+      };
+    }
+    return {
+      grade: 'Grade A (100% Nowy / Pełnowartościowy)',
+      badgeColor: 'bg-emerald-600 text-white',
+      destination: 'Regał Główny A-01 (Wolna sprzedaż)',
+      discount: '100% Ceny (Brak rabatu)',
+      action: 'Przyjmij na pierwotny regał magazynowy bez strat marżowych.'
+    };
+  }, [triagePackage, triagePhysical, triageAccessories, triageFunction]);
+
+  const handleSaveTriageResult = () => {
+    sounds.playSuccess();
+    const prod = products.find(p => p.sku === triageSku) || { name: 'Towar magazynowy' };
+    const newRecord = {
+      id: `TRG-2026-${Math.floor(100 + Math.random() * 900)}`,
+      rmaId: `RMA-ORD-${Math.floor(10000 + Math.random() * 90000)}`,
+      sku: triageSku,
+      name: prod.name,
+      grade: computedGrade.grade,
+      condition: `Opakowanie: ${triagePackage}, Stan: ${triagePhysical}, Akcesoria: ${triageAccessories}`,
+      destination: computedGrade.destination,
+      priceModifier: computedGrade.discount,
+      date: new Date().toISOString().slice(0, 10),
+      inspector: 'Administrator WMS (Triage)'
+    };
+
+    setTriageHistory([newRecord, ...triageHistory]);
+  };
+
+  // ----------------------------------------------------
+  // OPTION 5B: Serial Number & Anti-Fraud Return Verifier
+  // ----------------------------------------------------
+  const [fraudRecords, setFraudRecords] = useState([
+    {
+      id: 'FRAUD-CHK-01',
+      rmaId: 'RMA-ORD-10492',
+      sku: 'ELEC-IPHONE-15',
+      name: 'Smartfon Pro 256GB Titanium',
+      outboundSerial: 'SN-APL-8849201',
+      returnedSerial: 'SN-APL-8849201',
+      sealStatus: 'INTACT' as 'INTACT' | 'BROKEN' | 'MISSING',
+      result: 'MATCH_GENUINE' as 'MATCH_GENUINE' | 'FRAUD_MISMATCH' | 'BROKEN_SEAL',
+      customer: 'Piotr Wiśniewski',
+      status: 'Zatwierdzono zwrot środków',
+      date: '2026-08-26'
+    },
+    {
+      id: 'FRAUD-CHK-02',
+      rmaId: 'RMA-ORD-10488',
+      sku: 'TOOL-DEWALT-DCD',
+      name: 'Wkrętarka udarowa 18V XR',
+      outboundSerial: 'SN-DWT-9912044',
+      returnedSerial: 'SN-DWT-1102949',
+      sealStatus: 'BROKEN' as 'INTACT' | 'BROKEN' | 'MISSING',
+      result: 'FRAUD_MISMATCH' as 'MATCH_GENUINE' | 'FRAUD_MISMATCH' | 'BROKEN_SEAL',
+      customer: 'Tomasz Nowak',
+      status: 'WSTRZYMANO (Podejrzenie Podmiany Sprzętu)',
+      date: '2026-08-25'
+    },
+    {
+      id: 'FRAUD-CHK-03',
+      rmaId: 'RMA-ORD-10471',
+      sku: 'AUDIO-SONY-WH',
+      name: 'Słuchawki bezprzewodowe ANC',
+      outboundSerial: 'SN-SNY-3301928',
+      returnedSerial: 'SN-SNY-3301928',
+      sealStatus: 'BROKEN' as 'INTACT' | 'BROKEN' | 'MISSING',
+      result: 'BROKEN_SEAL' as 'MATCH_GENUINE' | 'FRAUD_MISMATCH' | 'BROKEN_SEAL',
+      customer: 'Kamil Zieliński',
+      status: 'Weryfikacja Serwisowa Plomby',
+      date: '2026-08-24'
+    }
+  ]);
+
+  // Anti-Fraud Verification Interactive Input State
+  const [fraudRmaId, setFraudRmaId] = useState('RMA-ORD-10520');
+  const [fraudExpectedSn, setFraudExpectedSn] = useState('SN-APL-7749102');
+  const [fraudScannedSn, setFraudScannedSn] = useState('');
+  const [fraudSeal, setFraudSeal] = useState<'INTACT' | 'BROKEN' | 'MISSING'>('INTACT');
+  const [fraudCustomer, setFraudCustomer] = useState('Jan Kowalski');
+
+  const handleVerifyAntiFraud = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fraudScannedSn) return;
+
+    const isMatch = fraudExpectedSn.trim().toUpperCase() === fraudScannedSn.trim().toUpperCase();
+    let res: 'MATCH_GENUINE' | 'FRAUD_MISMATCH' | 'BROKEN_SEAL' = 'MATCH_GENUINE';
+    let stat = 'Zatwierdzono zwrot środków';
+
+    if (!isMatch) {
+      sounds.playError();
+      res = 'FRAUD_MISMATCH';
+      stat = 'WSTRZYMANO (Podejrzenie Podmiany Sprzętu)';
+    } else if (fraudSeal === 'BROKEN' || fraudSeal === 'MISSING') {
+      sounds.playBeep();
+      res = 'BROKEN_SEAL';
+      stat = 'Weryfikacja Serwisowa Plomby';
+    } else {
+      sounds.playSuccess();
+    }
+
+    const newRecord = {
+      id: `FRAUD-CHK-${String(fraudRecords.length + 1).padStart(2, '0')}`,
+      rmaId: fraudRmaId,
+      sku: 'ELEC-IPHONE-15',
+      name: 'Smartfon Pro 256GB Titanium',
+      outboundSerial: fraudExpectedSn,
+      returnedSerial: fraudScannedSn,
+      sealStatus: fraudSeal,
+      result: res,
+      customer: fraudCustomer,
+      status: stat,
+      date: new Date().toISOString().slice(0, 10)
+    };
+
+    setFraudRecords([newRecord, ...fraudRecords]);
+    setFraudScannedSn('');
+  };
   
   // Printing State
   const [printingRma, setPrintingRma] = useState<RmaReturn | null>(null);
@@ -431,14 +630,14 @@ export default function RmaManager({
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50/50 p-6 overflow-y-auto">
       
       {/* Upper header with title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <RotateCcw className="w-7 h-7 text-indigo-600 animate-spin-slow" />
             Carrier & RMA Manager
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Zarządzanie zwrotami kurierskimi i kontrola jakościowa zwracanego stocku (WMS RMA Registry)
+            Zarządzanie zwrotami kurierskimi, klasyfikacja jakościowa (Grade Triage 5A) oraz weryfikacja autentyczności plomb i numerów seryjnych (Anti-Fraud 5B).
           </p>
         </div>
         
@@ -451,18 +650,63 @@ export default function RmaManager({
         </button>
       </div>
 
-      {/* Statistics dashboard */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        
-        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <RotateCcw className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wszystkie zgłoszenia</p>
-            <p className="text-xl font-black text-slate-900 mt-0.5">{stats.total}</p>
-          </div>
-        </div>
+      {/* Upper Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-3 mb-6 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveSection('rma_list')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
+            activeSection === 'rma_list'
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          Rejestr Zwrotów & Skaner RMA
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('grade_triage')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
+            activeSection === 'grade_triage'
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          5A. Drzewo Triage (Grade A/B/C/D)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('anti_fraud')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
+            activeSection === 'anti_fraud'
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <Lock className="w-4 h-4" />
+          5B. Weryfikator Anty-Fraud (Numery Seryjne & Plomby)
+        </button>
+      </div>
+
+      {/* RMA STANDARD LIST SECTION */}
+      {activeSection === 'rma_list' && (
+        <>
+          {/* Statistics dashboard */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wszystkie zgłoszenia</p>
+                <p className="text-xl font-black text-slate-900 mt-0.5">{stats.total}</p>
+              </div>
+            </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -832,6 +1076,377 @@ export default function RmaManager({
           );
         })()}
       </div>
+      </>
+      )}
+
+      {/* 5A: DECISION TREE VISUAL GRADING TRIAGE */}
+      {activeSection === 'grade_triage' && (
+        <div className="space-y-6 animate-fadeIn font-sans mb-8">
+          {/* Top Triage Wizard Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-3xl border border-indigo-900/60 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-indigo-800/50 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Award className="w-6 h-6 text-indigo-400" />
+                  <h2 className="text-lg font-black uppercase tracking-wider text-white font-display">
+                    Drzewo Decyzyjne Klasyfikacji Wizualnej Zwrotu (Grade A/B/C/D Triage 5A)
+                  </h2>
+                </div>
+                <p className="text-xs text-indigo-200 mt-1 max-w-2xl">
+                  Wizualny algorytm kategoryzacji zwróconego towaru. Na podstawie 4 kryteriów fizycznych system automatycznie wyznacza strefę docelową (Regał główny / Outlet / Serwis / Złom) oraz procentową korektę ceny.
+                </p>
+              </div>
+
+              <div className="bg-black/50 border border-indigo-700/60 p-3 rounded-2xl flex items-center gap-3 font-mono">
+                <span className="text-[10px] text-indigo-300 block uppercase">Wyliczona Klasa:</span>
+                <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase ${computedGrade.badgeColor}`}>
+                  {computedGrade.grade}
+                </span>
+              </div>
+            </div>
+
+            {/* Interactive 4-Step Decision Wizard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+              {/* Step 1 */}
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-3">
+                <span className="font-mono text-[10px] text-indigo-300 font-bold uppercase block">Krok 1: Stan Opakowania</span>
+                <div className="space-y-1.5 font-medium">
+                  {[
+                    { id: 'INTACT', label: '✓ Oryginalne, nienaruszone' },
+                    { id: 'DAMAGED', label: '⚠️ Rozerwane / uszkodzone' },
+                    { id: 'MISSING', label: '✕ Brak opakowania fabrycznego' }
+                  ].map(opt => (
+                    <label key={opt.id} className="flex items-center gap-2 p-2 rounded-xl bg-black/30 hover:bg-black/50 cursor-pointer transition-colors">
+                      <input 
+                        type="radio" 
+                        name="triagePkg" 
+                        checked={triagePackage === opt.id} 
+                        onChange={() => setTriagePackage(opt.id as any)} 
+                        className="accent-indigo-500" 
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-3">
+                <span className="font-mono text-[10px] text-indigo-300 font-bold uppercase block">Krok 2: Stan Fizyczny Towaru</span>
+                <div className="space-y-1.5 font-medium">
+                  {[
+                    { id: 'PERFECT', label: '✓ Idealny, brak śladów użycia' },
+                    { id: 'SCRATCHED', label: '⚠️ Mikro-ryski / drobne otarcia' },
+                    { id: 'HEAVY_USE', label: '⚡ Widoczne ślady eksploatacji' },
+                    { id: 'BROKEN', label: '✕ Pęknięcia / uszkodzenie mechaniczne' }
+                  ].map(opt => (
+                    <label key={opt.id} className="flex items-center gap-2 p-2 rounded-xl bg-black/30 hover:bg-black/50 cursor-pointer transition-colors">
+                      <input 
+                        type="radio" 
+                        name="triagePhys" 
+                        checked={triagePhysical === opt.id} 
+                        onChange={() => setTriagePhysical(opt.id as any)} 
+                        className="accent-indigo-500" 
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-3">
+                <span className="font-mono text-[10px] text-indigo-300 font-bold uppercase block">Krok 3: Kompletność Akcesoriów</span>
+                <div className="space-y-1.5 font-medium">
+                  {[
+                    { id: 'FULL', label: '✓ 100% komplet (kable, instrukcja)' },
+                    { id: 'MISSING_MINOR', label: '⚠️ Brak woreczka / instrukcji' },
+                    { id: 'MISSING_CRITICAL', label: '✕ Brak zasilacza / modułu głównego' }
+                  ].map(opt => (
+                    <label key={opt.id} className="flex items-center gap-2 p-2 rounded-xl bg-black/30 hover:bg-black/50 cursor-pointer transition-colors">
+                      <input 
+                        type="radio" 
+                        name="triageAcc" 
+                        checked={triageAccessories === opt.id} 
+                        onChange={() => setTriageAccessories(opt.id as any)} 
+                        className="accent-indigo-500" 
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl space-y-3">
+                <span className="font-mono text-[10px] text-indigo-300 font-bold uppercase block">Krok 4: Test Działania</span>
+                <div className="space-y-1.5 font-medium">
+                  {[
+                    { id: 'WORKING', label: '✓ W 100% sprawny technicznie' },
+                    { id: 'DEFECTIVE', label: '✕ Niesprawny / nie włącza się' }
+                  ].map(opt => (
+                    <label key={opt.id} className="flex items-center gap-2 p-2 rounded-xl bg-black/30 hover:bg-black/50 cursor-pointer transition-colors">
+                      <input 
+                        type="radio" 
+                        name="triageFunc" 
+                        checked={triageFunction === opt.id} 
+                        onChange={() => setTriageFunction(opt.id as any)} 
+                        className="accent-indigo-500" 
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Decision Summary Banner & Save */}
+            <div className="p-4 bg-indigo-950/80 border border-indigo-600/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1 text-xs">
+                <div className="text-indigo-200">
+                  <span className="text-white font-bold">Zalecana dyspozycja:</span> {computedGrade.action}
+                </div>
+                <div className="text-slate-300 font-mono text-[11px]">
+                  Strefa docelowa: <strong className="text-amber-300">{computedGrade.destination}</strong> | Wycena: <strong className="text-emerald-300">{computedGrade.discount}</strong>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <select
+                  value={triageSku}
+                  onChange={(e) => setTriageSku(e.target.value)}
+                  className="p-2 bg-slate-900 border border-indigo-700 rounded-xl text-xs text-white font-mono outline-none"
+                >
+                  {products.map(p => (
+                    <option key={p.sku} value={p.sku}>{p.sku} - {p.name}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleSaveTriageResult}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg cursor-pointer transition-all border-none flex items-center gap-2 active:scale-95 shrink-0"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Zatwierdź Wynik Triage
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Triage History Table */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-4 h-4 text-indigo-600" />
+              Historia Przeprowadzonych Klasyfikacji Triage ({triageHistory.length})
+            </h3>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-sans border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase text-[10px]">
+                    <th className="p-3">ID Triage</th>
+                    <th className="p-3">RMA / SKU</th>
+                    <th className="p-3">Wyliczona Klasa</th>
+                    <th className="p-3">Ocena Wizualna</th>
+                    <th className="p-3">Strefa Docelowa WMS</th>
+                    <th className="p-3">Modyfikator Ceny</th>
+                    <th className="p-3">Inspektor & Data</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {triageHistory.map((trg) => (
+                    <tr key={trg.id} className="hover:bg-slate-50/60">
+                      <td className="p-3 font-mono font-bold text-indigo-600">{trg.id}</td>
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900">{trg.name}</div>
+                        <div className="text-[10px] font-mono text-slate-400">{trg.sku} ({trg.rmaId})</div>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                          trg.grade.startsWith('Grade A') ? 'bg-emerald-100 text-emerald-800' :
+                          trg.grade.startsWith('Grade B') ? 'bg-blue-100 text-blue-800' :
+                          trg.grade.startsWith('Grade C') ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {trg.grade}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-600 text-[11px] max-w-xs">{trg.condition}</td>
+                      <td className="p-3 font-mono font-bold text-slate-800 text-[11px]">{trg.destination}</td>
+                      <td className="p-3 font-mono font-bold text-indigo-700">{trg.priceModifier}</td>
+                      <td className="p-3 text-[11px]">
+                        <div className="text-slate-800 font-bold">{trg.inspector}</div>
+                        <div className="text-slate-400">{trg.date}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5B: ANTI-FRAUD SERIAL & SEAL VERIFIER */}
+      {activeSection === 'anti_fraud' && (
+        <div className="space-y-6 animate-fadeIn font-sans mb-8">
+          <div className="bg-gradient-to-r from-slate-950 via-red-950 to-slate-950 text-white p-6 rounded-3xl border border-red-900/60 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-red-900/50 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Fingerprint className="w-6 h-6 text-red-400 animate-pulse" />
+                  <h2 className="text-lg font-black uppercase tracking-wider text-white font-display">
+                    Weryfikator Anty-Fraud: Numery Seryjne & Plomby (Option 5B)
+                  </h2>
+                </div>
+                <p className="text-xs text-red-200 mt-1 max-w-2xl">
+                  Automatyczna ochrona przed oszustwami typu <em>Switching Fraud</em> (podmiana nowego towaru na stary lub uszkodzony) oraz weryfikacja nienaruszalności plomb gwarancyjnych producenta.
+                </p>
+              </div>
+
+              <div className="bg-black/60 border border-red-800/60 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-xs font-mono">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-red-300">Weryfikator Aktywny: 100% SKU Elektroniki</span>
+              </div>
+            </div>
+
+            {/* Interactive Verifier Form */}
+            <form onSubmit={handleVerifyAntiFraud} className="bg-white/5 border border-white/10 p-5 rounded-2xl space-y-4">
+              <h3 className="font-bold text-xs uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                <Search className="w-4 h-4 text-red-400" />
+                Sprawdź Zwrócony Egzemplarz przed Zwrotem Środków
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">ID Zgłoszenia RMA:</label>
+                  <input
+                    type="text"
+                    value={fraudRmaId}
+                    onChange={(e) => setFraudRmaId(e.target.value)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white font-mono text-xs"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Wysłany SN (z Bazy WMS):</label>
+                  <input
+                    type="text"
+                    value={fraudExpectedSn}
+                    onChange={(e) => setFraudExpectedSn(e.target.value)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-emerald-400 font-mono text-xs font-bold"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Zeskanuj Zwrócony SN:</label>
+                  <input
+                    type="text"
+                    placeholder="Wpisz lub zeskanuj SN..."
+                    value={fraudScannedSn}
+                    onChange={(e) => setFraudScannedSn(e.target.value)}
+                    className="w-full p-2.5 bg-black/60 border border-red-500 rounded-xl text-white font-mono text-xs font-bold outline-none focus:ring-2 focus:ring-red-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Stan Plomby Gwarancyjnej:</label>
+                  <select
+                    value={fraudSeal}
+                    onChange={(e) => setFraudSeal(e.target.value as any)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white text-xs font-sans"
+                  >
+                    <option value="INTACT">✓ Plomba Nienaruszona</option>
+                    <option value="BROKEN">⚠️ Plomba Zerwana / Naruszona</option>
+                    <option value="MISSING">✕ Brak Plomby / Ślady Odklejenia</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-red-700 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg cursor-pointer transition-all border-none flex items-center gap-2"
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  Weryfikuj Zgodność SN & Plomby
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Anti-Fraud Audit Table */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <Lock className="w-4 h-4 text-red-600" />
+              Rejestr Inspekcji Anty-Fraud Zwróconego Sprzętu ({fraudRecords.length})
+            </h3>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-sans border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase text-[10px]">
+                    <th className="p-3">ID Kontroli</th>
+                    <th className="p-3">RMA & Produkt</th>
+                    <th className="p-3 font-mono">Wysłany SN</th>
+                    <th className="p-3 font-mono">Zwrócony SN</th>
+                    <th className="p-3">Plomba</th>
+                    <th className="p-3">Wynik Anty-Fraud</th>
+                    <th className="p-3">Status Zwrotu Środków</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {fraudRecords.map((rec) => (
+                    <tr key={rec.id} className="hover:bg-slate-50/60 font-mono">
+                      <td className="p-3 font-bold text-red-700">{rec.id}</td>
+                      <td className="p-3 font-sans">
+                        <div className="font-bold text-slate-900">{rec.name}</div>
+                        <div className="text-[10px] text-slate-400">{rec.rmaId} — Klient: {rec.customer}</div>
+                      </td>
+                      <td className="p-3 text-emerald-700 font-bold">{rec.outboundSerial}</td>
+                      <td className={`p-3 font-bold ${rec.result === 'FRAUD_MISMATCH' ? 'text-red-600 bg-red-50 rounded' : 'text-slate-800'}`}>
+                        {rec.returnedSerial}
+                      </td>
+                      <td className="p-3 font-sans">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          rec.sealStatus === 'INTACT' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                        }`}>
+                          {rec.sealStatus === 'INTACT' ? 'Nienaruszona' : 'Zerwana/Brak'}
+                        </span>
+                      </td>
+                      <td className="p-3 font-sans">
+                        {rec.result === 'MATCH_GENUINE' ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-[11px]">
+                            <CheckCircle className="w-3.5 h-3.5" /> 100% Zgodny
+                          </span>
+                        ) : rec.result === 'FRAUD_MISMATCH' ? (
+                          <span className="inline-flex items-center gap-1 text-rose-700 font-black text-[11px] bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                            <AlertTriangle className="w-3.5 h-3.5" /> PODMIANA SPRZĘTU!
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-amber-700 font-bold text-[11px]">
+                            <AlertCircle className="w-3.5 h-3.5" /> Naruszona Plomba
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 font-sans">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                          rec.status.includes('Zatwierdzono') ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 font-black'
+                        }`}>
+                          {rec.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CREATE RMA RETURN MODAL */}
       {isCreateModalOpen && (

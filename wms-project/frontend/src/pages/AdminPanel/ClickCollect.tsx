@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Search, MapPin, CheckCircle2, User, Clock, Package, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Search, MapPin, CheckCircle2, User, Clock, Package, AlertTriangle, ShieldCheck, Key, Smartphone, Lock, RefreshCw, Send, Check } from 'lucide-react';
+import { sounds } from '../../components/SoundEffects';
 
 interface ClickCollectProps {
     orders: any[];
@@ -8,6 +9,16 @@ interface ClickCollectProps {
     logActivity: (message: string, type: string, details?: string) => void;
     addToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
+
+// 6-Character Alphanumeric Code Generator (A-Z, 2-9 without ambiguous chars)
+export const generate6CharBopisCode = (): string => {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+};
 
 export default function ClickCollect({
     orders,
@@ -19,6 +30,17 @@ export default function ClickCollect({
     const [pinInput, setPinInput] = useState('');
     const [searchedOrder, setSearchedOrder] = useState<any | null>(null);
     const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+    
+    // Locker Assignment & Generator State (Option 971)
+    const [selectedOrderForCode, setSelectedOrderForCode] = useState<string>('');
+    const [generatedCode, setGeneratedCode] = useState<string>('');
+    const [assignedLocker, setAssignedLocker] = useState<string>('Skrytka A1');
+    const [copiedCode, setCopiedCode] = useState(false);
+
+    // Active BOPIS orders ready for pickup
+    const pendingBopisOrders = useMemo(() => {
+        return orders.filter(o => o.isPickup && o.status !== 'Dostarczone');
+    }, [orders]);
 
     // Filter for orders picked up today via click and collect
     const todayPickups = useMemo(() => {
@@ -32,27 +54,56 @@ export default function ClickCollect({
         e.preventDefault();
         const cleanedPin = pinInput.trim().toUpperCase();
         if (!cleanedPin) {
-            addToast('Proszę wpisać kod PIN', 'warning');
+            addToast('Proszę wpisać 6-znakowy kod PIN (litery i cyfry)', 'warning');
             return;
         }
 
-        const found = orders.find(o => o.isPickup && o.pickupCode?.toUpperCase() === cleanedPin);
+        const found = orders.find(o => o.isPickup && (
+            o.pickupCode?.toUpperCase() === cleanedPin ||
+            o.id?.toUpperCase() === cleanedPin
+        ));
+
         if (found) {
+            sounds.playSuccess();
             setSearchedOrder(found);
-            // Reset item checklist
             const initialChecklist: Record<string, boolean> = {};
-            found.items.forEach((item: any) => {
+            (found.items || []).forEach((item: any) => {
                 initialChecklist[item.sku] = false;
             });
             setCheckedItems(initialChecklist);
-            addToast(`Znaleziono zamówienie: ${found.id}`, 'success');
+            addToast(`Znaleziono zamówienie: ${found.id} (Kod PIN: ${found.pickupCode || 'Brak'})`, 'success');
         } else {
+            sounds.playError();
             setSearchedOrder(null);
-            addToast('Nie znaleziono zamówienia o podanym kodzie PIN', 'error');
+            addToast(`Nie znaleziono zamówienia o kodzie "${cleanedPin}". Wymagany format: 6 znaków alfanumerycznych (np. W8K2M9)`, 'error');
+        }
+    };
+
+    const handleGenerateNewCode = () => {
+        if (!selectedOrderForCode) {
+            addToast('Wybierz zamówienie z listy oczekujących', 'warning');
+            return;
+        }
+        sounds.playBeep();
+        const newCode = generate6CharBopisCode();
+        setGeneratedCode(newCode);
+
+        const targetOrder = orders.find(o => o.id === selectedOrderForCode);
+        if (targetOrder) {
+            const updated = {
+                ...targetOrder,
+                pickupCode: newCode,
+                lockerBox: assignedLocker,
+                status: 'Gotowe do odbioru'
+            };
+            onUpdateOrder(updated);
+            logActivity(`Wygenerowano 6-znakowy kod BOPIS ${newCode} dla ${targetOrder.id} (${assignedLocker})`, 'info');
+            addToast(`Wygenerowano kod ${newCode} i przypisano do ${assignedLocker}!`, 'success');
         }
     };
 
     const toggleItemCheck = (sku: string) => {
+        sounds.playBeep();
         setCheckedItems(prev => ({
             ...prev,
             [sku]: !prev[sku]
@@ -260,8 +311,91 @@ export default function ClickCollect({
                     )}
                 </div>
 
-                {/* Right column: Recent BOPIS Pickups today */}
+                {/* Right column: 6-Char PIN Generator, Locker Grid & Recent Pickups */}
                 <div className="space-y-6">
+                    {/* GENERATOR KODÓW 6-ZNAKOWYCH BOPIS (OPTION 971) */}
+                    <div className="bg-gradient-to-br from-zinc-950 to-indigo-950/40 border border-indigo-900/40 p-5 shadow-xl space-y-4 font-mono">
+                        <div className="flex items-center justify-between border-b border-indigo-900/50 pb-2.5">
+                            <div className="flex items-center gap-2">
+                                <Key className="w-4 h-4 text-indigo-400" />
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-200">
+                                    Generator 6-znakowych PIN (Alfanumeryczny)
+                                </h3>
+                            </div>
+                            <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">
+                                6-CHAR A-Z / 2-9
+                            </span>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div>
+                                <label className="text-[10px] text-zinc-400 block mb-1">Wybierz Zamówienie BOPIS:</label>
+                                <select
+                                    value={selectedOrderForCode}
+                                    onChange={(e) => setSelectedOrderForCode(e.target.value)}
+                                    className="w-full bg-black border border-zinc-800 text-zinc-200 p-2 text-xs rounded outline-none focus:border-indigo-500"
+                                >
+                                    <option value="">-- Wybierz zlecenie do przypisania --</option>
+                                    {pendingBopisOrders.map(o => (
+                                        <option key={o.id} value={o.id}>
+                                            {o.id} • {o.customer} ({o.pickupCode ? `PIN: ${o.pickupCode}` : 'Brak PIN'})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] text-zinc-400 block mb-1">Przypisz Skrytkę / Punkt:</label>
+                                <select
+                                    value={assignedLocker}
+                                    onChange={(e) => setAssignedLocker(e.target.value)}
+                                    className="w-full bg-black border border-zinc-800 text-zinc-200 p-2 text-xs rounded outline-none focus:border-indigo-500"
+                                >
+                                    {['Skrytka A1', 'Skrytka A2', 'Skrytka B1', 'Skrytka B2', 'Skrytka C1', 'Skrytka C2', 'Skrytka D1', 'Skrytka D2'].map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleGenerateNewCode}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-4 text-xs rounded shadow transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Generuj 6-znakowy Kod BOPIS
+                            </button>
+
+                            {generatedCode && (
+                                <div className="p-3 bg-indigo-950/60 border border-indigo-700/50 rounded-lg space-y-1.5 animate-fadeIn">
+                                    <div className="text-[10px] text-indigo-300 font-bold">AKTYWNY KOD PIN DLA KLIENTA:</div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xl font-black tracking-widest text-emerald-400 bg-black/60 px-3 py-1 rounded border border-emerald-500/40">
+                                            {generatedCode}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(generatedCode);
+                                                setCopiedCode(true);
+                                                sounds.playSuccess();
+                                                setTimeout(() => setCopiedCode(false), 2000);
+                                            }}
+                                            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] rounded cursor-pointer transition-all border border-zinc-700 flex items-center gap-1"
+                                        >
+                                            {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Smartphone className="w-3 h-3" />}
+                                            {copiedCode ? 'Skopiowano!' : 'Kopiuj'}
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-zinc-400 mt-1">
+                                        📲 SMS: <em>"Twoja paczka czeka w HUB-PL-01 ({assignedLocker}). Kod odbioru: {generatedCode}"</em>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* RECENT PICKUPS */}
                     <div className="bg-zinc-950 border border-zinc-900 p-6 shadow-xl space-y-4">
                         <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
                             <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-300">
@@ -271,7 +405,7 @@ export default function ClickCollect({
                         </div>
 
                         {todayPickups.length > 0 ? (
-                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                            <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
                                 {todayPickups.map((o) => (
                                     <div key={o.id} className="p-3 bg-zinc-900/40 border border-zinc-900 hover:border-zinc-800 transition-colors font-mono space-y-2 text-left">
                                         <div className="flex items-center justify-between">
@@ -280,6 +414,7 @@ export default function ClickCollect({
                                         </div>
                                         <div className="text-[10px] text-zinc-400 space-y-1">
                                             <p><span className="text-zinc-600">Odbiorca:</span> {o.customer}</p>
+                                            <p><span className="text-zinc-600">PIN:</span> <strong className="text-zinc-300">{o.pickupCode || 'BOPIS'}</strong></p>
                                             <p><span className="text-zinc-600">Czas wydania:</span> {o.shipmentDate || 'Dzisiaj'}</p>
                                         </div>
                                     </div>
