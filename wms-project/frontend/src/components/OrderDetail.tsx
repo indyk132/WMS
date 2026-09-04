@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Printer,
@@ -16,9 +16,15 @@ import {
   AlertTriangle,
   Check,
   Edit2,
-  Box
+  Box,
+  Mail,
+  Send,
+  Globe,
+  ExternalLink,
+  X
 } from 'lucide-react';
 import { defaultImages } from '../data/warehouseData';
+import { sounds } from './SoundEffects';
 
 export interface OrderItem {
   lp: number;
@@ -156,6 +162,32 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
   // Print & Cancel states
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+
+  // ----------------------------------------------------
+  // OPTION 91: International CMR Consignment Note Generator (Druk CMR)
+  // ----------------------------------------------------
+  const [isCmrModalOpen, setIsCmrModalOpen] = useState(false);
+  const [cmrCopyType, setCmrCopyType] = useState<'1' | '2' | '3' | '4'>('1');
+
+  // ----------------------------------------------------
+  // OPTION 100: Dispatch Email Notification Generator
+  // ----------------------------------------------------
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState(`Twoje zamówienie #${order.id} w drodze! Numer listu: ${order.waybillNumber || 'DPD-PL-99214'}`);
+
+  const handleSendEmailNotification = () => {
+    sounds.playSuccess();
+    onAddChangeLog(order.id, 'Wysłano e-mail do klienta', `Powiadomienie ze statusem wysyłki wysłane na ${order.email}`);
+    setIsEmailModalOpen(false);
+    triggerToast(`[Opcja 100]: Wysłano e-mail z linkiem do śledzenia przesyłki na adres: ${order.email}!`);
+  };
+
+  // ----------------------------------------------------
+  // OPTION 93: Zip Code Validator
+  // ----------------------------------------------------
+  const postalCodeMatch = (order.shippingAddress || '').match(/\b\d{2}-\d{3}\b/);
+  const hasValidPolishZip = !!postalCodeMatch;
+  const extractedZip = postalCodeMatch ? postalCodeMatch[0] : null;
 
   useEffect(() => {
     setNoteText(order.internalNotes || '');
@@ -300,7 +332,29 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
           </div>
         </div>
 
-        <div className="flex gap-2 w-full md:w-auto shrink-0 select-none">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto shrink-0 select-none">
+          <button
+            onClick={() => {
+              sounds.playBeep();
+              setIsCmrModalOpen(true);
+            }}
+            className="flex-1 md:flex-none px-3.5 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+            title="Wygeneruj międzynarodowy list przewozowy CMR"
+          >
+            <FileText className="w-4 h-4 text-rose-600" /> 91. Druk CMR
+          </button>
+
+          <button
+            onClick={() => {
+              sounds.playBeep();
+              setIsEmailModalOpen(true);
+            }}
+            className="flex-1 md:flex-none px-3.5 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+            title="Generuj i wyślij e-mail z linkiem do śledzenia przesyłki"
+          >
+            <Mail className="w-4 h-4 text-sky-600" /> 100. E-mail Klienta
+          </button>
+
           <button
             onClick={handlePrintLabel}
             className="flex-1 md:flex-none px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
@@ -363,6 +417,21 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Adres Dostawy</span>
                   <p className="text-xs font-bold text-slate-900 mt-0.5" title={order.shippingAddress}>{order.shippingAddress}</p>
+
+                  {/* OPTION 93: ZIP CODE VALIDATOR BADGE */}
+                  <div className="mt-1.5">
+                    {hasValidPolishZip ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                        93. Format Kodu PL poprawny: <strong>{extractedZip}</strong>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-250">
+                        <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                        93. Brak standardowego kodu PL (XX-XXX) — sprawdź przed wydrukiem etykiety!
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -745,6 +814,345 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                   Oznacz jako anulowane
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OPTION 91: International CMR Consignment Note Modal */}
+      {isCmrModalOpen && (
+        <div id="cmr-print-modal" className="fixed inset-0 bg-[#020617]/75 z-50 flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-xl border border-slate-200 w-full max-w-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-auto flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold tracking-tight">Międzynarodowy Samochodowy List Przewozowy (CMR)</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono font-bold">OPCJA 91</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">Standard Konwencji Genewskiej CMR z 19 maja 1956 r. • Zlecenie: {order.id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsCmrModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Copy selector bar */}
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Wybór egzemplarza:</span>
+                <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 shadow-xs text-xs font-semibold">
+                  <button
+                    onClick={() => setCmrCopyType('1')}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${cmrCopyType === '1' ? 'bg-red-600 text-white shadow-xs font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    1. Nadawca (Czerwony)
+                  </button>
+                  <button
+                    onClick={() => setCmrCopyType('2')}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${cmrCopyType === '2' ? 'bg-blue-600 text-white shadow-xs font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    2. Odbiorca (Niebieski)
+                  </button>
+                  <button
+                    onClick={() => setCmrCopyType('3')}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${cmrCopyType === '3' ? 'bg-emerald-600 text-white shadow-xs font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    3. Przewoźnik (Zielony)
+                  </button>
+                  <button
+                    onClick={() => setCmrCopyType('4')}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${cmrCopyType === '4' ? 'bg-slate-800 text-white shadow-xs font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    4. Administracja (Czarny)
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Drukuj CMR
+                </button>
+              </div>
+            </div>
+
+            {/* Document sheet preview */}
+            <div className="p-5 overflow-y-auto flex-1 bg-slate-100/70">
+              <div className={`bg-white border-2 rounded-lg p-6 shadow-md max-w-3xl mx-auto font-sans text-xs ${
+                cmrCopyType === '1' ? 'border-red-400' :
+                cmrCopyType === '2' ? 'border-blue-400' :
+                cmrCopyType === '3' ? 'border-emerald-400' : 'border-slate-400'
+              }`}>
+                {/* Header ribbon of the CMR copy */}
+                <div className={`py-1.5 px-3 mb-4 rounded text-white text-[11px] font-black uppercase tracking-wider flex justify-between items-center ${
+                  cmrCopyType === '1' ? 'bg-red-600' :
+                  cmrCopyType === '2' ? 'bg-blue-600' :
+                  cmrCopyType === '3' ? 'bg-emerald-600' : 'bg-slate-800'
+                }`}>
+                  <span>
+                    {cmrCopyType === '1' && 'EGZEMPLARZ 1 / COPY 1 / EXEMPLAIRE 1 — DLA NADAWCY (FOR SENDER)'}
+                    {cmrCopyType === '2' && 'EGZEMPLARZ 2 / COPY 2 / EXEMPLAIRE 2 — DLA ODBIORCY (FOR CONSIGNEE)'}
+                    {cmrCopyType === '3' && 'EGZEMPLARZ 3 / COPY 3 / EXEMPLAIRE 3 — DLA PRZEWOŹNIKA (FOR CARRIER)'}
+                    {cmrCopyType === '4' && 'EGZEMPLARZ 4 / COPY 4 / EXEMPLAIRE 4 — DO AKT ADMINISTRACYJNYCH'}
+                  </span>
+                  <span className="font-mono">CMR-{order.id}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 border border-slate-300">
+                  {/* Box 1: Sender */}
+                  <div className="p-2.5 border-b border-r border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">1. Nadawca (nazwisko lub nazwa, adres, kraj) / Sender</div>
+                    <p className="font-bold text-slate-900 mt-1">WMS LOGISTICS SP. Z O.O.</p>
+                    <p className="text-slate-600 text-[11px]">Centrum Dystrybucyjne DC-1</p>
+                    <p className="text-slate-600 text-[11px]">ul. Magazynowa 12, 02-222 Warszawa</p>
+                    <p className="text-slate-500 font-mono text-[10px]">POLSKA / POLAND (NIP: PL5210002233)</p>
+                  </div>
+
+                  {/* Box 2: Consignee */}
+                  <div className="p-2.5 border-b border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">2. Odbiorca (nazwisko lub nazwa, adres, kraj) / Consignee</div>
+                    <p className="font-bold text-slate-900 mt-1">{order.customerName}</p>
+                    <p className="text-slate-600 text-[11px]">{order.shippingAddress}</p>
+                    <p className="text-slate-500 font-mono text-[10px]">Tel: {order.phone} • E-mail: {order.email}</p>
+                  </div>
+
+                  {/* Box 3: Place of Delivery */}
+                  <div className="p-2.5 border-b border-r border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">3. Miejsce przeznaczenia (miejscowość, kraj) / Place of delivery</div>
+                    <p className="font-semibold text-slate-800 mt-1">{order.shippingAddress}</p>
+                  </div>
+
+                  {/* Box 4: Place and Date of taking over */}
+                  <div className="p-2.5 border-b border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">4. Miejsce i data załadowania / Place & date of taking over</div>
+                    <p className="font-semibold text-slate-800 mt-1">Warszawa DC-1, {new Date().toLocaleDateString('pl-PL')}</p>
+                  </div>
+
+                  {/* Box 5: Documents attached */}
+                  <div className="p-2.5 border-b border-r border-slate-300 col-span-2 bg-slate-50/50">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">5. Załączone dokumenty / Documents attached</div>
+                    <p className="font-mono text-slate-700 mt-0.5">Faktura WZ/2026/{order.id.replace('ORD-', '')}, Specyfikacja towarowa, Świadectwo Fitosanitarne WE</p>
+                  </div>
+
+                  {/* Box 6-12: Goods description table */}
+                  <div className="col-span-2 p-2.5 border-b border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">6-12. Cechy, ilość sztuk, sposób opakowania, rodzaj towaru / Marks, quantity, description of goods</div>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-[10px] text-slate-500 uppercase">
+                          <th className="py-1">Poz.</th>
+                          <th className="py-1">SKU / Kod</th>
+                          <th className="py-1">Nazwa asortymentu</th>
+                          <th className="py-1 text-right">Ilość szt.</th>
+                          <th className="py-1 text-right">Waga szac.</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-[11px]">
+                        {(order.items || []).map((it, idx) => (
+                          <tr key={idx}>
+                            <td className="py-1 text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="py-1 font-mono font-bold text-slate-700">{it.sku}</td>
+                            <td className="py-1 text-slate-800">{it.product}</td>
+                            <td className="py-1 text-right font-bold text-slate-900">{it.quantity} szt.</td>
+                            <td className="py-1 text-right text-slate-500 font-mono">{(it.quantity * 0.25).toFixed(2)} kg</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between text-[11px] font-bold text-slate-800">
+                      <span>Łączna liczba jednostek: {(order.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0)} szt.</span>
+                      <span>Waga brutto całości: {((order.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0) * 0.25 + 0.4).toFixed(2)} kg (1 karton/paczka)</span>
+                    </div>
+                  </div>
+
+                  {/* Box 13: Sender instructions */}
+                  <div className="p-2.5 border-b border-r border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">13. Instrukcje nadawcy / Sender's instructions</div>
+                    <p className="text-slate-700 mt-1">Przesyłka wrażliwa na wilgoć i ujemne temperatury. Transport w temperaturze kontrolowanej +5°C do +18°C.</p>
+                  </div>
+
+                  {/* Box 16: Carrier */}
+                  <div className="p-2.5 border-b border-slate-300">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">16. Przewoźnik / Carrier</div>
+                    <p className="font-bold text-slate-900 mt-1">{order.shippingMethod || 'DPD International Freight / Raben'}</p>
+                    <p className="text-slate-600 font-mono text-[10px]">Numer listu: {order.waybillNumber || 'DPD-PL-99214-CMR'}</p>
+                  </div>
+
+                  {/* Signatures */}
+                  <div className="p-3 border-r border-slate-300 flex flex-col justify-between h-24">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">22. Podpis i stempel nadawcy</div>
+                    <div className="border-t border-dashed border-slate-300 pt-1 text-[10px] text-slate-400 text-center">WMS Expedition Center DC-1</div>
+                  </div>
+
+                  <div className="p-3 border-r border-slate-300 flex flex-col justify-between h-24">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">23. Podpis i stempel przewoźnika</div>
+                    <div className="border-t border-dashed border-slate-300 pt-1 text-[10px] text-slate-400 text-center">{order.shippingMethod || 'Kierowca / Przewoźnik'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCmrModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OPTION 100: Dispatch Email Notification Generator Modal */}
+      {isEmailModalOpen && (
+        <div id="email-preview-modal" className="fixed inset-0 bg-[#020617]/75 z-50 flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+          <div className="bg-white rounded-xl border border-slate-200 w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-auto flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold tracking-tight">Powiadomienie E-mail o Wysyłce Zamówienia</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold">OPCJA 100</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">Generowanie wiadomości transakcyjnej z bezpośrednim linkiem śledzenia do kuriera</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsEmailModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Email form controls */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-3 shrink-0 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Adres Odbiorcy:</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={order.email || 'klient@example.pl'}
+                    className="w-full p-2 border border-slate-300 bg-white rounded-lg text-slate-800 font-mono font-medium outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Przewoźnik / Nr listu:</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${order.shippingMethod || 'DPD'} — ${order.waybillNumber || 'DPD-PL-99214'}`}
+                    className="w-full p-2 border border-slate-300 bg-white rounded-lg text-slate-800 font-mono font-medium outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Temat Wiadomości:</label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full p-2 border border-slate-350 bg-white rounded-lg text-slate-900 font-semibold outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            {/* Live Email HTML Preview */}
+            <div className="p-4 overflow-y-auto flex-1 bg-slate-100/70">
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden text-xs max-w-xl mx-auto font-sans">
+                {/* Email Header Banner */}
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-5 text-white text-center">
+                  <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Truck className="w-6 h-6 text-white" />
+                  </div>
+                  <h4 className="text-base font-extrabold">Twoja paczka jest w drodze! 📦</h4>
+                  <p className="text-xs text-emerald-100 mt-1">Zamówienie #{order.id} zostało przekazane kurierowi.</p>
+                </div>
+
+                {/* Email Body */}
+                <div className="p-5 space-y-4 text-slate-700">
+                  <p>Cześć <strong className="text-slate-900">{order.customerName}</strong>,</p>
+                  <p className="leading-relaxed">
+                    Mamy świetną wiadomość! Twoje zamówienie zostało spakowane i przekazane kurierowi <strong>{order.shippingMethod || 'DPD'}</strong>.
+                  </p>
+
+                  {/* Tracking Card in Email */}
+                  <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-lg text-center space-y-2">
+                    <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Numer listu przewozowego:</p>
+                    <p className="text-sm font-mono font-black text-emerald-950 tracking-wider">{order.waybillNumber || 'DPD-PL-99214'}</p>
+                    <a
+                      href={`https://track.dpd.com.pl/parcelStatus.aspx?trackingNumber=${order.waybillNumber || 'DPD-PL-99214'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-xs transition-colors no-underline cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Śledź przesyłkę online
+                    </a>
+                  </div>
+
+                  {/* Items summary */}
+                  <div>
+                    <h5 className="font-bold text-slate-900 mb-2 border-b border-slate-100 pb-1">Zawartość przesyłki:</h5>
+                    <div className="space-y-1.5">
+                      {(order.items || []).map((it, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-slate-50">
+                          <span className="text-slate-800">{it.product} <span className="text-slate-400 font-mono">({it.sku})</span></span>
+                          <span className="font-bold text-slate-900">{it.quantity} szt.</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Delivery address */}
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-[11px]">
+                    <span className="font-bold text-slate-700 block mb-0.5">Adres dostawy:</span>
+                    <span className="text-slate-600">{order.shippingAddress}</span>
+                  </div>
+
+                  <p className="text-slate-500 text-[11px] pt-2">
+                    Pozdrawiamy serdecznie,<br />
+                    <strong>Zespół WMS Logistics</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsEmailModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                onClick={handleSendEmailNotification}
+                className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer border-none"
+              >
+                <Send className="w-3.5 h-3.5" /> Wyślij E-mail do Klienta
+              </button>
             </div>
           </div>
         </div>

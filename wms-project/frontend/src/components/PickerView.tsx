@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Barcode, Play, CheckCircle2, MapPin, 
   Check, Timer, Target, AlertTriangle, XCircle, Volume2, ShieldAlert,
-  Layers, ShoppingCart
+  Layers, ShoppingCart, AlertCircle, Lock, Ban, AlertOctagon
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
 import { defaultImages } from '../data/warehouseData';
@@ -141,6 +141,65 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     }
     return () => clearInterval(interval);
   }, [selectedOrderId, isBatchMode]);
+
+  // ----------------------------------------------------
+  // OPTION 13: Instant Stock Shortage Reporting (1-Click Shortage Flag)
+  // ----------------------------------------------------
+  const [shortageItems, setShortageItems] = useState<Record<string, boolean>>({});
+
+  const handleReportShortage = (sku: string, productName: string, locationCode: string) => {
+    sounds.playError();
+    const itemKey = `${selectedOrderId}-${sku}`;
+    setShortageItems(prev => ({ ...prev, [itemKey]: true }));
+
+    // Save incident to local storage for replenishment / audit log
+    try {
+      const existing = JSON.parse(localStorage.getItem('wms-stock-shortages') || '[]');
+      const incident = {
+        id: `SHORT-${Date.now()}`,
+        orderId: selectedOrderId,
+        sku,
+        productName,
+        locationCode,
+        reportedBy: workerName,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('wms-stock-shortages', JSON.stringify([incident, ...existing]));
+    } catch (e) {
+      console.error(e);
+    }
+
+    showFeedback('error', `[Opcja 13]: Zgłoszono brak SKU ${sku} w gnieździe ${locationCode}. Wygenerowano alert dla Uzupełniania Stanów. Możesz kontynuować zbiórkę!`);
+  };
+
+  // ----------------------------------------------------
+  // OPTION 86: Concurrency Lock - Prevent Inventory Count During Active Picking
+  // ----------------------------------------------------
+  useEffect(() => {
+    if (selectedOrderId && selectedOrder) {
+      const productMap = new Map((products || []).map(p => [p.sku, p]));
+      const activeLocations = (selectedOrder.items || []).map((i: any) => {
+        const prod = productMap.get(i.sku);
+        return prod?.locationCode || i.zone;
+      }).filter(Boolean);
+      const activeSkus = (selectedOrder.items || []).map((i: any) => i.sku);
+
+      const lockPayload = {
+        orderId: selectedOrderId,
+        worker: workerName,
+        skus: activeSkus,
+        locations: activeLocations,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('wms-active-pick-locks', JSON.stringify(lockPayload));
+    } else {
+      localStorage.removeItem('wms-active-pick-locks');
+    }
+
+    return () => {
+      localStorage.removeItem('wms-active-pick-locks');
+    };
+  }, [selectedOrderId, selectedOrder, workerName, products]);
 
   useEffect(() => {
     if (isBinModalOpen) {
@@ -524,13 +583,21 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
         };
       });
 
+      const shortedSkus = (selectedOrder.items || [])
+        .filter((i: any) => shortageItems[`${selectedOrderId}-${i.sku}`])
+        .map((i: any) => `${i.sku} (${i.product || i.name})`);
+
+      const shortageNote = shortedSkus.length > 0 
+        ? `\n[ALERT BRAK W GNIEŹDZIE 13]: Zgłoszono brak fizyczny dla: ${shortedSkus.join(', ')}.`
+        : '';
+
       onUpdateOrder(selectedOrderId, {
         status: 'Oczekuje na pakowanie',
         binId: cleanBin,
         pickedBy: workerName,
         pickCompletedTime: currentTime,
         items: updatedItems,
-        internalNotes: `${selectedOrder.internalNotes || ''}\n[PICKER]: Kompletacja zakończona przez ${workerName}. Pojemnik: ${cleanBin}. Czas: ${Math.floor(secondsElapsed / 60)}m ${secondsElapsed % 60}s.`,
+        internalNotes: `${selectedOrder.internalNotes || ''}\n[PICKER]: Kompletacja zakończona przez ${workerName}. Pojemnik: ${cleanBin}. Czas: ${Math.floor(secondsElapsed / 60)}m ${secondsElapsed % 60}s.${shortageNote}`,
         internalNotesActor: workerName
       });
     }
@@ -1118,11 +1185,31 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                               {isFood ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-250 text-amber-850 text-[10px] font-mono font-bold uppercase rounded-lg shadow-inner select-none animate-pulse">
                                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                  Wymagany lot FIFO: <strong className="text-zinc-950 font-black ml-0.5">{lotInfo.fifoLot}</strong> <span className="text-zinc-400">|</span> Ważność: {lotInfo.fifoExp}
+                                   Wymagany lot FIFO: <strong className="text-zinc-950 font-black ml-0.5">{lotInfo.fifoLot}</strong> <span className="text-zinc-400">|</span> Ważność: {lotInfo.fifoExp}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 border border-zinc-200 text-zinc-500 text-[10px] font-mono font-bold uppercase rounded-lg">
                                   Partia: <strong className="text-zinc-800 font-bold ml-0.5">{lotInfo.fifoLot}</strong>
+                                </span>
+                              )}
+
+                              {/* Option 13: Instant Shortage Action Button */}
+                              {!isDone && !shortageItems[key] && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReportShortage(item.sku, item.product || item.name, displayLocation)}
+                                  className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-bold rounded-lg cursor-pointer transition-colors shadow-2xs"
+                                  title="Towaru fizycznie brak w gnieździe? Kliknij, aby zgłosić i kontynuować trasę"
+                                >
+                                  <AlertOctagon className="w-3 h-3 text-rose-600 shrink-0" />
+                                  13. Zgłoś brak w gnieździe
+                                </button>
+                              )}
+
+                              {shortageItems[key] && (
+                                <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 bg-rose-100 border border-rose-300 text-rose-800 text-[10px] font-bold rounded-lg animate-pulse">
+                                  <AlertTriangle className="w-3 h-3 text-rose-700 shrink-0" />
+                                  Zgłoszono brak (Pominięto w zbiórce)
                                 </span>
                               )}
                             </div>
@@ -1192,7 +1279,13 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                       return sum + (pickedItems[key] || 0);
                     }, 0);
                     const percent = totalTarget > 0 ? Math.round((totalPicked / totalTarget) * 100) : 0;
-                    const allDone = percent === 100;
+                    const hasShortages = (selectedOrder?.items || []).some((i: any) => shortageItems[`${selectedOrder?.id}-${i.sku}`]);
+                    const allDone = (selectedOrder?.items || []).every((i: any) => {
+                      const key = `${selectedOrder?.id}-${i.sku}`;
+                      const picked = pickedItems[key] || 0;
+                      const target = i.quantity || i.qty || 0;
+                      return picked >= target || shortageItems[key];
+                    });
 
                     return (
                       <>
@@ -1206,6 +1299,13 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                             style={{ width: `${percent}%` }}
                           />
                         </div>
+
+                        {hasShortages && (
+                          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-[10px] text-rose-800 font-medium flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>Zgłoszono braki w gnieździe. Zlecenie zostanie przekazane do pakowania z adnotacją o brakach.</span>
+                          </div>
+                        )}
 
                         <div className="pt-4">
                           <button

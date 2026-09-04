@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   RotateCcw, Plus, Search, X, CheckCircle, AlertCircle, 
   Filter, FileText, Calendar, Printer, ShieldAlert, ArrowLeftRight, Check, Trash2, Package, Sparkles,
-  Award, ShieldCheck, AlertTriangle, Tag, Sliders, HelpCircle, CheckSquare, Ban, Eye, Fingerprint, Lock
+  Award, ShieldCheck, AlertTriangle, Tag, Sliders, HelpCircle, CheckSquare, Ban, Eye, Fingerprint, Lock,
+  Boxes, Wrench, Layers, RefreshCw, ScanLine, ArrowRight
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { sounds } from '../../components/SoundEffects';
@@ -49,8 +50,8 @@ export default function RmaManager({
   onCreateRmaReturn,
   onReceiveRmaReturn
 }: RmaManagerProps) {
-  // Navigation Sections: RMA standard list vs 5A Grade Triage vs 5B Anti-Fraud Verifier
-  const [activeSection, setActiveSection] = useState<'rma_list' | 'grade_triage' | 'anti_fraud'>('rma_list');
+  // Navigation Sections: RMA standard list vs 5A Grade Triage vs 5B Anti-Fraud Verifier vs 47 Damaged Repack
+  const [activeSection, setActiveSection] = useState<'rma_list' | 'grade_triage' | 'anti_fraud' | 'damaged_repack'>('damaged_repack');
 
   // Lists
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,8 +256,145 @@ export default function RmaManager({
     setFraudRecords([newRecord, ...fraudRecords]);
     setFraudScannedSn('');
   };
-  
-  // Printing State
+
+  // ----------------------------------------------------
+  // OPTION 47: Damaged Packaging Ledger & Repack Dispatcher State
+  // ----------------------------------------------------
+  const [repackQueue, setRepackQueue] = useState([
+    {
+      id: 'REPACK-2026-041',
+      sku: 'SKU-002',
+      productName: 'Tarcze hamulcowe 280mm',
+      qty: 6,
+      sourceZone: 'Rampa DOK-02 (Przyjęcie towaru)',
+      damageType: 'TORN_BOX' as const,
+      damageDescription: 'Pudełko fabryczne rozdarte widłami wózka, tarcze w 100% całe i naoliwione',
+      replacementPkg: 'Karton Wzmocniony K-03 (Heavy Duty)',
+      relabelRequired: true,
+      priority: 'HIGH' as const,
+      status: 'PENDING_REPACK' as 'PENDING_REPACK' | 'IN_REPACK' | 'COMPLETED_RESTOCKED',
+      assignedStation: 'Stół P-01 (Heavy)',
+      createdAt: '2026-09-04 14:10',
+      targetLocation: 'Regał A-01-2',
+      savedValuePln: 960,
+      inspectedBy: 'Marta N. (Kontrola Jakości)'
+    },
+    {
+      id: 'REPACK-2026-042',
+      sku: 'SKU-004',
+      productName: 'Filtr oleju silnikowego',
+      qty: 12,
+      sourceZone: 'Alejka B-02 (Gniazdo 2)',
+      damageType: 'CRUSHED_BLISTER' as const,
+      damageDescription: 'Zgnieciony kartonik jednostkowy podczas pobierania ze stosu paletowego',
+      replacementPkg: 'Kartonik Uniwersalny B-01',
+      relabelRequired: true,
+      priority: 'NORMAL' as const,
+      status: 'IN_REPACK' as 'PENDING_REPACK' | 'IN_REPACK' | 'COMPLETED_RESTOCKED',
+      assignedStation: 'Stół P-02',
+      createdAt: '2026-09-04 15:30',
+      targetLocation: 'Regał B-02-1',
+      savedValuePln: 540,
+      inspectedBy: 'Piotr W. (Magazynier)'
+    },
+    {
+      id: 'REPACK-2026-043',
+      sku: 'SKU-001',
+      productName: 'Klocki hamulcowe przód (A1)',
+      qty: 8,
+      sourceZone: 'Zwrot kurierski RMA-ORD-10492',
+      damageType: 'UNREADABLE_BARCODE' as const,
+      damageDescription: 'Etykieta EAN zalana płynem, skaner nie odczytuje kodu kreskowego',
+      replacementPkg: 'Pudełko neutralne + nowa etykieta EAN-13',
+      relabelRequired: true,
+      priority: 'NORMAL' as const,
+      status: 'COMPLETED_RESTOCKED' as 'PENDING_REPACK' | 'IN_REPACK' | 'COMPLETED_RESTOCKED',
+      assignedStation: 'Stół P-02',
+      createdAt: '2026-09-04 11:20',
+      completedAt: '2026-09-04 12:05',
+      targetLocation: 'Regał A-01-1',
+      savedValuePln: 720,
+      inspectedBy: 'Marta N. (Kontrola Jakości)'
+    },
+    {
+      id: 'REPACK-2026-044',
+      sku: 'SKU-006',
+      productName: 'Pasek rozrządu wzmocniony',
+      qty: 4,
+      sourceZone: 'Rampa DOK-01',
+      damageType: 'WATER_DAMAGE' as const,
+      damageDescription: 'Zalanie kartonu podczas deszczu przy wyładunku, pasek suchy w zgrzewce',
+      replacementPkg: 'Torebka zgrzewana z zawieszką',
+      relabelRequired: true,
+      priority: 'HIGH' as const,
+      status: 'PENDING_REPACK' as 'PENDING_REPACK' | 'IN_REPACK' | 'COMPLETED_RESTOCKED',
+      assignedStation: 'Stół P-02',
+      createdAt: '2026-09-04 16:05',
+      targetLocation: 'Regał A-02-3',
+      savedValuePln: 880,
+      inspectedBy: 'Tomasz K. (Brygadzista)'
+    }
+  ]);
+
+  // Form states for creating a new repack ticket
+  const [repackNewSku, setRepackNewSku] = useState('SKU-003');
+  const [repackNewQty, setRepackNewQty] = useState(5);
+  const [repackNewSource, setRepackNewSource] = useState('Rampa DOK-02 (Przyjęcie towaru)');
+  const [repackNewDamageType, setRepackNewDamageType] = useState<'TORN_BOX' | 'WATER_DAMAGE' | 'CRUSHED_BLISTER' | 'UNREADABLE_BARCODE' | 'LOOSE_MULTIPACK'>('TORN_BOX');
+  const [repackNewDesc, setRepackNewDesc] = useState('Rozerwany kartonik transportowy');
+  const [repackNewReplacement, setRepackNewReplacement] = useState('Kartonik Uniwersalny B-01');
+  const [repackNewPriority, setRepackNewPriority] = useState<'HIGH' | 'NORMAL'>('NORMAL');
+  const [repackNewTargetRack, setRepackNewTargetRack] = useState('Regał A-01-3');
+  const [repackFilter, setRepackFilter] = useState<'ALL' | 'PENDING' | 'IN_REPACK' | 'COMPLETED'>('ALL');
+  const [printedRepackLabels, setPrintedRepackLabels] = useState<Record<string, boolean>>({});
+
+  const handleCreateRepackTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    sounds.playSuccess();
+
+    const prod = products.find(p => p.sku === repackNewSku) || { name: 'Towar magazynowy' };
+    const unitPrice = 85;
+    const newTask = {
+      id: `REPACK-2026-${Math.floor(100 + Math.random() * 900)}`,
+      sku: repackNewSku,
+      productName: prod.name,
+      qty: repackNewQty,
+      sourceZone: repackNewSource,
+      damageType: repackNewDamageType,
+      damageDescription: repackNewDesc,
+      replacementPkg: repackNewReplacement,
+      relabelRequired: true,
+      priority: repackNewPriority,
+      status: 'PENDING_REPACK' as const,
+      assignedStation: 'Stół P-02 (Repack)',
+      createdAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      targetLocation: repackNewTargetRack,
+      savedValuePln: repackNewQty * unitPrice,
+      inspectedBy: 'Operator Przyjęć / Magazynier'
+    };
+
+    setRepackQueue([newTask, ...repackQueue]);
+    setRepackNewDesc('');
+  };
+
+  const handleStartRepackTask = (taskId: string) => {
+    sounds.playBeep();
+    setRepackQueue(prev => prev.map(t => t.id === taskId ? { ...t, status: 'IN_REPACK' as const } : t));
+  };
+
+  const handlePrintRepackLabel = (taskId: string) => {
+    sounds.playSuccess();
+    setPrintedRepackLabels(prev => ({ ...prev, [taskId]: true }));
+  };
+
+  const handleCompleteRepackTask = (taskId: string) => {
+    sounds.playVictoryChime();
+    setRepackQueue(prev => prev.map(t => t.id === taskId ? { 
+      ...t, 
+      status: 'COMPLETED_RESTOCKED' as const,
+      completedAt: new Date().toISOString().slice(0, 16).replace('T', ' ')
+    } : t));
+  };
   const [printingRma, setPrintingRma] = useState<RmaReturn | null>(null);
 
   // Verification details
@@ -688,7 +826,20 @@ export default function RmaManager({
           }`}
         >
           <Lock className="w-4 h-4" />
-          5B. Weryfikator Anty-Fraud (Numery Seryjne & Plomby)
+          5B. Weryfikator Anty-Fraud
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('damaged_repack')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
+            activeSection === 'damaged_repack'
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
+          }`}
+        >
+          <Boxes className="w-4 h-4" />
+          47. Uszkodzenia Opakowań & Przepakowywanie
         </button>
       </div>
 
@@ -1441,6 +1592,366 @@ export default function RmaManager({
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 47: DAMAGED PACKAGING LEDGER & REPACK STATION DISPATCHER */}
+      {activeSection === 'damaged_repack' && (
+        <div className="space-y-6 animate-fadeIn font-sans mb-8">
+          {/* Top Banner with KPIs */}
+          <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 text-white p-6 rounded-3xl border border-sky-900/60 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-sky-800/50 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Boxes className="w-6 h-6 text-sky-400" />
+                  <h2 className="text-lg font-black uppercase tracking-wider text-white font-display">
+                    Ewidencja Uszkodzeń Opakowań Fabrycznych & Strefa Przepakowywania (Opcja 47)
+                  </h2>
+                </div>
+                <p className="text-xs text-sky-200 mt-1 max-w-2xl">
+                  Rejestracja uszkodzeń pudełek fabrycznych z dostaw, magazynu i zwrotów. Automatyczny przydział opakowań zastępczych, generowanie nowych etykiet EAN-13 i przywracanie sprawnego towaru do wolnej sprzedaży.
+                </p>
+              </div>
+
+              <div className="bg-black/50 border border-sky-700/60 px-4 py-2.5 rounded-2xl flex items-center gap-3 font-mono text-xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 block uppercase">Uratowana Wartość Zapasu:</span>
+                  <strong className="text-emerald-400 font-bold text-sm">
+                    {repackQueue.reduce((acc, t) => acc + t.savedValuePln, 0).toLocaleString('pl-PL')} PLN
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Repack Station Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+              <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl">
+                <span className="text-[10px] text-sky-300 block uppercase">W kolejce (Do naprawy)</span>
+                <strong className="text-xl font-bold text-amber-300 mt-1 block">
+                  {repackQueue.filter(t => t.status === 'PENDING_REPACK').length} zlecenia
+                </strong>
+                <span className="text-[10px] text-slate-400">
+                  {repackQueue.filter(t => t.status === 'PENDING_REPACK').reduce((a, b) => a + b.qty, 0)} szt. towaru
+                </span>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl">
+                <span className="text-[10px] text-sky-300 block uppercase">W trakcie przepakowania</span>
+                <strong className="text-xl font-bold text-sky-400 mt-1 block">
+                  {repackQueue.filter(t => t.status === 'IN_REPACK').length} w toku
+                </strong>
+                <span className="text-[10px] text-slate-400">Stanowiska P-01 / P-02</span>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl">
+                <span className="text-[10px] text-sky-300 block uppercase">Przywrócono na regał</span>
+                <strong className="text-xl font-bold text-emerald-400 mt-1 block">
+                  {repackQueue.filter(t => t.status === 'COMPLETED_RESTOCKED').length} ukończono
+                </strong>
+                <span className="text-[10px] text-slate-400">100% zdatne do wysyłki</span>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 p-3.5 rounded-2xl">
+                <span className="text-[10px] text-sky-300 block uppercase">Średni czas operacji</span>
+                <strong className="text-xl font-bold text-indigo-300 mt-1 block">14.5 min</strong>
+                <span className="text-[10px] text-slate-400">Cel SLA: &lt; 30 min</span>
+              </div>
+            </div>
+
+            {/* Quick Dispatcher Form */}
+            <form onSubmit={handleCreateRepackTask} className="bg-white/5 border border-white/10 p-5 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <h3 className="font-bold text-xs uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-sky-400" />
+                  Zgłoś Uszkodzenie Opakowania i Skieruj do Przepakowania
+                </h3>
+                <span className="text-[10px] text-sky-300 font-mono">Automatyczny routing: Stół P-02</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-sans">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Wybierz SKU Produktu:</label>
+                  <select
+                    value={repackNewSku}
+                    onChange={(e) => setRepackNewSku(e.target.value)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white font-mono text-xs outline-none focus:border-sky-500"
+                  >
+                    {products.map(p => (
+                      <option key={p.sku} value={p.sku}>{p.sku} — {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Liczba Uszkodzonych Pudełek:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={repackNewQty}
+                    onChange={(e) => setRepackNewQty(Math.max(1, Number(e.target.value)))}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white font-mono text-xs"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Typ Uszkodzenia Opakowania:</label>
+                  <select
+                    value={repackNewDamageType}
+                    onChange={(e) => setRepackNewDamageType(e.target.value as any)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white text-xs outline-none focus:border-sky-500"
+                  >
+                    <option value="TORN_BOX">📦 Rozerwany / pęknięty karton</option>
+                    <option value="CRUSHED_BLISTER">💥 Zgnieciony blister / pudełko</option>
+                    <option value="WATER_DAMAGE">💧 Zalanie / zawilgocenie kartonu</option>
+                    <option value="UNREADABLE_BARCODE">🏷️ Zniszczony kod EAN-13 (Nieczytelny)</option>
+                    <option value="LOOSE_MULTIPACK">🔗 Rozsypane opakowanie zbiorcze</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Opakowanie Zastępcze:</label>
+                  <select
+                    value={repackNewReplacement}
+                    onChange={(e) => setRepackNewReplacement(e.target.value)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white text-xs outline-none focus:border-sky-500"
+                  >
+                    <option value="Kartonik Uniwersalny B-01">Kartonik Uniwersalny B-01 (15x10x10 cm)</option>
+                    <option value="Karton Wzmocniony K-03 (Heavy Duty)">Karton Wzmocniony K-03 (Heavy Duty)</option>
+                    <option value="Torebka zgrzewana z zawieszką">Torebka zgrzewana z zawieszką</option>
+                    <option value="Pudełko neutralne + nowa etykieta EAN-13">Pudełko neutralne + nowa etykieta EAN-13</option>
+                  </select>
+                </div>
+
+                <div className="lg:col-span-2">
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Szczegółowy Opis Uszkodzenia Opakowania:</label>
+                  <input
+                    type="text"
+                    placeholder="np. Narożnik kartonu wgnieciony podczas odkładania widłakiem..."
+                    value={repackNewDesc}
+                    onChange={(e) => setRepackNewDesc(e.target.value)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white text-xs outline-none focus:border-sky-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Strefa Źródłowa:</label>
+                  <input
+                    type="text"
+                    value={repackNewSource}
+                    onChange={(e) => setRepackNewSource(e.target.value)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white text-xs"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">Priorytet Zlecenia:</label>
+                  <select
+                    value={repackNewPriority}
+                    onChange={(e) => setRepackNewPriority(e.target.value as any)}
+                    className="w-full p-2.5 bg-black/40 border border-slate-700 rounded-xl text-white text-xs font-mono"
+                  >
+                    <option value="NORMAL">STANDARD (Kolejka zwykła)</option>
+                    <option value="HIGH">⚠️ PILNE (Towar potrzebny do zamówień)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg cursor-pointer transition-all border-none flex items-center gap-2 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  Utwórz Zlecenie Przepakowania (P-02)
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Repack Tasks Queue Table */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-sky-600" />
+                  Kolejka Zleceń Przepakowywania ({repackQueue.length})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Stanowisko Repack Stół P-01/P-02: wymiana kartoników, wydruk etykiet zastępczych i zatwierdzenie powrotu na regał.
+                </p>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                {[
+                  { id: 'ALL', label: 'Wszystkie' },
+                  { id: 'PENDING', label: 'Oczekujące' },
+                  { id: 'IN_REPACK', label: 'W trakcie' },
+                  { id: 'COMPLETED', label: 'Na regale' }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setRepackFilter(f.id as any)}
+                    className={`px-3 py-1.5 rounded-lg transition-all border-none cursor-pointer ${
+                      repackFilter === f.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-sans border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase text-[10px]">
+                    <th className="p-3">ID / Priorytet</th>
+                    <th className="p-3">Towar & SKU</th>
+                    <th className="p-3">Typ Uszkodzenia</th>
+                    <th className="p-3">Opakowanie Zastępcze</th>
+                    <th className="p-3">Lokalizacja & Wycena</th>
+                    <th className="p-3">Status Zlecenia</th>
+                    <th className="p-3 text-right">Akcje Repack</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {repackQueue
+                    .filter(t => {
+                      if (repackFilter === 'PENDING') return t.status === 'PENDING_REPACK';
+                      if (repackFilter === 'IN_REPACK') return t.status === 'IN_REPACK';
+                      if (repackFilter === 'COMPLETED') return t.status === 'COMPLETED_RESTOCKED';
+                      return true;
+                    })
+                    .map((task) => (
+                      <tr key={task.id} className="hover:bg-slate-50/60">
+                        <td className="p-3 font-mono">
+                          <span className="font-bold text-sky-700 block">{task.id}</span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                            task.priority === 'HIGH' ? 'bg-rose-100 text-rose-700 animate-pulse' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {task.priority === 'HIGH' ? '⚠️ Pilny' : 'Standard'}
+                          </span>
+                        </td>
+
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900">{task.productName}</div>
+                          <div className="text-[10px] font-mono text-slate-400">
+                            SKU: {task.sku} | Ilość: <strong className="text-slate-800 font-bold">{task.qty} szt.</strong>
+                          </div>
+                        </td>
+
+                        <td className="p-3">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
+                            {task.damageType === 'TORN_BOX' && '📦 Rozerwany karton'}
+                            {task.damageType === 'CRUSHED_BLISTER' && '💥 Zgnieciony blister'}
+                            {task.damageType === 'WATER_DAMAGE' && '💧 Zalanie / wilgoć'}
+                            {task.damageType === 'UNREADABLE_BARCODE' && '🏷️ Zniszczony kod EAN'}
+                            {task.damageType === 'LOOSE_MULTIPACK' && '🔗 Rozsypany multipack'}
+                          </span>
+                          <div className="text-[10px] text-slate-500 max-w-xs truncate" title={task.damageDescription}>
+                            {task.damageDescription}
+                          </div>
+                        </td>
+
+                        <td className="p-3 font-mono text-slate-700 text-[11px]">
+                          <div className="font-bold text-sky-900">{task.replacementPkg}</div>
+                          {task.relabelRequired && (
+                            <span className="text-[9px] text-indigo-600 font-bold flex items-center gap-1 mt-0.5">
+                              <ScanLine className="w-3 h-3" /> Wymóg druku EAN-13
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3">
+                          <div className="text-[11px] text-slate-700">
+                            Źródło: <span className="font-medium text-slate-500">{task.sourceZone}</span>
+                          </div>
+                          <div className="text-[10px] font-mono font-bold text-emerald-700">
+                            Odzysk: {task.savedValuePln} PLN &rarr; {task.targetLocation}
+                          </div>
+                        </td>
+
+                        <td className="p-3 font-sans">
+                          {task.status === 'PENDING_REPACK' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              Oczekuje na stół
+                            </span>
+                          )}
+                          {task.status === 'IN_REPACK' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                              <RefreshCw className="w-3 h-3 animate-spin text-sky-600" />
+                              W trakcie pakowania ({task.assignedStation})
+                            </span>
+                          )}
+                          {task.status === 'COMPLETED_RESTOCKED' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              Przepakowano &bull; Na regale
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {task.status === 'PENDING_REPACK' && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartRepackTask(task.id)}
+                                className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer border-none shadow-sm flex items-center gap-1"
+                              >
+                                <Wrench className="w-3.5 h-3.5" />
+                                Podejmij
+                              </button>
+                            )}
+
+                            {task.status === 'IN_REPACK' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintRepackLabel(task.id)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1 ${
+                                    printedRepackLabels[task.id] 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                                  }`}
+                                  title="Drukuj nową etykietę EAN-13"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  {printedRepackLabels[task.id] ? 'Etykieta OK' : 'Drukuj EAN'}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCompleteRepackTask(task.id)}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer border-none shadow-sm flex items-center gap-1 active:scale-95"
+                                >
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  Na regał
+                                </button>
+                              </>
+                            )}
+
+                            {task.status === 'COMPLETED_RESTOCKED' && (
+                              <span className="text-[10px] text-slate-400 font-mono italic">
+                                Ukończono: {task.completedAt?.slice(11) || 'Dziś'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

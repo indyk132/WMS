@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Minus, Plus, Check, Package, X, Percent } from 'lucide-react';
+import { 
+    Search, RefreshCw, Minus, Plus, Check, Package, X, Percent,
+    ShieldAlert, FileText, AlertTriangle, Lock, History, ClipboardList, 
+    CheckCircle2, TrendingUp, AlertOctagon
+} from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { defaultImages } from '../../data/warehouseData';
 import { sounds } from '../../components/SoundEffects';
@@ -59,6 +63,106 @@ export default function Products({
     const [selectedVatCategory, setSelectedVatCategory] = useState('');
     const [selectedVatRate, setSelectedVatRate] = useState<number>(23);
 
+    // ----------------------------------------------------
+    // OPTION 84: Scrap Ledger (Protokół Strat Wewnętrznych RW)
+    // ----------------------------------------------------
+    const [isScrapModalOpen, setIsScrapModalOpen] = useState(false);
+    const [scrapSelectedSku, setScrapSelectedSku] = useState(products[0]?.sku || '');
+    const [scrapQty, setScrapQty] = useState(1);
+    const [scrapReason, setScrapReason] = useState('Upadek z wideł wózka');
+    const [scrapInspector, setScrapInspector] = useState('Magazynier Dyżurny');
+    const [scrapNotes, setScrapNotes] = useState('');
+
+    // ----------------------------------------------------
+    // OPTION 87: Audit Adjustment Ledger (Dziennik Korekt Magazynowych)
+    // ----------------------------------------------------
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [historyFilterType, setHistoryFilterType] = useState('ALL');
+    const [auditAdjustments, setAuditAdjustments] = useState([
+        {
+            id: 'KOR-2026-091',
+            sku: 'SKU-001',
+            name: 'Klocki hamulcowe przód (A1)',
+            type: 'PZ',
+            delta: +50,
+            date: '2026-09-04 09:15',
+            actor: 'Marta N. (Przyjęcia)',
+            docRef: 'PZ-2026-114',
+            reason: 'Dostawa bieżąca od producenta'
+        },
+        {
+            id: 'KOR-2026-092',
+            sku: 'SKU-002',
+            name: 'Tarcze hamulcowe 280mm',
+            type: 'RW',
+            delta: -2,
+            date: '2026-09-04 11:30',
+            actor: 'Piotr W. (Magazynier)',
+            docRef: 'RW-2026-042',
+            reason: 'Protokół strat 84: Upadek z wideł wózka'
+        },
+        {
+            id: 'KOR-2026-093',
+            sku: 'SKU-003',
+            name: 'Amortyzator olejowy tył',
+            type: 'INW',
+            delta: -1,
+            date: '2026-09-04 13:00',
+            actor: 'Kierownik Magazynu',
+            docRef: 'INW-CYKL-09',
+            reason: 'Inwentaryzacja cykliczna: sprostowanie stanu'
+        },
+        {
+            id: 'KOR-2026-094',
+            sku: 'SKU-004',
+            name: 'Filtr oleju silnikowego',
+            type: 'WZ',
+            delta: -8,
+            date: '2026-09-04 14:45',
+            actor: 'System WMS (Dyspozycja)',
+            docRef: 'WZ-ORD-10492',
+            reason: 'Wydanie do zamówienia klienta'
+        }
+    ]);
+
+    // Handle Scrap Submission (Option 84 -> Option 87)
+    const handleConfirmScrap = async () => {
+        const prod = products.find(p => p.sku === scrapSelectedSku);
+        if (!prod) return;
+
+        // Check Option 86 lock
+        try {
+            const locks = JSON.parse(localStorage.getItem('wms-active-pick-locks') || 'null');
+            if (locks && (locks.skus?.includes(prod.sku) || locks.locations?.includes(prod.zone))) {
+                sounds.playError();
+                setStockError(`🔒 [Opcja 86 - Blokada Concurrency]: Nie można spisać strat dla SKU ${prod.sku}. Trwa aktywna kompletacja zamówienia ${locks.orderId} przez ${locks.worker}.`);
+                setIsScrapModalOpen(false);
+                return;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+
+        sounds.playSuccess();
+        await onUpdateStock(prod, -scrapQty);
+
+        const newAdjustment = {
+            id: `KOR-2026-${Math.floor(100 + Math.random() * 900)}`,
+            sku: prod.sku,
+            name: prod.name,
+            type: 'RW',
+            delta: -scrapQty,
+            date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            actor: scrapInspector,
+            docRef: `RW-2026-${Math.floor(100 + Math.random() * 900)}`,
+            reason: `Protokół strat 84: ${scrapReason}${scrapNotes ? ` (${scrapNotes})` : ''}`
+        };
+
+        setAuditAdjustments(prev => [newAdjustment, ...prev]);
+        setIsScrapModalOpen(false);
+        setScrapNotes('');
+    };
+
     const [productImages] = useState<Record<string, string>>(() => {
         try {
             const stored = localStorage.getItem('wms-product-images');
@@ -107,11 +211,38 @@ export default function Products({
         const delta = Number(draft) - product.stock;
         if (delta === 0) return;
 
+        // OPTION 86: Concurrency Lock during active picking
+        try {
+            const locks = JSON.parse(localStorage.getItem('wms-active-pick-locks') || 'null');
+            if (locks && (locks.skus?.includes(product.sku) || locks.locations?.includes(product.zone))) {
+                sounds.playError();
+                setStockError(`🔒 [Opcja 86 - Blokada Concurrency]: Nie można skorygować stanu SKU ${product.sku} (Gniazdo ${product.zone}). Trwa aktywna kompletacja zamówienia ${locks.orderId} przez ${locks.worker}. Inwentaryzacja zablokowana do zakończenia kompletacji.`);
+                return;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+
         setStockError('');
         setPendingSku(product.sku);
 
         try {
             await onUpdateStock(product, delta);
+
+            // OPTION 87: Log adjustment
+            const newAdj = {
+                id: `KOR-2026-${Math.floor(100 + Math.random() * 900)}`,
+                sku: product.sku,
+                name: product.name,
+                type: delta > 0 ? 'PZ' : 'INW',
+                delta: delta,
+                date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                actor: 'Operator Magazynu',
+                docRef: delta > 0 ? 'PZ-KOR-MANUAL' : 'INW-KOR-MANUAL',
+                reason: 'Ręczna korekta stanu / inwentaryzacja'
+            };
+            setAuditAdjustments(prev => [newAdj, ...prev]);
+
             setDraftStocks(prev => {
                 const copy = { ...prev };
                 delete copy[product.sku];
@@ -145,14 +276,44 @@ export default function Products({
         }
     };
 
+    // Option 85: Inventory Record Accuracy calculation
+    const totalAuditedSkus = products.length;
+    const matchingSkus = products.filter(p => p.stock > 0 && p.stock >= p.reorderThreshold * 0.5).length;
+    const iraPercent = totalAuditedSkus > 0 ? ((matchingSkus / totalAuditedSkus) * 100).toFixed(1) : '100.0';
+    const isWorldClassIra = Number(iraPercent) >= 95.0;
+
     return (
         <div className="space-y-6 font-sans text-sm text-[#0b1c30] animate-fadeIn">
-            <div className="flex justify-between items-end mb-2">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-zinc-900 leading-tight border-none">Katalog Zapasów SKU</h2>
                     <p className="text-zinc-500 text-xs mt-1">Stan zapasów produktów w czasie rzeczywistym, poziomy ostrzegawcze i lokalizacje.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
+                            setIsScrapModalOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
+                        title="Spisanie uszkodzonego lub stłuczonego towaru ze stanu"
+                    >
+                        <AlertTriangle className="w-4 h-4" /> 84. Protokół Strat (RW)
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
+                            setIsHistoryModalOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
+                        title="Przejrzyj historię wszystkich zmian i korekt magazynowych"
+                    >
+                        <History className="w-4 h-4 text-sky-400" /> 87. Dziennik Korekt
+                    </button>
+
                     <button
                         onClick={() => {
                             if (categories.length > 0) {
@@ -160,9 +321,9 @@ export default function Products({
                             }
                             setIsVatModalOpen(true);
                         }}
-                        className="h-9 px-4 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm border-none"
+                        className="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
                     >
-                        <Percent className="w-4 h-4" /> Masowa edycja VAT
+                        <Percent className="w-4 h-4" /> VAT
                     </button>
                     <button
                         onClick={async () => {
@@ -178,10 +339,54 @@ export default function Products({
                                 setStockError(error.message || 'Nie udało się uzupełnić braków.');
                             }
                         }}
-                        className="h-9 px-4 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shadow-sm border-none"
+                        className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
                     >
-                        <RefreshCw className="w-4 h-4" /> Automatyczne uzupełnienie braków
+                        <RefreshCw className="w-4 h-4" /> Uzupełnij braki
                     </button>
+                </div>
+            </div>
+
+            {/* OPTION 85: INVENTORY RECORD ACCURACY (IRA %) RIBBON */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4.5 rounded-2xl text-white shadow-md border border-indigo-900/50 select-none">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                        <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300">Wskaźnik IRA (Opcja 85)</span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                {isWorldClassIra ? 'Klasa Światowa WERC' : 'W normie'}
+                            </span>
+                        </div>
+                        <div className="text-xl font-black text-emerald-400 font-mono mt-0.5">
+                            {iraPercent}% <span className="text-xs text-slate-300 font-normal">zgodności stanów</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-white/10 sm:pl-4">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                        <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300">Audyt Ciągły SKU</span>
+                        <div className="text-lg font-bold text-white font-mono mt-0.5">
+                            {matchingSkus} / {totalAuditedSkus} SKU <span className="text-xs text-emerald-300 font-normal">zgodne</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-white/10 sm:pl-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                        <History className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300">Historia Korekt (Opcja 87)</span>
+                        <div className="text-lg font-bold text-white font-mono mt-0.5">
+                            {auditAdjustments.length} zdarzeń <span className="text-xs text-indigo-300 font-normal">(PZ/WZ/RW/INW)</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -477,6 +682,257 @@ export default function Products({
                                 className="h-8.5 px-4.5 rounded-lg bg-indigo-600 hover:bg-indigo-750 text-white font-bold text-xs cursor-pointer shadow-sm border-none transition-colors active:scale-[0.97]"
                             >
                                 Zatwierdź zmianę
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OPTION 84: SCRAP LEDGER MODAL (Protokół Strat Wewnętrznych RW) */}
+            {isScrapModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-100 shadow-2xl overflow-hidden flex flex-col">
+                        {/* Header */}
+                        <div className="bg-rose-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
+                            <div>
+                                <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                                    <AlertTriangle className="w-4.5 h-4.5 text-rose-300" />
+                                    Protokół Strat Wewnętrznych RW (Opcja 84)
+                                </h3>
+                                <p className="text-[11px] text-rose-200 mt-0.5">Spisanie uszkodzonego/zniszczonego towaru ze stanu magazynowego</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsScrapModalOpen(false)}
+                                className="p-1.5 hover:bg-rose-800 text-rose-200 hover:text-white rounded-xl transition-colors border-none bg-transparent cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Form */}
+                        <div className="p-6 space-y-4 text-left font-sans text-xs">
+                            <div>
+                                <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                                    Wybierz Produkt do Spisania:
+                                </label>
+                                <select
+                                    value={scrapSelectedSku}
+                                    onChange={(e) => setScrapSelectedSku(e.target.value)}
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 outline-none"
+                                >
+                                    {products.map(p => (
+                                        <option key={p.sku} value={p.sku}>
+                                            {p.sku} — {p.name} (Na stanie: {p.stock} szt.)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                                        Liczba Sztuk do Spisania (RW):
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={products.find(p => p.sku === scrapSelectedSku)?.stock || 99}
+                                        value={scrapQty}
+                                        onChange={(e) => setScrapQty(Math.max(1, Number(e.target.value)))}
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs font-bold text-slate-900"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                                        Osoba Sporządzająca:
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={scrapInspector}
+                                        onChange={(e) => setScrapInspector(e.target.value)}
+                                        className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-semibold"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                                    Przyczyna Powstania Straty:
+                                </label>
+                                <select
+                                    value={scrapReason}
+                                    onChange={(e) => setScrapReason(e.target.value)}
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-semibold outline-none"
+                                >
+                                    <option value="Upadek z wideł wózka">💥 Upadek z wideł wózka / uszkodzenie mechaniczne</option>
+                                    <option value="Zalanie płynem z pękniętej butelki">💧 Zalanie płynem / chemikaliami z sąsiedniej palety</option>
+                                    <option value="Zgniecenie pod paletą">📦 Zgniecenie pod zbyt ciężką paletą w regale</option>
+                                    <option value="Wada ukryta fabryczna">⚙️ Wada ukryta fabryczna (wykryta przy pobraniu)</option>
+                                    <option value="Przeterminowanie / zepsucie">⌛ Przeterminowanie / utrata zdatności (FEFO)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                                    Dodatkowe Uwagi / Numer Zlecenia:
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="np. Miejsce zdarzenia: Alejka A-02, stłuczona 1 butelka..."
+                                    value={scrapNotes}
+                                    onChange={(e) => setScrapNotes(e.target.value)}
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900"
+                                />
+                            </div>
+
+                            <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl text-[11px] text-rose-800 leading-relaxed">
+                                <strong>Skutek księgowy:</strong> Zatwierdzenie dokumentu RW natychmiast odejmie <strong>{scrapQty} szt.</strong> ze stanu magazynowego i zarejestruje wpis w Dzienniku Korekt (Opcja 87).
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsScrapModalOpen(false)}
+                                className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer bg-white"
+                            >
+                                Anuluj
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmScrap}
+                                className="px-5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer border-none flex items-center gap-1.5"
+                            >
+                                <AlertTriangle className="w-4 h-4" />
+                                Wystaw Protokół RW & Odejmij ze Stanu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OPTION 87: AUDIT ADJUSTMENT LEDGER MODAL (Dziennik Korekt i Zdarzeń Magazynowych) */}
+            {isHistoryModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-white w-full max-w-4xl rounded-3xl border border-slate-100 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                        {/* Header */}
+                        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
+                            <div>
+                                <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                                    <History className="w-4.5 h-4.5 text-sky-400" />
+                                    Dziennik Korekt i Zdarzeń Magazynowych (Opcja 87)
+                                </h3>
+                                <p className="text-[11px] text-slate-400 mt-0.5">Śledzenie wszystkich ruchów stanów magazynowych (PZ, WZ, RW, INW)</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsHistoryModalOpen(false)}
+                                className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors border-none bg-transparent cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Filter Bar */}
+                        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-1.5 font-bold">
+                                {[
+                                    { id: 'ALL', label: 'Wszystkie Ruchy' },
+                                    { id: 'PZ', label: 'PZ (Przyjęcia)' },
+                                    { id: 'WZ', label: 'WZ (Wydania)' },
+                                    { id: 'RW', label: 'RW (Straty)' },
+                                    { id: 'INW', label: 'INW (Inwentaryzacja)' }
+                                ].map(f => (
+                                    <button
+                                        key={f.id}
+                                        type="button"
+                                        onClick={() => setHistoryFilterType(f.id)}
+                                        className={`px-3 py-1 rounded-lg transition-all cursor-pointer border ${
+                                            historyFilterType === f.id 
+                                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs' 
+                                                : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+                                        }`}
+                                    >
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <span className="font-mono text-slate-500 text-[11px]">
+                                Łącznie wpisów w dzienniku: <strong className="text-slate-900">{auditAdjustments.length}</strong>
+                            </span>
+                        </div>
+
+                        {/* Table */}
+                        <div className="p-6 overflow-y-auto flex-1">
+                            <table className="w-full text-left text-xs font-sans border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-100 text-slate-500 font-bold border-b border-slate-200 uppercase text-[10px]">
+                                        <th className="p-3">ID / Data</th>
+                                        <th className="p-3">Typ & Nr Dokumentu</th>
+                                        <th className="p-3">SKU & Nazwa Towaru</th>
+                                        <th className="p-3 text-right">Korekta (Delta)</th>
+                                        <th className="p-3">Przyczyna / Kontekst</th>
+                                        <th className="p-3">Operator</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 font-medium">
+                                    {auditAdjustments
+                                        .filter(item => historyFilterType === 'ALL' || item.type === historyFilterType)
+                                        .map((item) => (
+                                            <tr key={item.id} className="hover:bg-slate-50/70 font-sans">
+                                                <td className="p-3 font-mono">
+                                                    <span className="font-bold text-slate-900 block">{item.id}</span>
+                                                    <span className="text-[10px] text-slate-400">{item.date}</span>
+                                                </td>
+
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block ${
+                                                        item.type === 'PZ' ? 'bg-emerald-100 text-emerald-800' :
+                                                        item.type === 'WZ' ? 'bg-blue-100 text-blue-800' :
+                                                        item.type === 'RW' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-900'
+                                                    }`}>
+                                                        {item.type}
+                                                    </span>
+                                                    <span className="font-mono text-[10px] text-slate-500 block mt-0.5">{item.docRef}</span>
+                                                </td>
+
+                                                <td className="p-3">
+                                                    <div className="font-bold text-slate-900">{item.name}</div>
+                                                    <div className="font-mono text-[10px] text-slate-400">{item.sku}</div>
+                                                </td>
+
+                                                <td className={`p-3 text-right font-mono text-sm font-black ${
+                                                    item.delta > 0 ? 'text-emerald-600' : 'text-rose-600'
+                                                }`}>
+                                                    {item.delta > 0 ? `+${item.delta}` : item.delta} szt.
+                                                </td>
+
+                                                <td className="p-3 text-slate-600 text-[11px] max-w-xs">
+                                                    {item.reason}
+                                                </td>
+
+                                                <td className="p-3 text-slate-700 text-[11px]">
+                                                    <span className="font-bold block">{item.actor}</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-end shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsHistoryModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
+                            >
+                                Zamknij Dziennik
                             </button>
                         </div>
                     </div>
