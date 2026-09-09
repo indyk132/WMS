@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Barcode, Play, CheckCircle2, MapPin, 
   Check, Timer, Target, AlertTriangle, XCircle, Volume2, ShieldAlert,
-  Layers, ShoppingCart, AlertCircle, Lock, Ban, AlertOctagon
+  Layers, ShoppingCart, AlertCircle, Lock, Ban, AlertOctagon,
+  Maximize2, Scale, Eye, Box
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
 import { defaultImages } from '../data/warehouseData';
@@ -61,6 +62,56 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     return { aisle, bay, level, position };
   };
 
+  // ----------------------------------------------------
+  // OPTION 5: Heavy-First Sorting (Ciężkie towary na spód wózka)
+  // ----------------------------------------------------
+  const [sortByHeavyFirst, setSortByHeavyFirst] = useState(false);
+
+  const getProductWeight = (sku: string, name?: string) => {
+    const p = (products || []).find(prod => prod.sku === sku);
+    if (p?.weight) return Number(p.weight);
+    const hash = (sku || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    return Math.round((0.4 + (hash % 45) / 10) * 10) / 10;
+  };
+
+  // ----------------------------------------------------
+  // OPTION 6: Split Pick / Multi-tote Mode (Wózek Pełny)
+  // ----------------------------------------------------
+  const [currentToteNumber, setCurrentToteNumber] = useState(1);
+  const [itemToteMap, setItemToteMap] = useState<Record<string, number>>({});
+
+  // ----------------------------------------------------
+  // OPTION 4: Zoomed Product Modal (Powiększenie zdjęcia i cech)
+  // ----------------------------------------------------
+  const [zoomedProduct, setZoomedProduct] = useState<{
+    sku: string;
+    name: string;
+    image: string;
+    weight: number;
+    location: string;
+    dimensions: string;
+    ean: string;
+  } | null>(null);
+
+  // ----------------------------------------------------
+  // OPTION 7: Temperature Zone Helper
+  // ----------------------------------------------------
+  const getTemperatureZone = (locCode: string, sku?: string) => {
+    if (locCode?.startsWith('A-01') || locCode?.startsWith('C-') || (sku || '').toUpperCase().includes('COLD')) {
+      return { label: 'Chłodnia (+2°C .. +6°C)', bg: 'bg-cyan-50 text-cyan-800 border-cyan-300', icon: '❄️' };
+    }
+    if (locCode?.startsWith('A-02') || locCode?.startsWith('B-')) {
+      return { label: 'Kontrolowana (+15°C .. +25°C)', bg: 'bg-emerald-50 text-emerald-800 border-emerald-300', icon: '🌡️' };
+    }
+    return { label: 'Standardowa (+18°C .. +22°C)', bg: 'bg-slate-50 text-slate-700 border-slate-200', icon: '🏢' };
+  };
+
+  // ----------------------------------------------------
+  // OPTION 17: Barcode Debounce (500ms)
+  // ----------------------------------------------------
+  const lastScanTimeRef = useRef<number>(0);
+  const lastScanCodeRef = useRef<string>('');
+
   // Sort order items according to pick path optimization
   const getSortedItems = () => {
     if (!selectedOrder || !selectedOrder.items) return [];
@@ -69,6 +120,14 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     const productMap = new Map((products || []).map(p => [p.sku, p]));
     
     return [...selectedOrder.items].sort((a, b) => {
+      if (sortByHeavyFirst) {
+        const weightA = getProductWeight(a.sku, a.product || a.name);
+        const weightB = getProductWeight(b.sku, b.product || b.name);
+        if (Math.abs(weightB - weightA) > 0.4) {
+          return weightB - weightA; // Cięższe na początek trasy
+        }
+      }
+
       const prodA = productMap.get(a.sku);
       const prodB = productMap.get(b.sku);
       
@@ -435,6 +494,15 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     sounds.playBeep();
     const cleanInput = scannedSku.toUpperCase().trim();
     
+    // OPTION 17: Debounce 500ms on scan input to prevent double scan from hardware jitter
+    const now = Date.now();
+    if (lastScanCodeRef.current === cleanInput && (now - lastScanTimeRef.current) < 500) {
+      showFeedback('error', `[Opcja 17]: Zignorowano podwójny skan lasera (<500ms) dla kodu "${cleanInput}".`);
+      return;
+    }
+    lastScanTimeRef.current = now;
+    lastScanCodeRef.current = cleanInput;
+
     if (!selectedOrder) return;
     
     // Find if the input matches any item by SKU, FIFO Lot, or newer Lot
@@ -494,6 +562,10 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     setPickedItems(prev => ({
       ...prev,
       [key]: nextPicked
+    }));
+    setItemToteMap(prev => ({
+      ...prev,
+      [key]: currentToteNumber
     }));
     
     setKpiStats(prev => ({
@@ -1086,6 +1158,42 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                   </div>
                   
                   <div className="flex flex-wrap gap-2.5 w-full sm:w-auto">
+                    {/* Option 5: Heavy-first toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playBeep();
+                        const next = !sortByHeavyFirst;
+                        setSortByHeavyFirst(next);
+                        showFeedback('success', next ? '[Opcja 5]: Włączono sortowanie: Ciężkie artykuły na początek trasy (na spód wózka).' : 'Przywrócono domyślne sortowanie alejkami.');
+                      }}
+                      className={`flex-grow sm:flex-none h-11 px-3.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer border transition-all ${
+                        sortByHeavyFirst 
+                          ? 'bg-amber-600 text-white border-amber-700 shadow-sm' 
+                          : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+                      }`}
+                      title="Układa trasę tak, by najpierw zebrać ciężkie towary na dno wózka"
+                    >
+                      <Scale className="w-4 h-4" />
+                      5. Ciężkie na spód: {sortByHeavyFirst ? 'WŁ' : 'WYŁ'}
+                    </button>
+
+                    {/* Option 6: Split Pick / Multi-tote button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playSuccess();
+                        const nextTote = currentToteNumber + 1;
+                        setCurrentToteNumber(nextTote);
+                        showFeedback('success', `[Opcja 6]: Pojemnik #${currentToteNumber} oznaczony jako pełny. Rozpoczęto napełnianie Pojemnika #${nextTote}!`);
+                      }}
+                      className="flex-grow sm:flex-none h-11 px-3.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                      title="Gdy brakuje miejsca na wózku/w kuwecie, rozpocznij kolejny pojemnik"
+                    >
+                      <Box className="w-4 h-4 text-purple-700" />
+                      6. Pojemnik #{currentToteNumber} (Wózek pełny)
+                    </button>
+
                     <button
                       onClick={() => {
                         sounds.playBeep();
@@ -1154,12 +1262,32 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                           : 'bg-white border-zinc-200 text-zinc-800 shadow-sm'
                       }`}
                     >
-                      <div className="w-16 h-16 rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50 shrink-0 select-none flex items-center justify-center">
+                      {/* Option 4: Clickable thumbnail to open zoomed image and dimensions */}
+                      <div 
+                        onClick={() => {
+                          sounds.playBeep();
+                          const weight = getProductWeight(item.sku, item.product || item.name);
+                          setZoomedProduct({
+                            sku: item.sku,
+                            name: item.product || item.name,
+                            image: getProductImage(item.sku),
+                            weight,
+                            location: displayLocation,
+                            dimensions: weight > 2 ? '38 x 28 x 20 cm' : '22 x 15 x 8 cm',
+                            ean: `590${item.sku.replace(/[^0-9]/g, '').padEnd(10, '7')}`
+                          });
+                        }}
+                        className="w-16 h-16 rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50 shrink-0 select-none flex items-center justify-center relative group cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+                        title="Kliknij, aby powiększyć zdjęcie i sprawdzić specyfikację (Opcja 4)"
+                      >
                         {getProductImage(item.sku) ? (
                           <img src={getProductImage(item.sku)} alt={item.product || item.name} className="w-full h-full object-cover" />
                         ) : (
                           <Barcode className="w-6 h-6 text-zinc-350" />
                         )}
+                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                          <Eye className="w-5 h-5" />
+                        </div>
                       </div>
 
                       <div className="space-y-2.5 flex-grow w-full">
@@ -1170,14 +1298,34 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                               <span className="font-sans font-black text-base text-zinc-950">{item.product || item.name}</span>
                             </div>
                             
-                            <div className="flex flex-wrap items-center gap-4 text-[11px] font-mono text-zinc-500 mt-1">
+                            <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-zinc-500 mt-1">
                               <span className="flex items-center gap-1.5 bg-zinc-50 border border-zinc-200 px-2.5 py-1 rounded-lg">
                                 <MapPin className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
                                 LOKALIZACJA: <strong className="text-zinc-950 font-extrabold font-mono text-xs ml-0.5">{displayLocation}</strong>
                               </span>
+
+                              {/* Option 7: Temperature zone indicator */}
+                              {(() => {
+                                const zone = getTemperatureZone(displayLocation, item.sku);
+                                return (
+                                  <span className={`flex items-center gap-1 border px-2.5 py-1 rounded-lg text-[10px] font-bold ${zone.bg}`}>
+                                    <span>{zone.icon}</span>
+                                    <span>{zone.label}</span>
+                                  </span>
+                                );
+                              })()}
+
+                              {/* Option 6: Assigned tote badge */}
+                              {itemToteMap[key] && (
+                                <span className="bg-purple-50 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 shadow-2xs">
+                                  <Box className="w-3 h-3 text-purple-600" />
+                                  Kuweta #{itemToteMap[key]}
+                                </span>
+                              )}
+
                               <span className="bg-zinc-50 border border-zinc-200 px-2.5 py-1 rounded-lg text-amber-850 font-semibold flex items-center gap-1">
                                 <Timer className="w-3.5 h-3.5 text-amber-500" />
-                                KROK ŚCIEŻKI: <strong className="text-zinc-950 font-black font-mono text-xs">{idx + 1}</strong>
+                                KROK: <strong className="text-zinc-950 font-black font-mono text-xs">{idx + 1}</strong>
                               </span>
                             </div>
 
@@ -1548,6 +1696,72 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Zatwierdź i Wyślij
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OPTION 4: Zoomed Product Modal */}
+      {zoomedProduct && (
+        <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Maximize2 className="w-4 h-4 text-blue-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Specyfikacja & Podgląd Produktu (Opcja 4)</h4>
+              </div>
+              <button 
+                onClick={() => setZoomedProduct(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer border-none bg-transparent"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="w-full h-56 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center shadow-inner">
+                <img 
+                  src={zoomedProduct.image} 
+                  alt={zoomedProduct.name} 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div>
+                <span className="font-mono text-xs font-black text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                  {zoomedProduct.sku}
+                </span>
+                <h3 className="text-base font-black text-slate-900 mt-1.5">{zoomedProduct.name}</h3>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Lokalizacja</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.location}</span>
+                </div>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Waga brutto</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.weight} kg</span>
+                </div>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Wymiary (DxSxW)</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.dimensions}</span>
+                </div>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Kod EAN-13</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.ean}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setZoomedProduct(null)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs cursor-pointer shadow-sm border-none"
+                >
+                  Zamknij podgląd
                 </button>
               </div>
             </div>

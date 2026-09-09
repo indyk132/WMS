@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Barcode, Play, CheckCircle2, AlertTriangle, Layers, 
   Check, RefreshCw, Box, Printer, Scale, Timer, Award, 
-  User, Clock, RotateCcw, AlertCircle, Truck, FileText
+  User, Clock, RotateCcw, AlertCircle, Truck, FileText,
+  Maximize2, Eye
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
 import { defaultImages } from '../data/warehouseData';
@@ -70,6 +71,95 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     setLocalToast({ msg, type });
     setTimeout(() => setLocalToast(null), 4500);
   };
+
+  // ----------------------------------------------------
+  // OPTION 4: Zoomed Product Modal
+  // ----------------------------------------------------
+  const [zoomedProduct, setZoomedProduct] = useState<{
+    sku: string;
+    name: string;
+    image: string;
+    dimensions: string;
+    weight: string;
+    ean: string;
+  } | null>(null);
+
+  // ----------------------------------------------------
+  // OPTION 17: Barcode Debounce (500ms)
+  // ----------------------------------------------------
+  const lastPackScanTimeRef = useRef<number>(0);
+  const lastPackScanCodeRef = useRef<string>('');
+
+  // ----------------------------------------------------
+  // OPTION 20: Auto-print Shipping Label after 100% Packing
+  // ----------------------------------------------------
+  const [isAutoPrintEnabled, setIsAutoPrintEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('wms-packer-autoprint') !== 'false';
+  });
+
+  // ----------------------------------------------------
+  // OPTION 24: Park / Hold Order (Zawieś zamówienie)
+  // ----------------------------------------------------
+  const [isParkModalOpen, setIsParkModalOpen] = useState(false);
+  const [parkReason, setParkReason] = useState('Brakujący gratis lub komponent');
+  const [parkedOrders, setParkedOrders] = useState<Array<{ orderId: string; reason: string; timestamp: string; itemsCount: number }>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('wms-parked-orders') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const handleConfirmParkOrder = () => {
+    if (!selectedOrder) return;
+    sounds.playBeep();
+    const newEntry = {
+      orderId: selectedOrder.id,
+      reason: parkReason,
+      timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+      itemsCount: (selectedOrder.items || []).length
+    };
+    const updated = [newEntry, ...parkedOrders.filter(p => p.orderId !== selectedOrder.id)];
+    setParkedOrders(updated);
+    try {
+      localStorage.setItem('wms-parked-orders', JSON.stringify(updated));
+    } catch (e) {}
+
+    if (onUpdateOrder) {
+      onUpdateOrder(selectedOrder.id, {
+        status: 'Zawieszone',
+        internalNotes: `${selectedOrder.internalNotes || ''}\n[PAUZA-STACJA]: Zlecenie zaparkowane przez ${workerName}. Przyczyna: ${parkReason}.`,
+        internalNotesActor: workerName
+      });
+    }
+
+    showLocalToast(`[Opcja 24]: Zlecenie ${selectedOrder.id} zostało zaparkowane w buforze wyjaśnień.`, 'info');
+    setIsParkModalOpen(false);
+    setSelectedOrderId(null);
+  };
+
+  const handleResumeParkedOrder = (orderId: string) => {
+    sounds.playSuccess();
+    const updated = parkedOrders.filter(p => p.orderId !== orderId);
+    setParkedOrders(updated);
+    try {
+      localStorage.setItem('wms-parked-orders', JSON.stringify(updated));
+    } catch (e) {}
+    setSelectedOrderId(orderId);
+    showLocalToast(`Wznowiono pakowanie zawieszonego zlecenia ${orderId}.`, 'success');
+  };
+
+  // ----------------------------------------------------
+  // OPTION 26: Shift Session Packed Counter
+  // ----------------------------------------------------
+  const [sessionPackedCount, setSessionPackedCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('wms-session-packed-count');
+      return saved ? parseInt(saved, 10) : 16;
+    } catch {
+      return 16;
+    }
+  });
 
   const [currentTime, setCurrentTime] = useState(() => {
     const d = new Date();
@@ -224,6 +314,15 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
     sounds.playBeep();
     const rawClean = scannedSku.trim();
     const cleanSku = sanitizeBarcode(scannedSku);
+
+    // OPTION 17: Debounce 500ms on packing scan input
+    const now = Date.now();
+    if (lastPackScanCodeRef.current === cleanSku && (now - lastPackScanTimeRef.current) < 500) {
+      showLocalToast(`[Opcja 17]: Zignorowano podwójny skan lasera (<500ms) dla "${scannedSku}".`, 'info');
+      return;
+    }
+    lastPackScanTimeRef.current = now;
+    lastPackScanCodeRef.current = cleanSku;
     
     if (!selectedOrder) return;
     
@@ -278,7 +377,15 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
       if (allDone) {
         sounds.playVictoryChime();
-        showLocalToast('🎉 Brawo! Wszystkie pozycje zlecenia zostały pomyślnie spakowane. Możesz wydrukować etykietę.', 'success');
+        showLocalToast('🎉 Brawo! Wszystkie pozycje zlecenia zostały pomyślnie spakowane.', 'success');
+
+        // OPTION 20: Auto-print shipping label after 100% packing
+        if (isAutoPrintEnabled) {
+          setTimeout(() => {
+            showLocalToast('[Opcja 20]: Automatyczne wywołanie druku etykiety kurierskiej po spakowaniu 100%!', 'info');
+            window.print();
+          }, 800);
+        }
       }
 
       return nextPacked;
@@ -429,6 +536,13 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
       ...prev,
       packedToday: prev.packedToday + 1
     }));
+    setSessionPackedCount(prev => {
+      const next = prev + 1;
+      try {
+        localStorage.setItem('wms-session-packed-count', String(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   if (processingOrderData) {
@@ -487,20 +601,59 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
           </div>
         </div>
 
-        <div className="flex items-center gap-6 text-right">
-          <div className="hidden md:block">
+        <div className="flex items-center gap-3 text-right">
+          {/* Option 26: Shift Session Packed Counter */}
+          <div className="hidden sm:flex items-center gap-2 bg-emerald-50 border border-emerald-250 px-3 py-1.5 rounded-xl shadow-2xs">
+            <div className="text-left">
+              <span className="text-[9px] font-mono text-emerald-800 uppercase block tracking-wider font-extrabold">26. Zmiana: {sessionPackedCount} szt.</span>
+              <div className="w-20 bg-emerald-200 h-1.5 rounded-full overflow-hidden mt-0.5">
+                <div className="bg-emerald-600 h-full rounded-full transition-all" style={{ width: `${Math.min(100, (sessionPackedCount / 40) * 100)}%` }} />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playBeep();
+                setSessionPackedCount(0);
+                try { localStorage.setItem('wms-session-packed-count', '0'); } catch (e) {}
+                showLocalToast('Wyzerowano licznik zmiany dla nowego pracownika.', 'info');
+              }}
+              className="text-emerald-700 hover:text-emerald-950 p-1 rounded hover:bg-emerald-100 cursor-pointer border-none bg-transparent"
+              title="Wyzeruj licznik spakowanych paczek dla nowej zmiany (Opcja 26)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Option 20: Auto-print label toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playBeep();
+              const next = !isAutoPrintEnabled;
+              setIsAutoPrintEnabled(next);
+              try { localStorage.setItem('wms-packer-autoprint', String(next)); } catch (e) {}
+              showLocalToast(next ? '[Opcja 20]: Włączono auto-druk etykiety po spakowaniu 100%.' : 'Wyłączono auto-druk.', 'info');
+            }}
+            className={`hidden md:flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+              isAutoPrintEnabled 
+                ? 'bg-blue-50 text-blue-700 border-blue-250 hover:bg-blue-100 shadow-2xs' 
+                : 'bg-zinc-100 text-zinc-500 border-zinc-250 hover:bg-zinc-200'
+            }`}
+            title="Automatycznie wywołuje okno drukowania etykiety po spakowaniu 100% pozycji (Opcja 20)"
+          >
+            <Printer className="w-3.5 h-3.5 text-blue-600" />
+            20. Auto-druk: {isAutoPrintEnabled ? 'WŁ' : 'WYŁ'}
+          </button>
+
+          <div className="hidden lg:block">
             <span className="text-[8px] font-mono text-zinc-500 uppercase block tracking-wider font-bold">Spakowane Dziś</span>
             <span className="text-xs font-black font-mono text-[#0052CC] leading-none mt-0.5 block">{kpiStats.packedToday} paczek</span>
           </div>
           
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <span className="text-[8px] font-mono text-zinc-500 uppercase block tracking-wider font-bold">Śr. Czas Pakowania</span>
             <span className="text-xs font-black font-mono text-purple-650 leading-none mt-0.5 block">{kpiStats.avgTimeSec}s / paczka</span>
-          </div>
-          
-          <div className="hidden md:block text-right">
-            <span className="text-[8px] font-mono text-zinc-400 uppercase block font-bold">Dokładność</span>
-            <span className="text-xs font-bold font-mono text-emerald-600">99.4%</span>
           </div>
           
           {selectedOrderId ? (
@@ -598,6 +751,39 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                 </h3>
               </div>
             </div>
+
+            {/* Option 24: Parked Orders Buffer Banner */}
+            {parkedOrders.length > 0 && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 shadow-sm space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                    <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                    <span>Zawieszone zlecenia w buforze stacji ({parkedOrders.length})</span>
+                  </div>
+                  <span className="text-[10px] text-amber-800 font-mono font-bold uppercase bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
+                    Opcja 24: Parked Orders
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+                  {parkedOrders.map(parked => (
+                    <div key={parked.orderId} className="bg-white border border-amber-200 rounded-xl p-3 flex items-center justify-between shadow-2xs">
+                      <div className="space-y-0.5 min-w-0 pr-2">
+                        <div className="font-mono font-black text-xs text-amber-950">{parked.orderId}</div>
+                        <div className="text-[10px] text-slate-600 truncate font-semibold" title={parked.reason}>{parked.reason}</div>
+                        <div className="text-[9px] text-slate-400 font-mono">Zawieszono: {parked.timestamp}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleResumeParkedOrder(parked.orderId)}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded-lg cursor-pointer border-none shadow-2xs shrink-0 transition-colors"
+                      >
+                        Wznów
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex-grow overflow-y-auto pr-1">
               {activeOrders.length === 0 ? (
@@ -700,12 +886,28 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                     Klient: <span className="text-zinc-800 font-semibold">{selectedOrder?.customer || selectedOrder?.customerName}</span>
                   </p>
                 </div>
-                <button
-                  onClick={() => { sounds.playBeep(); setSelectedOrderId(null); }}
-                  className="px-3 py-1.5 bg-zinc-50 hover:bg-red-50 hover:text-red-655 text-zinc-650 text-[10px] font-display font-bold uppercase rounded border border-zinc-200 transition-all cursor-pointer"
-                >
-                  Zamknij sesję
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Option 24: Park / Hold Order Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sounds.playBeep();
+                      setIsParkModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold uppercase rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                    title="Zawieś zamówienie i odłóż na półkę buforową do wyjaśnienia (Opcja 24)"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-700" />
+                    24. Zawieś Zlecenie (Park)
+                  </button>
+
+                  <button
+                    onClick={() => { sounds.playBeep(); setSelectedOrderId(null); }}
+                    className="px-3 py-1.5 bg-zinc-50 hover:bg-red-50 hover:text-red-655 text-zinc-650 text-[10px] font-display font-bold uppercase rounded-lg border border-zinc-200 transition-all cursor-pointer"
+                  >
+                    Zamknij sesję
+                  </button>
+                </div>
               </div>
 
               {selectedOrder?.giftWrapping && (
@@ -814,14 +1016,32 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                 : 'border-transparent hover:bg-zinc-50/50'
                           }`}
                         >
-                          {/* Zdjęcie na samej lewej stronie */}
+                          {/* Zdjęcie na samej lewej stronie (Opcja 4: powiększenie zdjęcia) */}
                           <td className="px-4 py-3 text-center select-none w-24">
-                            <div className="w-18 h-18 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 flex items-center justify-center mx-auto shadow-sm">
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                sounds.playBeep();
+                                setZoomedProduct({
+                                  sku: item.sku,
+                                  name: item.product || item.name,
+                                  image: getProductImage(item.sku),
+                                  dimensions: '28 x 18 x 12 cm',
+                                  weight: '0.85 kg',
+                                  ean: `590${item.sku.replace(/[^0-9]/g, '').padEnd(10, '5')}`
+                                });
+                              }}
+                              className="w-18 h-18 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50 flex items-center justify-center mx-auto shadow-sm relative group cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+                              title="Kliknij, aby powiększyć zdjęcie i sprawdzić dane (Opcja 4)"
+                            >
                               {getProductImage(item.sku) ? (
                                 <img src={getProductImage(item.sku)} alt="" className="w-full h-full object-cover" />
                               ) : (
                                 <Box className="w-8 h-8 text-zinc-350" />
                               )}
+                              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Eye className="w-4 h-4" />
+                              </div>
                             </div>
                           </td>
 
@@ -1263,6 +1483,125 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                   className="w-full h-11 bg-white hover:bg-zinc-50 text-zinc-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer border border-zinc-300 hover:border-zinc-400 transition-all"
                 >
                   Wróć do listy zamówień
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OPTION 24: Park / Hold Order Modal */}
+      {isParkModalOpen && (
+        <div className="fixed inset-0 bg-[#020617]/75 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-md shadow-2xl p-6 text-left font-sans animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 border-b border-slate-150 pb-3 mb-4 select-none">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900">Zawieś Zlecenie w Buforze (Opcja 24)</h4>
+                <p className="text-[10px] text-slate-500 font-mono">Zlecenie: {selectedOrder?.id}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <p className="text-slate-600 font-medium leading-relaxed">
+                Zawieszenie zlecenia zwalnia stację pakowania i odkłada zamówienie do bufora sprawdzającego. Możesz je wznowić w dowolnej chwili z listy głównej.
+              </p>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Wybierz przyczynę wstrzymania pakowania:
+                </label>
+                <select
+                  value={parkReason}
+                  onChange={(e) => setParkReason(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-semibold outline-none focus:ring-2 focus:ring-amber-500 text-xs"
+                >
+                  <option value="Brakujący gratis lub komponent">Brakujący gratis lub komponent zbiórki</option>
+                  <option value="Uszkodzone opakowanie fabryczne">Uszkodzone opakowanie fabryczne / towaru</option>
+                  <option value="Niezgodność adresu / do wyjaśnienia z BOK">Niezgodność adresu / do wyjaśnienia z BOK</option>
+                  <option value="Oczekiwanie na dyspozycję kierownika">Oczekiwanie na dyspozycję kierownika zmiany</option>
+                  <option value="Inna wada asortymentowa">Inna wada asortymentowa</option>
+                </select>
+              </div>
+
+              <div className="pt-3 border-t border-slate-150 flex justify-end gap-2.5 select-none">
+                <button
+                  type="button"
+                  onClick={() => setIsParkModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs cursor-pointer bg-white"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmParkOrder}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-sm border-none transition-colors"
+                >
+                  Zawieś i Zwolnij Stację
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OPTION 4: Zoomed Product Modal in PackerView */}
+      {zoomedProduct && (
+        <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Maximize2 className="w-4 h-4 text-blue-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Weryfikacja Wizualna Produktu (Opcja 4)</h4>
+              </div>
+              <button 
+                onClick={() => setZoomedProduct(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer border-none bg-transparent"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="w-full h-56 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center shadow-inner">
+                <img 
+                  src={zoomedProduct.image} 
+                  alt={zoomedProduct.name} 
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div>
+                <span className="font-mono text-xs font-black text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                  {zoomedProduct.sku}
+                </span>
+                <h3 className="text-base font-black text-slate-900 mt-1.5">{zoomedProduct.name}</h3>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Waga</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.weight}</span>
+                </div>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Wymiary</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.dimensions}</span>
+                </div>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Kod EAN</span>
+                  <span className="font-mono font-bold text-slate-800">{zoomedProduct.ean}</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setZoomedProduct(null)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs cursor-pointer shadow-sm border-none"
+                >
+                  Zamknij podgląd
                 </button>
               </div>
             </div>

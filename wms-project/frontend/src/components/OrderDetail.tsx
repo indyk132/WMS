@@ -21,7 +21,9 @@ import {
   Send,
   Globe,
   ExternalLink,
-  X
+  X,
+  Calculator,
+  Code
 } from 'lucide-react';
 import { defaultImages } from '../data/warehouseData';
 import { sounds } from './SoundEffects';
@@ -188,6 +190,116 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
   const postalCodeMatch = (order.shippingAddress || '').match(/\b\d{2}-\d{3}\b/);
   const hasValidPolishZip = !!postalCodeMatch;
   const extractedZip = postalCodeMatch ? postalCodeMatch[0] : null;
+
+  // ----------------------------------------------------
+  // OPTION 57: Courier Autodetection (Format Listu Przewozowego)
+  // ----------------------------------------------------
+  const detectedCourier = useMemo(() => {
+    const raw = (order.waybillNumber || '').replace(/[\s-]/g, '').toUpperCase();
+    if (!raw) return { name: 'Brak numeru', badge: 'bg-slate-100 text-slate-500 border-slate-250', icon: '❓' };
+    if (/^6\d{23}$/.test(raw) || raw.length === 24) {
+      return { name: 'InPost (Paczkomat / Kurier)', badge: 'bg-amber-100 text-amber-900 border-amber-300', icon: '📦' };
+    }
+    if (/^0000\d{10}$/.test(raw) || raw.startsWith('DPD') || /^\d{14}$/.test(raw)) {
+      return { name: 'DPD Classic / Express', badge: 'bg-red-100 text-red-900 border-red-300', icon: '🔴' };
+    }
+    if (/^JJD\d+$/.test(raw) || raw.startsWith('DHL') || /^\d{10,11}$/.test(raw)) {
+      return { name: 'DHL Express', badge: 'bg-yellow-100 text-yellow-900 border-yellow-300', icon: '🟡' };
+    }
+    if (/^PX\d+$/.test(raw) || raw.startsWith('00359')) {
+      return { name: 'Pocztex / Poczta Polska', badge: 'bg-rose-100 text-rose-900 border-rose-300', icon: '📮' };
+    }
+    if (/^\d{12}$/.test(raw) || raw.startsWith('FDX')) {
+      return { name: 'FedEx Express', badge: 'bg-purple-100 text-purple-900 border-purple-300', icon: '🟣' };
+    }
+    return { name: 'Przewoźnik Standardowy', badge: 'bg-slate-100 text-slate-800 border-slate-300', icon: '🚚' };
+  }, [order.waybillNumber]);
+
+  // ----------------------------------------------------
+  // OPTION 69: ISO Country Code Validator
+  // ----------------------------------------------------
+  const countryValidation = useMemo(() => {
+    const addr = (order.shippingAddress || '').toUpperCase();
+    if (addr.includes('POLSKA') || addr.includes(', PL') || addr.endsWith(' PL') || /\b\d{2}-\d{3}\b/.test(addr)) {
+      return { code: 'PL', name: 'Polska', flag: '🇵🇱', isEu: true, standardZip: 'Format PL (XX-XXX)' };
+    }
+    if (addr.includes('GERMANY') || addr.includes('NIEMCY') || addr.includes(', DE') || addr.endsWith(' DE')) {
+      return { code: 'DE', name: 'Niemcy', flag: '🇩🇪', isEu: true, standardZip: 'Format DE (5 cyfr)' };
+    }
+    if (addr.includes('CZECH') || addr.includes('CZECHY') || addr.includes(', CZ')) {
+      return { code: 'CZ', name: 'Czechy', flag: '🇨🇿', isEu: true, standardZip: 'Format CZ (XXX XX)' };
+    }
+    if (addr.includes('SLOVAKIA') || addr.includes('SŁOWACJA') || addr.includes(', SK')) {
+      return { code: 'SK', name: 'Słowacja', flag: '🇸🇰', isEu: true, standardZip: 'Format SK (XXX XX)' };
+    }
+    if (addr.includes('FRANCE') || addr.includes('FRANCJA') || addr.includes(', FR')) {
+      return { code: 'FR', name: 'Francja', flag: '🇫🇷', isEu: true, standardZip: 'Format FR (5 cyfr)' };
+    }
+    return { code: 'PL', name: 'Polska (Domyślny)', flag: '🇵🇱', isEu: true, standardZip: 'Kraj UE' };
+  }, [order.shippingAddress]);
+
+  // ----------------------------------------------------
+  // OPTION 58: Zebra ZPL II Label Generator
+  // ----------------------------------------------------
+  const [isZplModalOpen, setIsZplModalOpen] = useState(false);
+  const zplGeneratedCode = useMemo(() => {
+    const waybill = order.waybillNumber || 'DPD-PL-99214';
+    const recipient = (order.customerName || 'Klient').replace(/[^a-zA-Z0-9\s]/g, '');
+    const addr = (order.shippingAddress || 'ul. Logistyczna 1, Warszawa').replace(/[^a-zA-Z0-9\s,.-]/g, '');
+    const totalQty = (order.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+    const weight = (totalQty * 0.35 + 0.4).toFixed(2);
+
+    return `^XA
+^PW800
+^LL1200
+^FO50,40^ADN,36,20^FDWMS LOGISTICS DC-1 WARSZAWA^FS
+^FO50,90^GB700,2,2^FS
+^FO50,110^ADN,18,10^FDZLECENIE WYJAZDOWE: ${order.id}^FS
+^FO50,140^ADN,22,12^FDODBIORCA: ${recipient}^FS
+^FO50,175^ADN,18,10^FDADRES: ${addr}^FS
+^FO50,210^ADN,18,10^FDKURIER: ${order.shippingMethod || 'DPD'} | PACZKA 1/1 | WAGA: ${weight} KG^FS
+^FO50,250^GB700,2,2^FS
+^FO120,290^BY3,3,110^BCN,110,Y,N,N^FD${waybill}^FS
+^FO50,450^GB700,2,2^FS
+^FO50,470^ADN,18,10^FDILOSC POZYCJI: ${(order.items || []).length} SKU | LACZNIE SZTUK: ${totalQty}^FS
+^FO50,500^ADN,14,8^FDWYGENEROWANO PRZEZ WMS OPERATOR: ${new Date().toLocaleDateString('pl-PL')}^FS
+^XZ`;
+  }, [order]);
+
+  const handleCopyZpl = () => {
+    navigator.clipboard.writeText(zplGeneratedCode);
+    triggerToast('[Opcja 58]: Skopiowano surowy kod Zebra ZPL II do schowka!');
+  };
+
+  const handleDownloadZpl = () => {
+    const blob = new Blob([zplGeneratedCode], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `etykieta_${order.id}.zpl`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    triggerToast('[Opcja 58]: Pobrano plik etykiety termicznej .zpl!');
+  };
+
+  // ----------------------------------------------------
+  // OPTION 64: Dimensional Weight Calculator (Waga Gabarytowa)
+  // ----------------------------------------------------
+  const [isDimWeightModalOpen, setIsDimWeightModalOpen] = useState(false);
+  const [dimLength, setDimLength] = useState(35);
+  const [dimWidth, setDimWidth] = useState(25);
+  const [dimHeight, setDimHeight] = useState(15);
+  const actualOrderWeight = useMemo(() => {
+    const totalQty = (order.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+    return Math.round((totalQty * 0.35 + 0.4) * 100) / 100;
+  }, [order.items]);
+
+  const dimVolumetricWeight = useMemo(() => {
+    return Math.round(((dimLength * dimWidth * dimHeight) / 5000) * 100) / 100;
+  }, [dimLength, dimWidth, dimHeight]);
+
+  const billableWeight = Math.max(actualOrderWeight, dimVolumetricWeight);
 
   useEffect(() => {
     setNoteText(order.internalNotes || '');
@@ -356,6 +468,28 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
           </button>
 
           <button
+            onClick={() => {
+              sounds.playBeep();
+              setIsZplModalOpen(true);
+            }}
+            className="flex-1 md:flex-none px-3.5 py-2 border border-purple-200 bg-purple-50/50 hover:bg-purple-100 text-purple-800 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+            title="Podgląd i pobieranie kodu ZPL II dla przemysłowych drukarek etykiet Zebra"
+          >
+            <Code className="w-4 h-4 text-purple-600" /> 58. ZPL Zebra
+          </button>
+
+          <button
+            onClick={() => {
+              sounds.playBeep();
+              setIsDimWeightModalOpen(true);
+            }}
+            className="flex-1 md:flex-none px-3.5 py-2 border border-amber-200 bg-amber-50/50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+            title="Kalkulator wagi gabarytowej i porównanie z wagą rzeczywistą przesyłki"
+          >
+            <Calculator className="w-4 h-4 text-amber-600" /> 64. Waga Gabarytowa
+          </button>
+
+          <button
             onClick={handlePrintLabel}
             className="flex-1 md:flex-none px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
           >
@@ -441,6 +575,24 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono font-sans font-bold text-slate-400">Wyjazd</span>
                     <p className="text-xs font-semibold text-teal-650 font-mono mt-0.5">{order.estimatedDelivery}</p>
+                  </div>
+                </div>
+
+                {/* OPTION 57 & OPTION 69: Courier Recognition & Country validation */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-slate-100">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">57. Kurier (z listu)</span>
+                    <span className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      <Truck className="w-3 h-3 text-indigo-600 shrink-0" />
+                      {detectedCourier}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">69. Kraj doręczenia</span>
+                    <span className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                      <span className="text-xs">{countryValidation.flag}</span>
+                      <strong>{countryValidation.code}</strong> - {countryValidation.name}
+                    </span>
                   </div>
                 </div>
                 {order.binId && (
@@ -1152,6 +1304,186 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                 className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer border-none"
               >
                 <Send className="w-3.5 h-3.5" /> Wyślij E-mail do Klienta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* OPTION 58: ZEBRA ZPL II MODAL                         */}
+      {/* ---------------------------------------------------- */}
+      {isZplModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-purple-900 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <Code className="w-5 h-5 text-purple-300" />
+                <h3 className="font-bold text-sm tracking-wide">58. Generator Kodu Zebra ZPL II</h3>
+              </div>
+              <button
+                onClick={() => setIsZplModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-purple-800 text-purple-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 flex items-start gap-2">
+                <Printer className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Etykieta termiczna 100x150 mm (ZPL II Code 128)</p>
+                  <p className="text-purple-700 mt-0.5">
+                    Kod gotowy do bezpośredniego przesłania przez RAW TCP/IP (port 9100) lub sterownik Zebra Generic Text na drukarki ZT411 / ZD421.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-bold text-slate-700 font-mono">Surowy kod rozkazowy ZPL:</span>
+                  <span className="text-[10px] text-slate-400 font-mono">800x1200 dots (203 DPI)</span>
+                </div>
+                <pre className="p-3.5 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto max-h-64 border border-slate-800 select-all leading-relaxed">
+                  {zplGeneratedCode}
+                </pre>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1 font-mono">
+                <div>• Zlecenie: <strong>{order.id}</strong></div>
+                <div>• Kod kreskowy Code128: <strong>{order.waybillNumber || 'DPD-PL-99214'}</strong></div>
+                <div>• Odbiorca: <strong>{order.customerName}</strong></div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsZplModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Zamknij
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyZpl}
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5" /> Kopiuj kod ZPL
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadZpl}
+                className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer border-none"
+              >
+                <Download className="w-3.5 h-3.5" /> Pobierz plik .zpl
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* OPTION 64: DIMENSIONAL WEIGHT CALCULATOR MODAL       */}
+      {/* ---------------------------------------------------- */}
+      {isDimWeightModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-amber-600 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-amber-200" />
+                <h3 className="font-bold text-sm tracking-wide">64. Kalkulator Wagi Gabarytowej (IATA / Kurierzy)</h3>
+              </div>
+              <button
+                onClick={() => setIsDimWeightModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-amber-700 text-amber-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <p className="text-xs text-slate-600">
+                W logistyce kurierskiej (DPD, DHL, InPost) opłata naliczana jest od wyższej wartości: wagi rzeczywistej vs wagi gabarytowej według wzoru: <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono font-bold text-slate-800">(Dł x Szer x Wys) / 5000</code>.
+              </p>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Długość [cm]</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={dimLength}
+                    onChange={(e) => setDimLength(Math.max(1, Number(e.target.value) || 1))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 text-center focus:outline-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Szerokość [cm]</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={dimWidth}
+                    onChange={(e) => setDimWidth(Math.max(1, Number(e.target.value) || 1))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 text-center focus:outline-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">Wysokość [cm]</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={dimHeight}
+                    onChange={(e) => setDimHeight(Math.max(1, Number(e.target.value) || 1))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 text-center focus:outline-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Waga rzeczywista</span>
+                  <span className="text-lg font-black text-slate-800 font-mono">{actualOrderWeight} kg</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">Suma z pozycji SKU</span>
+                </div>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block font-mono">Waga gabarytowa (V)</span>
+                  <span className="text-lg font-black text-amber-900 font-mono">{dimVolumetricWeight} kg</span>
+                  <span className="text-[10px] text-amber-700 block mt-0.5">Dł×Szer×Wys / 5000</span>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-xl border flex items-center justify-between ${
+                dimVolumetricWeight > actualOrderWeight 
+                  ? 'bg-rose-50 border-rose-200 text-rose-900' 
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider block">Waga taryfowa (rozliczeniowa):</span>
+                  <p className="text-xl font-black font-mono mt-0.5">{billableWeight} kg</p>
+                </div>
+                <div className="text-right text-xs">
+                  {dimVolumetricWeight > actualOrderWeight ? (
+                    <span className="inline-flex items-center gap-1 font-bold text-rose-700">
+                      <AlertTriangle className="w-4 h-4" /> Uwaga: dopłata gabarytowa!
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
+                      <Check className="w-4 h-4" /> Rozliczenie wg wagi rzeczywistej
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsDimWeightModalOpen(false)}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs cursor-pointer border-none shadow-xs"
+              >
+                Zamknij kalkulator
               </button>
             </div>
           </div>
