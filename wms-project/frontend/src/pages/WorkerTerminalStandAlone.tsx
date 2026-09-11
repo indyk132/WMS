@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
-  LogIn, Warehouse, Eye, EyeOff, Barcode, Clock, Timer, Award, LogOut, ArrowRight, Wifi, UserCheck, Layers, Box
+  LogIn, Warehouse, Eye, EyeOff, Barcode, Clock, Timer, Award, LogOut, ArrowRight, Wifi, UserCheck, Layers, Box,
+  Battery, BatteryCharging, BatteryWarning, Wrench, AlertTriangle, CheckCircle2, X, RefreshCw, Smartphone, Zap
 } from "lucide-react";
 import { sounds } from "../components/SoundEffects";
 import { WORKERS } from "../data/warehouseData";
@@ -216,12 +217,22 @@ interface WorkerHomeProps {
   currentUser: any;
   onLogout: () => void;
   onLaunchTerminal: (role: string) => void;
+  battery: { level: number; charging: boolean; supported: boolean };
+  onOpenScannerTest: () => void;
+  onOpenReportModal: () => void;
 }
 
-export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }: WorkerHomeProps) {
+export function WorkerHome({ 
+  currentUser, 
+  onLogout, 
+  onLaunchTerminal,
+  battery,
+  onOpenScannerTest,
+  onOpenReportModal
+}: WorkerHomeProps) {
   return (
-    <div className="flex-grow max-w-4xl mx-auto w-full px-4 py-8 flex flex-col justify-center h-screen font-sans">
-      <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden p-6 md:p-10 flex flex-col gap-8 animate-fadeIn">
+    <div className="flex-grow max-w-4xl mx-auto w-full px-4 py-8 flex flex-col justify-center min-h-screen font-sans">
+      <div className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden p-6 md:p-8 flex flex-col gap-6 animate-fadeIn">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-zinc-200">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-zinc-50 border border-zinc-300 flex items-center justify-center text-[#0052CC]">
@@ -251,35 +262,92 @@ export function WorkerHome({ currentUser, onLogout, onLaunchTerminal }: WorkerHo
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 select-none">
-          <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-xl flex items-center gap-3">
-            <Timer className="w-8 h-8 text-[#0052CC] shrink-0 animate-pulse" />
+        {/* Status Grid with Option 83 Battery */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 select-none">
+          <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl flex items-center gap-3">
+            <Timer className="w-7 h-7 text-[#0052CC] shrink-0 animate-pulse" />
             <div>
-              <span className="text-[10px] text-zinc-500 uppercase block font-mono">Norma Kompletacji</span>
-              <span className="text-sm font-bold text-zinc-900 font-mono leading-tight">Maks. 180s / produkt</span>
+              <span className="text-[9px] text-zinc-500 uppercase block font-mono">Norma Kompletacji</span>
+              <span className="text-xs font-bold text-zinc-900 font-mono leading-tight">Maks. 180s / SKU</span>
             </div>
           </div>
 
-          <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-xl flex items-center gap-3">
-            <Award className="w-8 h-8 text-amber-500 shrink-0" />
+          <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl flex items-center gap-3">
+            <Award className="w-7 h-7 text-amber-500 shrink-0" />
             <div>
-              <span className="text-[10px] text-zinc-500 uppercase block font-mono">Aktualny Bonus</span>
-              <span className="text-sm font-bold text-amber-600 font-mono leading-tight">+12.5% Produktywności</span>
+              <span className="text-[9px] text-zinc-500 uppercase block font-mono">Aktualny Bonus</span>
+              <span className="text-xs font-bold text-amber-600 font-mono leading-tight">+12.5% Premii</span>
             </div>
           </div>
 
-          <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-xl flex items-center gap-3">
-            <Wifi className="w-8 h-8 text-emerald-500 shrink-0 animate-pulse" />
+          <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-xl flex items-center gap-3">
+            <Wifi className="w-7 h-7 text-emerald-500 shrink-0 animate-pulse" />
             <div>
-              <span className="text-[10px] text-zinc-500 uppercase block font-mono">ZASIĘG WMS</span>
-              <span className="text-sm font-bold text-emerald-600 font-mono leading-tight flex items-center gap-1.5 font-sans">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Stabilne Połączenie
+              <span className="text-[9px] text-zinc-500 uppercase block font-mono">Zasięg Wi-Fi AP-4</span>
+              <span className="text-xs font-bold text-emerald-600 font-mono leading-tight flex items-center gap-1 font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Stabilne
+              </span>
+            </div>
+          </div>
+
+          {/* OPTION 83: Battery Card */}
+          <div className={`p-3.5 rounded-xl border flex items-center gap-3 transition-all ${
+            battery.level <= 20 && !battery.charging 
+              ? 'bg-red-50 border-red-200 text-red-800' 
+              : 'bg-zinc-50 border-zinc-200 text-zinc-900'
+          }`}>
+            {battery.charging ? (
+              <BatteryCharging className="w-7 h-7 text-emerald-500 shrink-0 animate-pulse" />
+            ) : battery.level <= 20 ? (
+              <BatteryWarning className="w-7 h-7 text-red-500 shrink-0 animate-bounce" />
+            ) : (
+              <Battery className="w-7 h-7 text-blue-600 shrink-0" />
+            )}
+            <div>
+              <span className="text-[9px] text-zinc-500 uppercase block font-mono">83. Bateria Terminala</span>
+              <span className="text-xs font-bold font-mono leading-tight flex items-center gap-1">
+                {battery.level}% {battery.charging ? '⚡ Ładowanie' : battery.level <= 20 ? '⚠️ Niski!' : 'OK'}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 mt-2">
+        {/* Hardware & Diagnostics Bar (Options 81 & 88) */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 select-none">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-700 shadow-3xs">
+              <Smartphone className="w-4.5 h-4.5 text-blue-600" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Narzędzia Techniczne Stanowiska Roboczego</h4>
+              <p className="text-[11px] text-slate-500">Diagnostyka lasera skanera Zebra/Honeywell oraz zgłaszanie usterek sprzętowych.</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenScannerTest}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs"
+              title="Test prędkości odczytu lasera, suffixu Enter oraz poprawności EAN/Code128"
+            >
+              <Barcode className="w-4 h-4 text-blue-600" />
+              81. Test Skanera Kodów
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenReportModal}
+              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs"
+              title="Zgłoś awarię skanera, drukarki Zebra, terminala lub wózka"
+            >
+              <Wrench className="w-4 h-4 text-rose-600" />
+              88. Zgłoś Awarię Sprzętu
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 mt-1">
           <h3 className="text-xs font-display font-black uppercase text-zinc-400 tracking-widest">
             Wybierz moduł terminala
           </h3>
@@ -396,6 +464,173 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
   const [currentUser, setCurrentUser] = useState(initialData.user);
   const [activeTab, setActiveTab] = useState(initialData.tab);
 
+  // ----------------------------------------------------
+  // OPTION 83: Battery Level API Hook & Status Indicator
+  // ----------------------------------------------------
+  const [battery, setBattery] = useState<{ level: number; charging: boolean; supported: boolean }>({
+    level: 88,
+    charging: false,
+    supported: false,
+  });
+
+  useEffect(() => {
+    let batteryObj: any = null;
+    const updateBattery = () => {
+      if (batteryObj) {
+        setBattery({
+          level: Math.round(batteryObj.level * 100),
+          charging: batteryObj.charging,
+          supported: true,
+        });
+      }
+    };
+
+    if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
+      (navigator as any).getBattery().then((batt: any) => {
+        batteryObj = batt;
+        updateBattery();
+        batt.addEventListener('levelchange', updateBattery);
+        batt.addEventListener('chargingchange', updateBattery);
+      }).catch(() => {
+        setBattery({ level: 88, charging: false, supported: false });
+      });
+    }
+
+    return () => {
+      if (batteryObj) {
+        batteryObj.removeEventListener('levelchange', updateBattery);
+        batteryObj.removeEventListener('chargingchange', updateBattery);
+      }
+    };
+  }, []);
+
+  // ----------------------------------------------------
+  // OPTION 81: Barcode Scanner Diagnostics Test Modal
+  // ----------------------------------------------------
+  const [isScannerTestOpen, setIsScannerTestOpen] = useState(false);
+  const [scannerInput, setScannerInput] = useState("");
+  const [keyTimestamps, setKeyTimestamps] = useState<number[]>([]);
+  const [scanLogs, setScanLogs] = useState<Array<{
+    code: string;
+    speedMs: number;
+    hasEnter: boolean;
+    symbology: string;
+    time: string;
+  }>>([
+    {
+      code: '5901234567890',
+      speedMs: 24,
+      hasEnter: true,
+      symbology: 'EAN-13 (Standardowy kod kreskowy)',
+      time: '18:40:12'
+    },
+    {
+      code: 'LOC-A-02-01',
+      speedMs: 31,
+      hasEnter: true,
+      symbology: 'Magazynowy Kod Lokacji',
+      time: '18:42:55'
+    }
+  ]);
+
+  const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const now = performance.now();
+    setKeyTimestamps(prev => [...prev, now]);
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = scannerInput.trim();
+      if (!val) return;
+
+      sounds.playBeep();
+      const timestamps = [...keyTimestamps, now];
+      let speed = 25;
+      if (timestamps.length >= 2) {
+        speed = Math.round(timestamps[timestamps.length - 1] - timestamps[0]);
+      }
+
+      let symb = 'Code 128 / Przemysłowy Alfanumeryczny';
+      if (/^\d{13}$/.test(val)) symb = 'EAN-13 (Standardowy kod kreskowy)';
+      else if (/^\d{8}$/.test(val)) symb = 'EAN-8 (Format skrócony)';
+      else if (/^\d{12}$/.test(val)) symb = 'UPC-A (Standard handlowy)';
+      else if (/^\d{14}$/.test(val)) symb = 'ITF-14 (Karton logistyczny)';
+      else if (val.startsWith('LOC-')) symb = 'Magazynowy Kod Lokacji';
+      else if (val.startsWith('TOTE-')) symb = 'Kod Pojemnika Kompletacji';
+      else if (val.startsWith('ORD-')) symb = 'Kod Zamówienia WMS';
+      else if (/^\d{2}-\d{3}$/.test(val)) symb = 'Kod Pocztowy PL';
+
+      setScanLogs(prev => [
+        {
+          code: val,
+          speedMs: speed,
+          hasEnter: true,
+          symbology: symb,
+          time: new Date().toLocaleTimeString('pl-PL')
+        },
+        ...prev.slice(0, 9)
+      ]);
+
+      setScannerInput("");
+      setKeyTimestamps([]);
+    }
+  };
+
+  const handleSimulateScan = (codeToScan: string) => {
+    sounds.playBeep();
+    let symb = 'Code 128 / Przemysłowy Alfanumeryczny';
+    if (/^\d{13}$/.test(codeToScan)) symb = 'EAN-13 (Standardowy kod kreskowy)';
+    else if (codeToScan.startsWith('LOC-')) symb = 'Magazynowy Kod Lokacji';
+    else if (codeToScan.startsWith('TOTE-')) symb = 'Kod Pojemnika Kompletacji';
+
+    setScanLogs(prev => [
+      {
+        code: codeToScan,
+        speedMs: Math.floor(18 + Math.random() * 20),
+        hasEnter: true,
+        symbology: symb,
+        time: new Date().toLocaleTimeString('pl-PL')
+      },
+      ...prev.slice(0, 9)
+    ]);
+  };
+
+  // ----------------------------------------------------
+  // OPTION 88: Worker Equipment Failure Reporting Modal
+  // ----------------------------------------------------
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [ticketDeviceType, setTicketDeviceType] = useState('Skaner ręczny Zebra TC57');
+  const [ticketDeviceId, setTicketDeviceId] = useState('');
+  const [ticketUrgency, setTicketUrgency] = useState('Średni');
+  const [ticketDescription, setTicketDescription] = useState('');
+  const [ticketToast, setTicketToast] = useState<string | null>(null);
+
+  const handleSubmitTicket = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ticketDescription.trim()) return;
+
+    sounds.playSuccess();
+    const storedTickets = JSON.parse(localStorage.getItem('wms-equipment-tickets') || '[]');
+    const newTicket = {
+      id: `TCK-${Math.floor(200 + Math.random() * 800)}`,
+      deviceType: `${ticketDeviceType} ${ticketDeviceId.trim() ? `[${ticketDeviceId.trim()}]` : ''}`.trim(),
+      station: currentUser?.role === 'picker' ? 'Strefa Kompletacji (Picker)' : 'Stacja Pakowania (Packer)',
+      urgency: ticketUrgency,
+      description: ticketDescription.trim(),
+      reportedBy: currentUser?.name || 'Operator terminala',
+      reportedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      status: 'OTWARTE'
+    };
+
+    const updated = [newTicket, ...storedTickets];
+    localStorage.setItem('wms-equipment-tickets', JSON.stringify(updated));
+
+    setTicketDescription('');
+    setTicketDeviceId('');
+    setIsReportModalOpen(false);
+    setTicketToast(`[Opcja 88]: Zgłoszenie awarii ${newTicket.id} przekazano do Helpdesku IT!`);
+    setTimeout(() => setTicketToast(null), 4500);
+  };
+
   const handleLogin = (userCredentials: any) => {
     setCurrentUser(userCredentials);
     setActiveTab("worker_terminal");
@@ -412,6 +647,72 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
 
   return (
     <div className="min-h-screen w-full flex flex-col bg-[#f5f7fa] transition-colors duration-305">
+      {/* Toast Notification for Option 88 */}
+      {ticketToast && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+          {ticketToast}
+        </div>
+      )}
+
+      {/* Industrial Status Bar when working in Terminal */}
+      {activeTab === "worker_terminal" && currentUser && (
+        <div className="bg-slate-900 border-b border-slate-800 px-4 py-1.5 text-white flex flex-wrap items-center justify-between text-xs select-none">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[11px] text-slate-400">
+              TERMINAL: <strong className="text-white">{currentUser.empId}</strong> ({currentUser.name})
+            </span>
+            <span className="hidden sm:inline text-slate-700">|</span>
+            <span className="hidden sm:inline font-mono text-[11px] text-slate-400">
+              ROLA: <strong className="text-amber-400 uppercase">{currentUser.role === 'picker' ? 'Kompletacja' : 'Pakowanie'}</strong>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {/* OPTION 83: Battery status indicator */}
+            <div 
+              className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded ${
+                battery.level <= 20 && !battery.charging 
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/40' 
+                  : 'text-emerald-400 bg-slate-800 border border-slate-700'
+              }`}
+              title={battery.charging ? "Terminal podłączony do stacji dokującej" : `Stan baterii: ${battery.level}%`}
+            >
+              {battery.charging ? (
+                <BatteryCharging className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              ) : battery.level <= 20 ? (
+                <BatteryWarning className="w-3.5 h-3.5 text-red-400 animate-bounce" />
+              ) : (
+                <Battery className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span>83. {battery.level}%</span>
+            </div>
+
+            {/* OPTION 81: Quick scanner test trigger */}
+            <button
+              type="button"
+              onClick={() => setIsScannerTestOpen(true)}
+              className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-slate-300 hover:text-white text-[11px] font-mono flex items-center gap-1 cursor-pointer transition-colors"
+              title="Otwórz okno testowania skanera kodów kreskowych"
+            >
+              <Barcode className="w-3 h-3 text-blue-400" />
+              81. Test Skanera
+            </button>
+
+            {/* OPTION 88: Quick report ticket trigger */}
+            <button
+              type="button"
+              onClick={() => setIsReportModalOpen(true)}
+              className="px-2 py-0.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 rounded text-rose-300 hover:text-white text-[11px] font-mono flex items-center gap-1 cursor-pointer transition-colors"
+              title="Zgłoś awarię sprzętu lub skanera"
+            >
+              <Wrench className="w-3 h-3 text-rose-400" />
+              88. Zgłoś Awarię
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeTab === "login" && (
         <WorkerLogin workersList={WORKERS} staffList={staffList} onLoginSelected={handleLogin} />
       )}
@@ -424,6 +725,9 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
             setCurrentUser(prev => ({ ...prev, role: selectedRole }));
             setActiveTab("worker_terminal");
           }} 
+          battery={battery}
+          onOpenScannerTest={() => setIsScannerTestOpen(true)}
+          onOpenReportModal={() => setIsReportModalOpen(true)}
         />
       )}
 
@@ -447,6 +751,231 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
             onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
           />
         )
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* OPTION 81: SCANNER DIAGNOSTICS MODAL                 */}
+      {/* ---------------------------------------------------- */}
+      {isScannerTestOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-blue-900 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <Barcode className="w-5 h-5 text-blue-300" />
+                <h3 className="font-bold text-sm tracking-wide">81. Diagnostyka Skanera Kodów (Zebra / Honeywell)</h3>
+              </div>
+              <button
+                onClick={() => setIsScannerTestOpen(false)}
+                className="p-1 rounded-lg hover:bg-blue-800 text-blue-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start gap-2">
+                <Smartphone className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Test odczytu sprzętowego lasera / matrycy 2D</p>
+                  <p className="text-blue-700 mt-0.5">
+                    Skieruj skaner na dowolny kod kreskowy. System sprawdzi czas transmisji znaków, obecność suffixu Enter [CR/LF] oraz zgodność formatu.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Pole aktywnego odczytu (Zeskanuj kod lub wpisz i kliknij Enter):
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Kliknij tutaj i naciśnij spust skanera..."
+                  value={scannerInput}
+                  onChange={(e) => setScannerInput(e.target.value)}
+                  onKeyDown={handleScannerKeyDown}
+                  className="w-full px-4 py-2.5 bg-slate-50 border-2 border-blue-500 rounded-xl font-mono text-sm text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-[11px] font-bold text-slate-500">Symuluj skan testowy:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSimulateScan('5901234567890')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                >
+                  EAN-13
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSimulateScan('LOC-B-04-01')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                >
+                  Lokacja
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSimulateScan('TOTE-88')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                >
+                  Pojemnik
+                </button>
+              </div>
+
+              {/* History table */}
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-bold text-slate-700">Historia ostatnich odczytów:</span>
+                  <button
+                    type="button"
+                    onClick={() => setScanLogs([])}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+                  >
+                    Wyczyść historię
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {scanLogs.map((log, idx) => (
+                    <div key={idx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-slate-900">{log.code}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">
+                            {log.symbology}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">Czas: {log.time}</span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {log.speedMs} ms
+                        </span>
+                        <span className="block text-[9px] text-slate-500 font-mono mt-0.5">Suffix [Enter]: OK</span>
+                      </div>
+                    </div>
+                  ))}
+                  {scanLogs.length === 0 && (
+                    <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      Brak zarejestrowanych odczytów. Zeskanuj kod kreskowy powyżej.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsScannerTestOpen(false)}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs cursor-pointer border-none shadow-xs"
+              >
+                Zamknij diagnostykę
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* OPTION 88: HARDWARE FAILURE REPORTING MODAL          */}
+      {/* ---------------------------------------------------- */}
+      {isReportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-rose-700 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <Wrench className="w-5 h-5 text-rose-200" />
+                <h3 className="font-bold text-sm tracking-wide">88. Zgłoś Awarię Sprzętu / Helpdesk IT</h3>
+              </div>
+              <button
+                onClick={() => setIsReportModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-rose-800 text-rose-200 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitTicket} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-5 overflow-y-auto space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Typ uszkodzonego urządzenia:</label>
+                  <select
+                    value={ticketDeviceType}
+                    onChange={(e) => setTicketDeviceType(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white"
+                  >
+                    <option value="Skaner ręczny Zebra TC57">Skaner ręczny Zebra TC57 / TC52</option>
+                    <option value="Drukarka etykiet Zebra ZD421">Drukarka etykiet Zebra ZD421 / ZT411</option>
+                    <option value="Terminal stacjonarny / Laptop">Terminal stacjonarny / Laptop</option>
+                    <option value="Waga paczkowa / podajnikowa">Waga paczkowa / podajnikowa</option>
+                    <option value="Wózek kompletacyjny / Rolkontener">Wózek kompletacyjny / Rolkontener</option>
+                    <option value="Inny osprzęt magazynowy">Inny osprzęt magazynowy</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Oznaczenie / ID sprzętu:</label>
+                    <input
+                      type="text"
+                      placeholder="np. SKAN-04, ZEBRA-P2"
+                      value={ticketDeviceId}
+                      onChange={(e) => setTicketDeviceId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Priorytet usterki:</label>
+                    <select
+                      value={ticketUrgency}
+                      onChange={(e) => setTicketUrgency(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white"
+                    >
+                      <option value="Niski">Niski - działa, drobny mankament</option>
+                      <option value="Średni">Średni - utrudnia pracę</option>
+                      <option value="Wysoki">Wysoki - przestój stanowiska</option>
+                      <option value="Krytyczny">Krytyczny - blokada wysyłek</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Szczegółowy opis problemu:</label>
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="Opisz co dokładnie nie działa (np. brak wiązki lasera, zacięty papier w drukarce, błąd komunikacji Bluetooth)..."
+                    value={ticketDescription}
+                    onChange={(e) => setTicketDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-blue-500"
+                  />
+                </div>
+
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800">
+                  Zgłoszenie trafi bezpośrednio do panelu Administratora WMS oraz technika dyżurnego IT.
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsReportModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs cursor-pointer"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs shadow-md transition-colors cursor-pointer border-none"
+                >
+                  <Wrench className="w-3.5 h-3.5" /> Wyślij Zgłoszenie Awarii
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

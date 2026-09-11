@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
     Search, RefreshCw, Minus, Plus, Check, Package, X, Percent,
     ShieldAlert, FileText, AlertTriangle, Lock, History, ClipboardList, 
-    CheckCircle2, TrendingUp, AlertOctagon
+    CheckCircle2, TrendingUp, AlertOctagon, Download, Wrench
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
 import { defaultImages } from '../../data/warehouseData';
@@ -62,6 +62,89 @@ export default function Products({
     const [isVatModalOpen, setIsVatModalOpen] = useState(false);
     const [selectedVatCategory, setSelectedVatCategory] = useState('');
     const [selectedVatRate, setSelectedVatRate] = useState<number>(23);
+
+    // ----------------------------------------------------
+    // OPTION 32: Reorder Point Filter & Alert
+    // ----------------------------------------------------
+    const [onlyBelowMin, setOnlyBelowMin] = useState(false);
+    const belowMinCount = products.filter(p => p.stock <= (p.reorderThreshold || 10)).length;
+
+    // ----------------------------------------------------
+    // OPTION 44: Fast CSV Export
+    // ----------------------------------------------------
+    const [stockToast, setStockToast] = useState('');
+    const handleExportCsv = () => {
+        sounds.playSuccess();
+        const headers = ['SKU', 'Nazwa Produktu', 'Kategoria', 'Stan Magazynowy', 'Próg Reorder Point', 'Status', 'Cena PLN', 'Lokalizacja'];
+        const rows = products.map(p => [
+            `"${p.sku}"`,
+            `"${(p.name || '').replace(/"/g, '""')}"`,
+            `"${p.category || ''}"`,
+            p.stock,
+            p.reorderThreshold || 10,
+            `"${p.stock === 0 ? 'Brak na stanie' : p.stock <= (p.reorderThreshold || 10) ? 'Niski stan' : 'Dostępny'}"`,
+            p.price || 0,
+            `"${p.locationCode || `Korytarz ${p.zone}`}"`
+        ]);
+
+        const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `stany_magazynowe_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setStockToast('[Opcja 44]: Pomyślnie wygenerowano i pobrano plik CSV ze stanami magazynowymi!');
+        setTimeout(() => setStockToast(''), 4500);
+    };
+
+    // ----------------------------------------------------
+    // OPTION 88: Hardware Tickets (IT Helpdesk Viewer for Admin)
+    // ----------------------------------------------------
+    const [isTicketsModalOpen, setIsTicketsModalOpen] = useState(false);
+    const [equipmentTickets, setEquipmentTickets] = useState<any[]>(() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem('wms-equipment-tickets') || '[]');
+            if (stored.length > 0) return stored;
+            const seed = [
+                {
+                    id: 'TCK-201',
+                    deviceType: 'Skaner ręczny Zebra TC57',
+                    station: 'Stanowisko Zbiórki A',
+                    urgency: 'Wysoki',
+                    description: 'Skaner gubi wiązkę lasera przy szybkim odczycie kodów Code128.',
+                    reportedBy: 'K. Kowalski',
+                    reportedAt: '2026-09-08 14:20',
+                    status: 'OTWARTE'
+                },
+                {
+                    id: 'TCK-202',
+                    deviceType: 'Drukarka termiczna Zebra ZD421',
+                    station: 'Stacja Pakowania 2',
+                    urgency: 'Średni',
+                    description: 'Biała linia w poprzek etykiety – zalecane przeczyszczenie głowicy.',
+                    reportedBy: 'M. Nowak',
+                    reportedAt: '2026-09-09 09:10',
+                    status: 'OTWARTE'
+                }
+            ];
+            localStorage.setItem('wms-equipment-tickets', JSON.stringify(seed));
+            return seed;
+        } catch {
+            return [];
+        }
+    });
+
+    const handleResolveTicket = (ticketId: string) => {
+        sounds.playSuccess();
+        const updated = equipmentTickets.map(t => t.id === ticketId ? { ...t, status: 'NAPRAWIONE', resolvedAt: new Date().toLocaleTimeString('pl-PL') } : t);
+        setEquipmentTickets(updated);
+        try {
+            localStorage.setItem('wms-equipment-tickets', JSON.stringify(updated));
+        } catch (e) {}
+    };
 
     // ----------------------------------------------------
     // OPTION 84: Scrap Ledger (Protokół Strat Wewnętrznych RW)
@@ -201,7 +284,8 @@ export default function Products({
             (p.zone || '').toLowerCase().includes(search.toLowerCase());
         const matchesCat = categoryFilter ? p.category === categoryFilter : true;
         const matchesStatus = statusFilter ? p.status === statusFilter : true;
-        return matchesSearch && matchesCat && matchesStatus;
+        const matchesBelowMin = onlyBelowMin ? p.stock <= (p.reorderThreshold || 10) : true;
+        return matchesSearch && matchesCat && matchesStatus && matchesBelowMin;
     });
 
     const saveStockUpdate = async (product: Product) => {
@@ -314,6 +398,49 @@ export default function Products({
                         <History className="w-4 h-4 text-sky-400" /> 87. Dziennik Korekt
                     </button>
 
+                    {/* Option 32: Reorder Point Filter */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
+                            setOnlyBelowMin(!onlyBelowMin);
+                        }}
+                        className={`h-9 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                            onlyBelowMin 
+                                ? 'bg-amber-600 text-white border-amber-700 shadow-sm' 
+                                : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-50'
+                        }`}
+                        title="Filtruj towary, których stan spadł poniżej progu minimalnego (Opcja 32)"
+                    >
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                        32. Poniżej min ({belowMinCount})
+                    </button>
+
+                    {/* Option 44: Fast CSV Export */}
+                    <button
+                        type="button"
+                        onClick={handleExportCsv}
+                        className="h-9 px-3 rounded-xl bg-white hover:bg-zinc-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-zinc-300 shadow-2xs"
+                        title="Pobierz aktualny stan magazynu jako plik CSV (Opcja 44)"
+                    >
+                        <Download className="w-3.5 h-3.5 text-blue-600" />
+                        44. Eksport CSV
+                    </button>
+
+                    {/* Option 88: Equipment Helpdesk Viewer */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
+                            setIsTicketsModalOpen(true);
+                        }}
+                        className="h-9 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border-none shadow-sm"
+                        title="Przeglądaj zgłoszenia awarii sprzętu zgłoszone przez magazynierów (Opcja 88)"
+                    >
+                        <Wrench className="w-3.5 h-3.5 text-amber-400" />
+                        88. Usterki ({equipmentTickets.filter(t => t.status === 'OTWARTE').length})
+                    </button>
+
                     <button
                         onClick={() => {
                             if (categories.length > 0) {
@@ -345,6 +472,17 @@ export default function Products({
                     </button>
                 </div>
             </div>
+
+            {/* Option 44 Success Toast */}
+            {stockToast && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>{stockToast}</span>
+                    </div>
+                    <button onClick={() => setStockToast('')} className="text-emerald-700 hover:text-emerald-950 font-bold border-none bg-transparent cursor-pointer">✕</button>
+                </div>
+            )}
 
             {/* OPTION 85: INVENTORY RECORD ACCURACY (IRA %) RIBBON */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4.5 rounded-2xl text-white shadow-md border border-indigo-900/50 select-none">
@@ -933,6 +1071,100 @@ export default function Products({
                                 className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
                             >
                                 Zamknij Dziennik
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OPTION 88: EQUIPMENT TICKETS HELPDESK MODAL */}
+            {isTicketsModalOpen && (
+                <div className="fixed inset-0 bg-[#020617]/75 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+                        {/* Header */}
+                        <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-400">
+                                    <Wrench className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-sm font-bold tracking-tight">Rejestr Zgłoszeń Awarii Sprzętu (IT Helpdesk)</h3>
+                                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">OPCJA 88</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400">Zgłoszenia awarii skanerów, drukarek i wag wysyłane przez pracowników</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsTicketsModalOpen(false)}
+                                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors border-none bg-transparent cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 overflow-y-auto flex-1 space-y-3 bg-slate-50">
+                            {equipmentTickets.length === 0 ? (
+                                <div className="p-8 text-center text-slate-500 text-xs font-semibold">
+                                    Brak zarejestrowanych zgłoszeń awarii sprzętu.
+                                </div>
+                            ) : (
+                                equipmentTickets.map((ticket: any) => {
+                                    const isResolved = ticket.status === 'NAPRAWIONE';
+                                    return (
+                                        <div key={ticket.id} className={`p-4 rounded-xl border bg-white shadow-2xs transition-all ${
+                                            isResolved ? 'border-emerald-200 bg-emerald-50/20 opacity-75' : 'border-slate-200'
+                                        }`}>
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2 mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono text-xs font-black text-slate-800">{ticket.id}</span>
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                                        ticket.urgency === 'Wysoki' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                    }`}>
+                                                        Priorytet: {ticket.urgency}
+                                                    </span>
+                                                    <span className="text-[11px] font-bold text-slate-700">{ticket.deviceType}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                                        isResolved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 animate-pulse'
+                                                    }`}>
+                                                        {ticket.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <p className="text-xs text-slate-700 leading-relaxed font-medium mb-3">
+                                                {ticket.description}
+                                            </p>
+
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-slate-400 font-mono pt-1">
+                                                <span>Lokalizacja: <strong className="text-slate-700">{ticket.station}</strong> • Zgłosił: <strong className="text-slate-700">{ticket.reportedBy}</strong> ({ticket.reportedAt})</span>
+                                                {!isResolved && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleResolveTicket(ticket.id)}
+                                                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[10px] cursor-pointer border-none shadow-2xs transition-colors self-end"
+                                                    >
+                                                        ✓ Oznacz jako naprawione
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-3 bg-white border-t border-slate-200 flex justify-end shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsTicketsModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
+                            >
+                                Zamknij
                             </button>
                         </div>
                     </div>
