@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { 
     Search, RefreshCw, Minus, Plus, Check, Package, X, Percent,
     ShieldAlert, FileText, AlertTriangle, Lock, History, ClipboardList, 
-    CheckCircle2, TrendingUp, AlertOctagon, Download, Wrench
+    CheckCircle2, TrendingUp, AlertOctagon, Download, Wrench, RotateCcw
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { defaultImages } from '../../data/warehouseData';
+import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
 import { sounds } from '../../components/SoundEffects';
 
 const polishStatusMap: Record<string, string> = {
@@ -208,6 +208,85 @@ export default function Products({
         }
     ]);
 
+    // ----------------------------------------------------
+    // REVERSE LOGISTICS: RMA Inventory Booking State
+    // ----------------------------------------------------
+    const [isRmaStockModalOpen, setIsRmaStockModalOpen] = useState(false);
+    const [rmaReturns, setRmaReturns] = useState<RmaReturn[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-rma-returns');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return INITIAL_RMA_RETURNS;
+    });
+
+    const pendingRmaCount = rmaReturns.filter(r => r.status === 'Oczekuje na przyjęcie' || r.status === 'W trakcie inspekcji').length;
+
+    const handleAcceptRmaStock = async (rma: RmaReturn, item: any) => {
+        const prod = products.find(p => p.sku === item.sku);
+        if (!prod) {
+            sounds.playError();
+            setStockError(`Nie znaleziono produktu ${item.sku} w katalogu!`);
+            return;
+        }
+
+        sounds.playSuccess();
+        await onUpdateStock(prod, item.quantity);
+
+        const newAdj = {
+            id: `KOR-RMA-${Math.floor(100 + Math.random() * 900)}`,
+            sku: item.sku,
+            name: item.name,
+            type: 'PZ',
+            delta: item.quantity,
+            date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            actor: 'Kierownik Magazynu (RMA)',
+            docRef: `PZ-${rma.id}`,
+            reason: `Zwrot klienta RMA ${rma.id}: przyjęcie na stan magazynowy (Klasa A - Resale)`
+        };
+        setAuditAdjustments(prev => [newAdj, ...prev]);
+
+        const updated = rmaReturns.map(r => r.id === rma.id ? {
+            ...r,
+            status: 'Zatwierdzony (Na stan)' as const,
+            resolution: `Przyjęto na stan magazynowy (+${item.quantity} szt.)`,
+            assignedRmaSlot: 'REGAŁ-GŁÓWNY'
+        } : r);
+        setRmaReturns(updated);
+        window.localStorage.setItem('wms-rma-returns', JSON.stringify(updated));
+
+        setStockToast(`[RMA ${rma.id}]: Pomyślnie przyjęto ${item.quantity} szt. ${item.sku} na stan (+PZ)!`);
+        setTimeout(() => setStockToast(''), 4500);
+    };
+
+    const handleWriteOffRmaStock = (rma: RmaReturn, item: any) => {
+        sounds.playSuccess();
+        const newAdj = {
+            id: `KOR-RW-${Math.floor(100 + Math.random() * 900)}`,
+            sku: item.sku,
+            name: item.name,
+            type: 'RW',
+            delta: 0,
+            date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            actor: 'Komisja Likwidacyjna RMA',
+            docRef: `RW-${rma.id}`,
+            reason: `Utylizacja reklamacji RMA ${rma.id}: towar zniszczony / klasa C (Protokół strat)`
+        };
+        setAuditAdjustments(prev => [newAdj, ...prev]);
+
+        const updated = rmaReturns.map(r => r.id === rma.id ? {
+            ...r,
+            status: 'Odrzucony (Utylizacja RW)' as const,
+            resolution: 'Spisano ze stanu w protokole strat RW (Klasa C)',
+            assignedRmaSlot: 'UTYLIZACJA-RW'
+        } : r);
+        setRmaReturns(updated);
+        window.localStorage.setItem('wms-rma-returns', JSON.stringify(updated));
+
+        setStockToast(`[RMA ${rma.id}]: Spisano pozycję ${item.sku} jako stratę w protokole RW!`);
+        setTimeout(() => setStockToast(''), 4500);
+    };
+
     // Handle Scrap Submission (Option 84 -> Option 87)
     const handleConfirmScrap = async () => {
         const prod = products.find(p => p.sku === scrapSelectedSku);
@@ -374,6 +453,18 @@ export default function Products({
                     <p className="text-zinc-500 text-xs mt-1">Stan zapasów produktów w czasie rzeczywistym, poziomy ostrzegawcze i lokalizacje.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
+                            setIsRmaStockModalOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
+                        title="Zarządzaj przyjęciem zwróconego towaru na stan magazynu lub odpisem strat (RMA Reverse Logistics)"
+                    >
+                        <RotateCcw className="w-4 h-4 text-indigo-200" /> Zwroty RMA ({pendingRmaCount})
+                    </button>
+
                     <button
                         type="button"
                         onClick={() => {
@@ -1162,6 +1253,135 @@ export default function Products({
                             <button
                                 type="button"
                                 onClick={() => setIsTicketsModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
+                            >
+                                Zamknij
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ---------------------------------------------------- */}
+            {/* REVERSE LOGISTICS: RMA STOCK BOOKING MODAL           */}
+            {/* ---------------------------------------------------- */}
+            {isRmaStockModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="p-4 bg-indigo-900 text-white flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-indigo-600 rounded-lg">
+                                    <RotateCcw className="w-5 h-5 text-indigo-100" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-sm tracking-wide">Księgowanie Zwrotów i Reklamacji Magazynowych (RMA)</h3>
+                                    <p className="text-[11px] text-indigo-200">Decyzje dyspozycyjne: Przyjęcie na stan (+PZ), Outlet lub Odpis strat (RW)</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsRmaStockModalOpen(false)}
+                                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-indigo-800 transition-colors border-none bg-transparent cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-5 overflow-y-auto flex-1 space-y-4 bg-slate-50">
+                            {rmaReturns.length === 0 ? (
+                                <div className="p-8 text-center text-slate-500 text-xs font-semibold">
+                                    Brak zgłoszeń zwrotów RMA w systemie.
+                                </div>
+                            ) : (
+                                rmaReturns.map(rma => (
+                                    <div key={rma.id} className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-xs font-black text-indigo-950">{rma.id}</span>
+                                                <span className="text-[11px] text-slate-500 font-mono">Zlecenie: {rma.originalOrderId}</span>
+                                                <span className="text-[11px] font-bold text-slate-800">{rma.customerName}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                    rma.status === 'Zatwierdzony (Na stan)' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                                                    rma.status === 'Odrzucony (Utylizacja RW)' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                                                    'bg-amber-100 text-amber-800 border border-amber-200'
+                                                }`}>
+                                                    {rma.status}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-mono">{rma.createdAt}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {rma.items.map((item, idx) => {
+                                                const productInCatalog = products.find(p => p.sku === item.sku);
+                                                const isProcessed = rma.status === 'Zatwierdzony (Na stan)' || rma.status === 'Odrzucony (Utylizacja RW)';
+
+                                                return (
+                                                    <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-150 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-slate-850">{item.name}</span>
+                                                                <span className="font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-[10px]">{item.sku}</span>
+                                                                <span className="font-bold font-mono">Ilość: {item.quantity} szt.</span>
+                                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                                    item.conditionGrade === 'GRADE_A' ? 'bg-emerald-100 text-emerald-800' :
+                                                                    item.conditionGrade === 'GRADE_B' ? 'bg-amber-100 text-amber-800' :
+                                                                    'bg-rose-100 text-rose-800'
+                                                                }`}>
+                                                                    {item.conditionGrade === 'GRADE_A' ? 'Klasa A (Pełnowartościowy)' :
+                                                                     item.conditionGrade === 'GRADE_B' ? 'Klasa B (Outlet -20%)' : 'Klasa C (Uszkodzony)'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-slate-500 mt-1">
+                                                                Powód: <span className="font-semibold text-slate-700">{item.reason}</span> • Uwagi: {item.inspectionNote || 'Brak'}
+                                                                {productInCatalog && (
+                                                                    <span className="ml-2 text-indigo-700 font-semibold font-mono">
+                                                                        [Aktualny stan SKU w magazynie: {productInCatalog.stock} szt.]
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                        </div>
+
+                                                        {!isProcessed && (
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAcceptRmaStock(rma, item)}
+                                                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs cursor-pointer border-none shadow-xs flex items-center gap-1"
+                                                                    title="Dodaj ilość do stanu magazynowego i wygeneruj dokument PZ"
+                                                                >
+                                                                    <Plus className="w-3.5 h-3.5" /> Przyjmij na stan (+PZ)
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleWriteOffRmaStock(rma, item)}
+                                                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs cursor-pointer border-none shadow-xs flex items-center gap-1"
+                                                                    title="Zarejestruj odpis strat w protokole RW bez dodawania do stanu zbywalnego"
+                                                                >
+                                                                    <AlertTriangle className="w-3.5 h-3.5" /> Odpisz jako stratę (RW)
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-3 bg-white border-t border-slate-200 flex justify-between items-center shrink-0">
+                            <span className="text-[11px] text-slate-500 font-mono">
+                                Moduł Reverse Logistics & Grading WMS
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setIsRmaStockModalOpen(false)}
                                 className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
                             >
                                 Zamknij

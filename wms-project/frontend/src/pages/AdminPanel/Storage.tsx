@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer } from 'lucide-react';
+import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer, RotateCcw, PackageCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
+import { RmaReturn, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
 
 interface StorageProps {
     zones: any[];
@@ -39,6 +40,43 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
         gasC: 0.02,
     });
     const [isAlarmActive, setIsAlarmActive] = useState(false);
+
+    // Reverse Logistics & RMA Buffer State
+    const [rmaReturns, setRmaReturns] = useState<RmaReturn[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-rma-returns');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return INITIAL_RMA_RETURNS;
+    });
+
+    const [selectedRmaSlot, setSelectedRmaSlot] = useState<string | null>(null);
+
+    const rmaSlots = [
+        { code: 'RMA-01-01', label: 'Stanowisko Inspekcji 1' },
+        { code: 'RMA-01-02', label: 'Stanowisko Inspekcji 2' },
+        { code: 'RMA-01-03', label: 'Bufor Kwarantanny A' },
+        { code: 'RMA-01-04', label: 'Bufor Kwarantanny B' },
+        { code: 'RMA-01-05', label: 'Strefa Klasy B (Outlet)' },
+        { code: 'RMA-01-06', label: 'Pojemnik Utylizacji (Klasa C)' },
+    ];
+
+    const handleRelocateRma = (rmaId: string, targetSlot: string) => {
+        const updated = rmaReturns.map(r => {
+            if (r.id === rmaId) {
+                return {
+                    ...r,
+                    status: 'Zatwierdzony (Na stan)' as const,
+                    resolution: 'Zwolniono bufor - przesunięto do regału docelowego',
+                    assignedRmaSlot: targetSlot
+                };
+            }
+            return r;
+        });
+        setRmaReturns(updated);
+        window.localStorage.setItem('wms-rma-returns', JSON.stringify(updated));
+        showNotification(`Zwolniono slot kwarantanny dla ${rmaId}! Przesunięto do ${targetSlot}`, 'success');
+    };
 
     // Live IoT Sensor Update Simulation
     React.useEffect(() => {
@@ -266,7 +304,7 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
             </div>
 
             {/* IoT Sensors Telemetry Panel */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2 select-none">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-2 select-none">
                 {/* Sector A */}
                 <div className="bg-white border border-[#e5e7eb] rounded-2xl p-4 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -339,6 +377,26 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                     <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span className="text-[10px] font-black text-emerald-700 uppercase">OK</span>
+                    </div>
+                </div>
+
+                {/* Sector RMA-01 (Reverse Logistics Buffer) */}
+                <div className="bg-white border border-indigo-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                            <RotateCcw className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Strefa RMA-01 (Kwarantanna)</span>
+                            <span className="text-sm font-black text-slate-900 mt-0.5">
+                                {rmaReturns.filter(r => r.assignedRmaSlot?.startsWith('RMA')).length} / 6 zajętych
+                            </span>
+                            <span className="text-[10px] text-indigo-700 ml-2 font-medium">Bufor zwrotów</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        <span className="text-[10px] font-black text-indigo-700 uppercase">RMA</span>
                     </div>
                 </div>
             </div>
@@ -527,9 +585,171 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                         })}
                                     </div>
                                 </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between pl-1 mb-2">
+                                        <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                                            <RotateCcw className="w-3.5 h-3.5" /> STREFA ZWROTÓW I REKLAMACJI RMA (RMA-01) - KWARANTANNA JAKOŚCIOWA
+                                        </div>
+                                        <span className="text-[10px] text-indigo-600 font-semibold font-mono">6 gniazd buforowych</span>
+                                    </div>
+                                    <div className="grid grid-cols-6 gap-2.5">
+                                        {rmaSlots.map(slot => {
+                                            const returnInSlot = rmaReturns.find(r => r.assignedRmaSlot === slot.code);
+                                            const isOccupied = !!returnInSlot;
+                                            const isSelected = selectedRmaSlot === slot.code;
+                                            return (
+                                                <button
+                                                    key={slot.code}
+                                                    type="button"
+                                                    onClick={() => setSelectedRmaSlot(isSelected ? null : slot.code)}
+                                                    className={`p-2.5 rounded-lg flex flex-col justify-between border cursor-pointer relative min-h-[76px] transition-all text-left ${
+                                                        isSelected
+                                                            ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-300 shadow-md scale-[1.03]'
+                                                            : isOccupied
+                                                            ? 'bg-purple-50/70 hover:bg-purple-100/70 border-purple-200'
+                                                            : 'bg-white hover:bg-slate-50 border-slate-200 border-dashed'
+                                                    }`}
+                                                >
+                                                    <div className="flex justify-between items-center w-full">
+                                                        <span className="text-xs font-bold font-mono text-indigo-950">
+                                                            {slot.code}
+                                                        </span>
+                                                        <span className={`w-2 h-2 rounded-full ${isOccupied ? 'bg-purple-600 animate-pulse' : 'bg-slate-300'}`} />
+                                                    </div>
+                                                    <div className="text-[9px] font-bold mt-1">
+                                                        {isOccupied ? (
+                                                            <span className="text-purple-900 font-mono block truncate">{returnInSlot.id}</span>
+                                                        ) : (
+                                                            <span className="text-slate-400 font-mono block">WOLNY</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-[8px] text-slate-500 truncate mt-0.5">
+                                                        {isOccupied ? (returnInSlot.items[0]?.conditionGrade || 'RMA') : slot.label}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
+
+                    {/* Selected RMA Slot Inspector */}
+                    {selectedRmaSlot && (() => {
+                        const returnInSlot = rmaReturns.find(r => r.assignedRmaSlot === selectedRmaSlot);
+                        const slotDef = rmaSlots.find(s => s.code === selectedRmaSlot);
+                        return (
+                            <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-4 shadow-sm animate-fadeIn">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-indigo-150 pb-3 mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-indigo-600 text-white rounded-lg">
+                                            <RotateCcw className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-extrabold text-xs text-indigo-950 uppercase tracking-wide">
+                                                Inspekcja Gniazda Buforowego: {selectedRmaSlot} ({slotDef?.label})
+                                            </h4>
+                                            <p className="text-[11px] text-indigo-700">
+                                                Strefa Kwarantanny i Przyjęć Zwrotów Magazynowych (RMA-01)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedRmaSlot(null)}
+                                        className="text-xs text-indigo-600 hover:text-indigo-900 font-bold cursor-pointer"
+                                    >
+                                        Zamknij podgląd ✕
+                                    </button>
+                                </div>
+
+                                {returnInSlot ? (
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                            <div className="p-2 bg-white rounded-lg border border-indigo-150">
+                                                <span className="text-[10px] text-slate-400 font-mono block uppercase">Zgłoszenie RMA</span>
+                                                <strong className="text-indigo-950 font-mono text-sm block mt-0.5">{returnInSlot.id}</strong>
+                                                <span className="text-[10px] text-slate-500">Zlecenie: {returnInSlot.originalOrderId}</span>
+                                            </div>
+
+                                            <div className="p-2 bg-white rounded-lg border border-indigo-150">
+                                                <span className="text-[10px] text-slate-400 font-mono block uppercase">Klient & List</span>
+                                                <span className="font-bold text-slate-800 block truncate mt-0.5">{returnInSlot.customerName}</span>
+                                                <span className="text-[10px] font-mono text-slate-500">{returnInSlot.returnTrackingNumber}</span>
+                                            </div>
+
+                                            <div className="p-2 bg-white rounded-lg border border-indigo-150">
+                                                <span className="text-[10px] text-slate-400 font-mono block uppercase">Grading & Decyzja</span>
+                                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mt-0.5 ${
+                                                    returnInSlot.items[0]?.conditionGrade === 'GRADE_A' ? 'bg-emerald-100 text-emerald-800' :
+                                                    returnInSlot.items[0]?.conditionGrade === 'GRADE_B' ? 'bg-amber-100 text-amber-800' :
+                                                    'bg-rose-100 text-rose-800'
+                                                }`}>
+                                                    {returnInSlot.items[0]?.conditionGrade === 'GRADE_A' ? 'Klasa A (Resale)' :
+                                                     returnInSlot.items[0]?.conditionGrade === 'GRADE_B' ? 'Klasa B (Outlet)' : 'Klasa C (Utylizacja)'}
+                                                </span>
+                                                <span className="text-[10px] text-slate-500 block truncate mt-0.5">{returnInSlot.resolution}</span>
+                                            </div>
+
+                                            <div className="p-2 bg-white rounded-lg border border-indigo-150">
+                                                <span className="text-[10px] text-slate-400 font-mono block uppercase">Status Bufora</span>
+                                                <span className="font-bold text-purple-700 block mt-0.5">{returnInSlot.status}</span>
+                                                <span className="text-[10px] text-slate-500">{returnInSlot.createdAt}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3 bg-white rounded-lg border border-indigo-150 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                                            <div>
+                                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                                    <span>{returnInSlot.items[0]?.name}</span>
+                                                    <span className="text-slate-400 font-mono">({returnInSlot.items[0]?.sku})</span>
+                                                    <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[10px] font-mono">x{returnInSlot.items[0]?.quantity} szt.</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                                    Powód: <span className="font-semibold text-slate-700">{returnInSlot.items[0]?.reason}</span> • Uwagi: {returnInSlot.items[0]?.inspectionNote || 'Brak'}
+                                                </p>
+                                            </div>
+
+                                            <div className="flex gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRelocateRma(returnInSlot.id, 'A-01-01')}
+                                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs cursor-pointer flex items-center gap-1 shadow-xs"
+                                                >
+                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Zwolnij na regał (PZ)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const label = {
+                                                            code: `${selectedRmaSlot}-${returnInSlot.id}`,
+                                                            description: `KWARANTANNA RMA | ${returnInSlot.id} | ${returnInSlot.customerName}`,
+                                                            sku: returnInSlot.items[0]?.sku || '',
+                                                            productName: returnInSlot.items[0]?.name || ''
+                                                        };
+                                                        preloadAndPrint([label]);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs cursor-pointer flex items-center gap-1 shadow-xs"
+                                                >
+                                                    <Printer className="w-3.5 h-3.5" /> Etykieta RMA
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-4 bg-white rounded-lg border border-indigo-150 text-center">
+                                        <PackageCheck className="w-6 h-6 text-indigo-400 mx-auto mb-1.5" />
+                                        <p className="text-xs font-bold text-indigo-950">Gniazdo buforowe {selectedRmaSlot} jest wolne</p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">
+                                            Gotowe do przyjęcia nowej paczki ze zwrotem na stanowisku inspekcji towarowej.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                 <div className="bg-white border border-[#e5e7eb] rounded-lg p-6 shadow-sm flex flex-col gap-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-200 pb-4 select-none">

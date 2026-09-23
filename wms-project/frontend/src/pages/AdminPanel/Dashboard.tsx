@@ -3,10 +3,10 @@ import {
   Plus, Filter, TrendingUp, AlertTriangle, Layers, Database, 
   CheckCircle2, Users, Clock, Activity, ArrowUpRight, ShieldAlert,
   Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package, Truck,
-  Trophy, Award, Zap, Medal
+  Trophy, Award, Zap, Medal, RotateCcw
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { defaultImages } from '../../data/warehouseData';
+import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
 
 interface DashboardProps {
     products: Product[];
@@ -60,6 +60,46 @@ export default function Dashboard({
 
     // Courier Pickup SLA On-Time Percentage Metric state
     const [courierSlaTimeframe, setCourierSlaTimeframe] = useState<'today' | 'week' | 'month'>('today');
+
+    // Reverse Logistics RMA Returns state & KPI aggregation
+    const [rmaReturns] = useState<RmaReturn[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-rma-returns');
+            if (saved) return JSON.parse(saved);
+        } catch {}
+        return INITIAL_RMA_RETURNS;
+    });
+
+    const rmaMetrics = useMemo(() => {
+        const totalRma = rmaReturns.length;
+        const pendingCount = rmaReturns.filter(r => r.status === 'Oczekuje na przyjęcie' || r.status === 'W trakcie inspekcji').length;
+        const approvedCount = rmaReturns.filter(r => r.status === 'Zatwierdzony (Na stan)').length;
+        const rejectedCount = rmaReturns.filter(r => r.status === 'Odrzucony (Utylizacja RW)').length;
+        const totalRefund = rmaReturns.reduce((s, r) => s + (r.totalRefundPln || 0), 0);
+
+        const reasonsMap: Record<string, number> = {};
+        rmaReturns.forEach(r => {
+            (r.items || []).forEach(it => {
+                reasonsMap[it.reason] = (reasonsMap[it.reason] || 0) + 1;
+            });
+        });
+
+        const gradeA = rmaReturns.filter(r => r.items[0]?.conditionGrade === 'GRADE_A').length;
+        const gradeB = rmaReturns.filter(r => r.items[0]?.conditionGrade === 'GRADE_B').length;
+        const gradeC = rmaReturns.filter(r => r.items[0]?.conditionGrade === 'GRADE_C').length;
+
+        return {
+            totalRma,
+            pendingCount,
+            approvedCount,
+            rejectedCount,
+            totalRefund,
+            reasonsMap,
+            gradeA,
+            gradeB,
+            gradeC
+        };
+    }, [rmaReturns]);
 
     // Active Shift Staff Attendance Radial Meter state
     const [attendanceShift, setAttendanceShift] = useState<'shift1' | 'shift2' | 'shift3'>('shift1');
@@ -1140,6 +1180,146 @@ export default function Dashboard({
                             </div>
                         </div>
                     ))}
+                </div>
+            </div>
+
+            {/* CENTRUM LOGISTYKI ZWROTNEJ & ANALITYKA RMA (REVERSE LOGISTICS & RMA RETURNS) */}
+            <div className="bg-white rounded-xl border border-indigo-200 p-6 shadow-sm font-sans space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-indigo-100 pb-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-300">
+                                <RotateCcw className="w-5 h-5 text-indigo-600" />
+                            </span>
+                            <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                                Centrum Logistyki Zwrotnej & Obsługi RMA (Reverse Logistics Control)
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-mono font-bold border border-indigo-300">
+                                Inbound Returns
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                            Analityka reklamacji, wskaźnik zwrotów (Return Rate), grading jakościowy (Klasy A/B/C) oraz alokacja bufora kwarantanny.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-indigo-950 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg">
+                            Wskaźnik zwrotów: <strong className="text-indigo-600">2.4%</strong> (Norma branżowa: &lt;3.5%)
+                        </span>
+                    </div>
+                </div>
+
+                {/* 4 Summary Metric Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-4 bg-indigo-50/50 border border-indigo-150 rounded-xl">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 block">Wszystkie zgłoszenia RMA</span>
+                        <div className="flex items-baseline justify-between mt-1">
+                            <span className="text-2xl font-black font-mono text-indigo-950">{rmaMetrics.totalRma}</span>
+                            <span className="text-[10px] font-bold text-indigo-600 font-mono">Baza RMA</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 mt-1 block">Zarejestrowane zwroty w WMS</span>
+                    </div>
+
+                    <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-700 block">Oczekuje na inspekcję</span>
+                        <div className="flex items-baseline justify-between mt-1">
+                            <span className="text-2xl font-black font-mono text-amber-900">{rmaMetrics.pendingCount}</span>
+                            <span className="text-[10px] font-bold text-amber-700 font-mono">Bufor RMA-01</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 mt-1 block">W trakcie weryfikacji na terminalu</span>
+                    </div>
+
+                    <div className="p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700 block">Odzysk na stan (Resale)</span>
+                        <div className="flex items-baseline justify-between mt-1">
+                            <span className="text-2xl font-black font-mono text-emerald-900">
+                                {rmaMetrics.totalRma > 0 ? Math.round((rmaMetrics.gradeA / rmaMetrics.totalRma) * 100) : 0}%
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-700 font-mono">{rmaMetrics.gradeA} szt. Klasa A</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 mt-1 block">Przywrócone do pełnej sprzedaży (+PZ)</span>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 block">Wartość zwrotów</span>
+                        <div className="flex items-baseline justify-between mt-1">
+                            <span className="text-xl font-black font-mono text-slate-900">{rmaMetrics.totalRefund.toFixed(2)} PLN</span>
+                            <span className="text-[10px] font-bold text-slate-500 font-mono">PLN Brutto</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 mt-1 block">Średnia wartość zwrotu: {rmaMetrics.totalRma > 0 ? (rmaMetrics.totalRefund / rmaMetrics.totalRma).toFixed(2) : '0.00'} PLN</span>
+                    </div>
+                </div>
+
+                {/* Grading & Reason Breakdown Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                    {/* Grading distribution */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
+                        <h4 className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
+                            <span>Rozkład Klas Jakościowych (Grading RMA)</span>
+                            <span className="text-[10px] text-slate-400 font-mono">100% zweryfikowanych</span>
+                        </h4>
+
+                        <div className="space-y-2.5">
+                            <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="font-bold text-emerald-800 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                        Klasa A (Pełnowartościowy / Resale)
+                                    </span>
+                                    <span className="font-mono font-bold text-slate-700">{rmaMetrics.gradeA} zwroty ({rmaMetrics.totalRma > 0 ? Math.round((rmaMetrics.gradeA / rmaMetrics.totalRma) * 100) : 0}%)</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${rmaMetrics.totalRma > 0 ? (rmaMetrics.gradeA / rmaMetrics.totalRma) * 100 : 0}%` }} />
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="font-bold text-amber-800 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                        Klasa B (Outlet / Opakowanie uszkodzone)
+                                    </span>
+                                    <span className="font-mono font-bold text-slate-700">{rmaMetrics.gradeB} zwroty ({rmaMetrics.totalRma > 0 ? Math.round((rmaMetrics.gradeB / rmaMetrics.totalRma) * 100) : 0}%)</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${rmaMetrics.totalRma > 0 ? (rmaMetrics.gradeB / rmaMetrics.totalRma) * 100 : 0}%` }} />
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                    <span className="font-bold text-rose-800 flex items-center gap-1.5">
+                                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                        Klasa C (Uszkodzony / Złomowanie RW)
+                                    </span>
+                                    <span className="font-mono font-bold text-slate-700">{rmaMetrics.gradeC} zwroty ({rmaMetrics.totalRma > 0 ? Math.round((rmaMetrics.gradeC / rmaMetrics.totalRma) * 100) : 0}%)</span>
+                                </div>
+                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-rose-500 rounded-full" style={{ width: `${rmaMetrics.totalRma > 0 ? (rmaMetrics.gradeC / rmaMetrics.totalRma) * 100 : 0}%` }} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Reasons breakdown */}
+                    <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
+                        <h4 className="text-xs font-black uppercase text-slate-800 tracking-wide flex items-center justify-between">
+                            <span>Główne Powody Zwrotów & Reklamacji</span>
+                            <span className="text-[10px] text-slate-400 font-mono">Klasyfikacja Pareto</span>
+                        </h4>
+
+                        <div className="space-y-2 text-xs">
+                            {Object.entries(rmaMetrics.reasonsMap).map(([reason, count], idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-150">
+                                    <span className="font-medium text-slate-700 truncate pr-2">{reason}</span>
+                                    <span className="font-mono font-bold text-indigo-900 bg-white border border-slate-200 px-2 py-0.5 rounded shrink-0">
+                                        {count} szt.
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </div>
 

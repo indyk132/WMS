@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { 
   LogIn, Warehouse, Eye, EyeOff, Barcode, Clock, Timer, Award, LogOut, ArrowRight, Wifi, UserCheck, Layers, Box,
-  Battery, BatteryCharging, BatteryWarning, Wrench, AlertTriangle, CheckCircle2, X, RefreshCw, Smartphone, Zap
+  Battery, BatteryCharging, BatteryWarning, Wrench, AlertTriangle, CheckCircle2, X, RefreshCw, Smartphone, Zap,
+  RotateCcw, ShieldCheck, Tag, Printer, PackageCheck
 } from "lucide-react";
 import { sounds } from "../components/SoundEffects";
-import { WORKERS } from "../data/warehouseData";
+import { WORKERS, RmaReturn, INITIAL_RMA_RETURNS, ConditionGrade } from "../data/warehouseData";
 import { PickerView } from "../components/PickerView";
 import { PackerView } from "../components/PackerView";
 
@@ -248,7 +249,7 @@ export function WorkerHome({
                 </span>
               </div>
               <p className="text-xs text-zinc-500 font-mono mt-1">
-                Przypisana Zmiana: <span className="text-zinc-800 font-bold">{currentUser.shift}</span> • Rola: <span className="text-[#0052CC] font-bold uppercase">{currentUser.role === "picker" ? "Zbieracz / Picker" : "Pakowacz / Packer"}</span>
+                Przypisana Zmiana: <span className="text-zinc-800 font-bold">{currentUser.shift}</span> • Rola: <span className="text-[#0052CC] font-bold uppercase">{currentUser.role === "picker" ? "Zbieracz / Picker" : currentUser.role === "rma" ? "Inspektor Zwrotów RMA" : "Pakowacz / Packer"}</span>
               </p>
             </div>
           </div>
@@ -352,7 +353,7 @@ export function WorkerHome({
             Wybierz moduł terminala
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className={`p-6 rounded-xl border flex flex-col justify-between gap-6 transition-all ${
               currentUser.role === "picker" 
                 ? "bg-blue-50/50 border-[#0052CC] shadow-md" 
@@ -422,7 +423,451 @@ export function WorkerHome({
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
+
+            <div className={`p-6 rounded-xl border flex flex-col justify-between gap-6 transition-all ${
+              currentUser.role === "rma" 
+                ? "bg-indigo-50/50 border-indigo-600 shadow-md" 
+                : "bg-white border-zinc-200 hover:border-zinc-350"
+            }`}>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className={`p-2.5 rounded-lg border ${
+                    currentUser.role === "rma"
+                      ? "bg-white border-indigo-500/30 text-indigo-600"
+                      : "bg-zinc-50 border-zinc-255 text-zinc-400"
+                  }`}>
+                    <RotateCcw className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  {currentUser.role === "rma" && (
+                    <span className="px-2 py-0.5 bg-indigo-600 text-white text-[8px] uppercase tracking-wider font-bold rounded">Twoja rola</span>
+                  )}
+                </div>
+                <h4 className="font-display font-black text-base text-zinc-900 uppercase tracking-wider mt-2">
+                  STACJA PRZYJĘCIA ZWROTÓW (RMA INSPECTION)
+                </h4>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  Inspekcja przesyłek zwrotnych, kwalifikacja stanu (Klasy A/B/C), kwarantanna i relokacja do bufora RMA.
+                </p>
+              </div>
+
+              <button
+                onClick={() => { sounds.playSuccess(); onLaunchTerminal("rma"); }}
+                className="w-full py-3 px-4 rounded-lg font-display font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white shadow-md active:scale-[0.98] border-none"
+              >
+                URUCHOM STACJĘ ZWROTÓW
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface RmaTerminalViewProps {
+  workerName: string;
+  onBackToMenu: () => void;
+}
+
+export function RmaTerminalView({ workerName, onBackToMenu }: RmaTerminalViewProps) {
+  const [rmaReturns, setRmaReturns] = useState<RmaReturn[]>(() => {
+    try {
+      const saved = window.localStorage.getItem('wms-rma-returns');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_RMA_RETURNS;
+  });
+
+  const [scanQuery, setScanQuery] = useState('');
+  const [selectedRmaId, setSelectedRmaId] = useState<string>(() => {
+    const pending = rmaReturns.find(r => r.status === 'Oczekuje na przyjęcie' || r.status === 'W trakcie inspekcji');
+    return pending ? pending.id : (rmaReturns[0]?.id || '');
+  });
+
+  const selectedRma = rmaReturns.find(r => r.id === selectedRmaId) || rmaReturns[0];
+
+  const [conditionGrade, setConditionGrade] = useState<ConditionGrade>('GRADE_A');
+  const [targetSlot, setTargetSlot] = useState('RMA-01-01');
+  const [inspectionNote, setInspectionNote] = useState('');
+  const [bannerMsg, setBannerMsg] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  // Sync when selected RMA changes
+  useEffect(() => {
+    if (selectedRma) {
+      setConditionGrade(selectedRma.items[0]?.conditionGrade || 'GRADE_A');
+      setInspectionNote(selectedRma.items[0]?.inspectionNote || '');
+      setTargetSlot(selectedRma.assignedRmaSlot || 'RMA-01-01');
+    }
+  }, [selectedRmaId]);
+
+  const handleScanSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = scanQuery.trim().toUpperCase();
+    if (!q) return;
+
+    sounds.playBeep();
+    const found = rmaReturns.find(r => 
+      r.id.toUpperCase() === q || 
+      r.returnTrackingNumber.toUpperCase().includes(q) || 
+      r.originalOrderId.toUpperCase() === q
+    );
+
+    if (found) {
+      sounds.playSuccess();
+      setSelectedRmaId(found.id);
+      setBannerMsg({ text: `Zeskanowano paczkę zwrotną: ${found.id} (${found.customerName})`, type: 'success' });
+      setScanQuery('');
+    } else {
+      sounds.playError();
+      setBannerMsg({ text: `Nie znaleziono przesyłki zwrotnej dla kodu "${q}". Sprawdź nr RMA lub list przewozowy.`, type: 'error' });
+    }
+  };
+
+  const handleSaveInspection = () => {
+    if (!selectedRma) return;
+    sounds.playSuccess();
+
+    const resolutionText = 
+      conditionGrade === 'GRADE_A' ? 'Zwrot na stan (Resale - Klasa A)' :
+      conditionGrade === 'GRADE_B' ? 'Przecena outletowa -20% (Klasa B)' : 
+      'Złomowanie / Odpis RW (Klasa C)';
+
+    const updated = rmaReturns.map(r => {
+      if (r.id === selectedRma.id) {
+        return {
+          ...r,
+          status: 'W trakcie inspekcji' as const,
+          resolution: resolutionText,
+          assignedRmaSlot: targetSlot,
+          items: r.items.map(it => ({
+            ...it,
+            conditionGrade,
+            inspectionNote: inspectionNote || `Zbadano organoleptycznie przez: ${workerName}`,
+            targetLocation: conditionGrade === 'GRADE_A' ? 'A-01-01-01' : conditionGrade === 'GRADE_B' ? 'B-02-01-01' : 'UTYLIZACJA-RW'
+          }))
+        };
+      }
+      return r;
+    });
+
+    setRmaReturns(updated);
+    window.localStorage.setItem('wms-rma-returns', JSON.stringify(updated));
+    setBannerMsg({ text: `Pomyślnie zatwierdzono inspekcję jakościową dla ${selectedRma.id}! Przypisano slot buforowy: ${targetSlot}.`, type: 'success' });
+  };
+
+  const handlePrintRmaLabel = () => {
+    if (!selectedRma) return;
+    sounds.playBeep();
+    window.print();
+  };
+
+  return (
+    <div className="flex-1 flex flex-col p-4 md:p-6 max-w-7xl mx-auto w-full gap-5 font-sans animate-fadeIn">
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-xs">
+            <RotateCcw className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-black text-slate-900 uppercase tracking-wide">
+                Stacja Przyjęcia i Inspekcji Zwrotów (RMA)
+              </h2>
+              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 font-mono text-[10px] font-bold rounded">
+                Reverse Logistics
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">
+              Stanowisko Inspekcyjne RMA-01 • Inspektor: <strong className="text-slate-800">{workerName}</strong>
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={onBackToMenu}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer border border-slate-200"
+        >
+          ← Powrót do menu
+        </button>
+      </div>
+
+      {bannerMsg && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold animate-fadeIn ${
+          bannerMsg.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' :
+          bannerMsg.type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+          'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span>{bannerMsg.text}</span>
+          </div>
+          <button onClick={() => setBannerMsg(null)} className="cursor-pointer text-slate-400 hover:text-slate-700">✕</button>
+        </div>
+      )}
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left Column: Scanner + Queue list */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Barcode className="w-4 h-4 text-indigo-600" /> Szybki Skaner Listu / RMA
+            </label>
+            <form onSubmit={handleScanSubmit} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Zeskanuj list np. DPD-RET-109283..."
+                value={scanQuery}
+                onChange={(e) => setScanQuery(e.target.value)}
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs cursor-pointer border-none shadow-xs"
+              >
+                Szukaj
+              </button>
+            </form>
+            <p className="text-[10px] text-slate-400 font-mono mt-1.5">
+              Wskazówka: zeskanuj kod kreskowy na paczce zwrotnej skanerem Zebra/Honeywell.
+            </p>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-black uppercase text-slate-800">
+                Kolejka Zwrotów do Oceny ({rmaReturns.length})
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">Kliknij, aby ocenić</span>
+            </div>
+
+            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+              {rmaReturns.map(rma => {
+                const isSelected = rma.id === selectedRma?.id;
+                return (
+                  <div
+                    key={rma.id}
+                    onClick={() => {
+                      sounds.playBeep();
+                      setSelectedRmaId(rma.id);
+                    }}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all text-xs ${
+                      isSelected
+                        ? 'border-indigo-600 bg-indigo-50/70 shadow-sm ring-2 ring-indigo-300'
+                        : 'border-slate-200 hover:bg-slate-50 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-mono font-black text-indigo-950">{rma.id}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        rma.status === 'Zatwierdzony (Na stan)' ? 'bg-emerald-100 text-emerald-800' :
+                        rma.status === 'W trakcie inspekcji' ? 'bg-blue-100 text-blue-800' :
+                        'bg-amber-100 text-amber-800'
+                      }`}>
+                        {rma.status}
+                      </span>
+                    </div>
+                    <div className="font-bold text-slate-800 truncate">{rma.customerName}</div>
+                    <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
+                      List: {rma.returnTrackingNumber} ({rma.carrier})
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1.5 pt-1 border-t border-slate-100">
+                      <span>{rma.items[0]?.name || 'Pozycja'}</span>
+                      <span className="font-mono font-bold text-indigo-700">{rma.assignedRmaSlot || 'Bufor RMA'}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Active Inspection Sheet */}
+        <div className="lg:col-span-7">
+          {selectedRma ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-black text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                      {selectedRma.id}
+                    </span>
+                    <span className="text-xs font-mono text-slate-500">
+                      Zamówienie bazowe: <strong className="text-slate-800">{selectedRma.originalOrderId}</strong>
+                    </span>
+                  </div>
+                  <h3 className="text-base font-extrabold text-slate-900 mt-1">
+                    {selectedRma.customerName}
+                  </h3>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-mono uppercase block">Przesyłka powrotna</span>
+                  <span className="font-mono font-bold text-xs text-slate-800">{selectedRma.returnTrackingNumber}</span>
+                  <span className="text-[10px] text-slate-500 block">{selectedRma.carrier}</span>
+                </div>
+              </div>
+
+              {/* Items inspected */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Zwracane pozycje asortymentowe ({selectedRma.items.length})
+                </label>
+                <div className="space-y-2">
+                  {selectedRma.items.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900">{item.name}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 font-mono">
+                          <span>SKU: <strong className="text-indigo-900">{item.sku}</strong></span>
+                          <span>•</span>
+                          <span>Ilość: <strong>{item.quantity} szt.</strong></span>
+                        </div>
+                        <div className="text-[10px] text-amber-800 mt-1 bg-amber-50 px-2 py-0.5 rounded inline-block">
+                          Zgłoszony powód: <strong>{item.reason}</strong>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block font-mono">Cena katalogowa</span>
+                        <strong className="text-slate-900 font-mono text-xs">{item.price.toFixed(2)} PLN</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grading selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Ocena stanu technicznego i wizualnego (Condition Grading)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { sounds.playBeep(); setConditionGrade('GRADE_A'); }}
+                    className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
+                      conditionGrade === 'GRADE_A'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-2 ring-emerald-400 shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-extrabold text-xs text-emerald-800">Klasa A (Resale)</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-tight">
+                      Towar fabrycznie nowy, nieużywany, oryginalne plomby.
+                    </p>
+                    <div className="mt-2 text-[10px] font-bold text-emerald-700 font-mono bg-emerald-100/60 px-1.5 py-0.5 rounded">
+                      Alokacja: Regał Główny (+PZ)
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { sounds.playBeep(); setConditionGrade('GRADE_B'); }}
+                    className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
+                      conditionGrade === 'GRADE_B'
+                        ? 'border-amber-500 bg-amber-50 text-amber-950 ring-2 ring-amber-300 shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-extrabold text-xs text-amber-800">Klasa B (Outlet)</span>
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-tight">
+                      Uszkodzony karton lub otwarte opakowanie, 100% sprawny.
+                    </p>
+                    <div className="mt-2 text-[10px] font-bold text-amber-700 font-mono bg-amber-100/60 px-1.5 py-0.5 rounded">
+                      Alokacja: Strefa Outlet (-20%)
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { sounds.playBeep(); setConditionGrade('GRADE_C'); }}
+                    className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
+                      conditionGrade === 'GRADE_C'
+                        ? 'border-rose-600 bg-rose-50 text-rose-950 ring-2 ring-rose-300 shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-extrabold text-xs text-rose-800">Klasa C (Utylizacja)</span>
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-tight">
+                      Towar uszkodzony mechanicznie, stłuczony, wada fabryczna.
+                    </p>
+                    <div className="mt-2 text-[10px] font-bold text-rose-700 font-mono bg-rose-100/60 px-1.5 py-0.5 rounded">
+                      Alokacja: Protokół Strat (RW)
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Slot assignment & inspection notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Przypisz gniazdo buforowe RMA
+                  </label>
+                  <select
+                    value={targetSlot}
+                    onChange={(e) => setTargetSlot(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono font-bold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="RMA-01-01">RMA-01-01 (Stanowisko Inspekcji 1)</option>
+                    <option value="RMA-01-02">RMA-01-02 (Stanowisko Inspekcji 2)</option>
+                    <option value="RMA-01-03">RMA-01-03 (Bufor Kwarantanny A)</option>
+                    <option value="RMA-01-04">RMA-01-04 (Bufor Kwarantanny B)</option>
+                    <option value="RMA-01-05">RMA-01-05 (Strefa Klasy B Outlet)</option>
+                    <option value="RMA-01-06">RMA-01-06 (Kosz Utylizacji RW)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Notatka inspekcyjna operatora
+                  </label>
+                  <input
+                    type="text"
+                    value={inspectionNote}
+                    onChange={(e) => setInspectionNote(e.target.value)}
+                    placeholder="Wpisz stan plomb, zarysowania, kompletność..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={handlePrintRmaLabel}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                >
+                  <Printer className="w-4 h-4 text-slate-600" /> Drukuj etykietę kwarantanny
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveInspection}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-md border-none"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Zatwierdź ocenę i relokuj do bufora
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400">
+              <RotateCcw className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+              <p className="font-bold text-sm text-slate-700">Wybierz zwrot z kolejki lub zeskanuj paczkę</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -664,7 +1109,7 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
             </span>
             <span className="hidden sm:inline text-slate-700">|</span>
             <span className="hidden sm:inline font-mono text-[11px] text-slate-400">
-              ROLA: <strong className="text-amber-400 uppercase">{currentUser.role === 'picker' ? 'Kompletacja' : 'Pakowanie'}</strong>
+              ROLA: <strong className="text-amber-400 uppercase">{currentUser.role === 'picker' ? 'Kompletacja' : currentUser.role === 'rma' ? 'Inspekcja Zwrotów RMA' : 'Pakowanie'}</strong>
             </span>
           </div>
 
@@ -740,6 +1185,11 @@ export default function WorkerTerminalStandAlone({ orders, onUpdateOrder, staffL
             onUpdateOrder={onUpdateOrder} 
             workerName={currentUser?.name || "Operator WMS"}
             products={products}
+            onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
+          />
+        ) : currentUser.role === "rma" ? (
+          <RmaTerminalView
+            workerName={currentUser?.name || "Operator WMS"}
             onBackToMenu={() => { sounds.playBeep(); setActiveTab("home"); }}
           />
         ) : (

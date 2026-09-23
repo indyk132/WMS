@@ -35,3 +35,139 @@ export const defaultImages: Record<string, string> = {
     'CHEM-REK-001': 'https://images.unsplash.com/photo-1588196749597-9ff075ee6b5b?w=400&q=80', // Rękawice nitrylowe 100 szt (Nitrile gloves)
     'CHEM-PLY-001': 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&q=80' // Płyn do dezynfekcji 5L (Disinfectant spray)
 };
+
+// ----------------------------------------------------
+// RMA (REVERSE LOGISTICS) INTERFACES & INITIAL DATA
+// ----------------------------------------------------
+export type ConditionGrade = 'GRADE_A' | 'GRADE_B' | 'GRADE_C';
+
+export interface RmaItem {
+    sku: string;
+    name: string;
+    quantity: number;
+    price: number;
+    conditionGrade: ConditionGrade; // A: Resalable, B: Outlet, C: Damaged/Scrap
+    reason: string;
+    inspectionNote?: string;
+    targetLocation?: string;
+}
+
+export interface RmaReturn {
+    id: string; // np. RMA-89211
+    originalOrderId: string; // np. ORD-89498
+    customerName: string;
+    returnTrackingNumber: string; // np. DPD-RET-98124
+    carrier: string;
+    createdAt: string;
+    status: 'Oczekuje na przyjęcie' | 'W trakcie inspekcji' | 'Zatwierdzony (Na stan)' | 'Odrzucony';
+    items: RmaItem[];
+    totalRefundPln: number;
+    resolution: 'Zwrot na stan (Resale)' | 'Przecena outletowa' | 'Utylizacja RW' | 'Odrzucenie reklamacji';
+    assignedRmaSlot?: string;
+    inspectedBy?: string;
+    inspectedAt?: string;
+}
+
+export const INITIAL_RMA_RETURNS: RmaReturn[] = [
+    {
+        id: 'RMA-89201',
+        originalOrderId: 'ORD-89498',
+        customerName: 'Hurtownia Części Auto Sp. z o.o.',
+        returnTrackingNumber: 'DPD-RET-9812401',
+        carrier: 'DPD Standard',
+        createdAt: '22 Wrz, 14:15',
+        status: 'Oczekuje na przyjęcie',
+        totalRefundPln: 269.98,
+        resolution: 'Zwrot na stan (Resale)',
+        assignedRmaSlot: 'RMA-01-01',
+        items: [
+            {
+                sku: 'SKU-73012',
+                name: 'Klocki hamulcowe CarbonPremium',
+                quantity: 2,
+                price: 134.99,
+                conditionGrade: 'GRADE_A',
+                reason: 'Nietrafiony dobór modelu pojazdu przez klienta',
+                inspectionNote: 'Opakowanie fabryczne nienaruszone, plomba zachowana.',
+                targetLocation: 'A-03-01-01'
+            }
+        ]
+    },
+    {
+        id: 'RMA-89202',
+        originalOrderId: 'ORD-89480',
+        customerName: 'ElectroWorld S.A.',
+        returnTrackingNumber: 'INPOST-RET-771290',
+        carrier: 'InPost Paczkomat',
+        createdAt: '21 Wrz, 11:30',
+        status: 'W trakcie inspekcji',
+        totalRefundPln: 249.00,
+        resolution: 'Przecena outletowa',
+        assignedRmaSlot: 'RMA-01-02',
+        inspectedBy: 'Jan Kowalski (EMP-1102)',
+        items: [
+            {
+                sku: 'SKU-39402',
+                name: 'Prostownik mikroprocesorowy 12V',
+                quantity: 1,
+                price: 249.00,
+                conditionGrade: 'GRADE_B',
+                reason: 'Uszkodzenie kartonu zewnętrznego w transporcie',
+                inspectionNote: 'Sprawny technicznie, pognieciony karton – zakwalifikowano do outletu -20%.',
+                targetLocation: 'B-02-01-03'
+            }
+        ]
+    },
+    {
+        id: 'RMA-89203',
+        originalOrderId: 'ORD-89455',
+        customerName: 'TechNova Dist. Sp. k.',
+        returnTrackingNumber: 'DHL-RET-441029',
+        carrier: 'DHL Express',
+        createdAt: '20 Wrz, 09:40',
+        status: 'Zatwierdzony (Na stan)',
+        totalRefundPln: 578.00,
+        resolution: 'Zwrot na stan (Resale)',
+        assignedRmaSlot: 'RMA-01-03',
+        inspectedBy: 'Mariusz Pakosz (EMP-9921)',
+        inspectedAt: '20 Wrz, 15:20',
+        items: [
+            {
+                sku: 'SKU-20391',
+                name: 'Reflektor LED H7 SuperVolt',
+                quantity: 2,
+                price: 289.00,
+                conditionGrade: 'GRADE_A',
+                reason: 'Odstąpienie od umowy w terminie 14 dni',
+                inspectionNote: 'Produkt fabrycznie nowy, sprawdzony testerem.',
+                targetLocation: 'A-01-01-02'
+            }
+        ]
+    },
+    {
+        id: 'RMA-89204',
+        originalOrderId: 'ORD-89410',
+        customerName: 'Logistyka Polska S.A.',
+        returnTrackingNumber: 'DPD-RET-992384',
+        carrier: 'DPD Standard',
+        createdAt: '19 Wrz, 16:00',
+        status: 'Zatwierdzony (Na stan)',
+        totalRefundPln: 179.99,
+        resolution: 'Utylizacja RW',
+        assignedRmaSlot: 'RMA-01-04',
+        inspectedBy: 'Wojtek Nowak (EMP-9104)',
+        inspectedAt: '19 Wrz, 17:30',
+        items: [
+            {
+                sku: 'SKU-50493',
+                name: 'Olej silnikowy Syntetic 5W30',
+                quantity: 1,
+                price: 179.99,
+                conditionGrade: 'GRADE_C',
+                reason: 'Rozszczelnienie kanistra podczas transportu kurierskiego',
+                inspectionNote: 'Wyciek płynu w paczce. Protokół szkody sporządzony z kurierem DPD.',
+                targetLocation: 'UTYLIZACJA-RW'
+            }
+        ]
+    }
+];

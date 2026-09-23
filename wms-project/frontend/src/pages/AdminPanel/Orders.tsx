@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange, AlertCircle, StickyNote, Copy, Check, Sparkles, Clock, Star, CheckCircle2 } from 'lucide-react';
+import { Download, Plus, Filter, ChevronLeft, ChevronRight, CheckSquare, Square, MoreVertical, Search, CalendarRange, AlertCircle, StickyNote, Copy, Check, Sparkles, Clock, Star, CheckCircle2, RotateCcw, ShieldCheck, X, Box, ArrowRight, Truck } from 'lucide-react';
 import { OrderDetail } from '../../components/OrderDetail';
 import { useDebounce } from '../../hooks/useDebounce';
 import { sounds } from '../../components/SoundEffects';
 import { Product } from '../../services/inventoryApi';
+import { RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
 
 const polishMonthMap: Record<string, number> = {
     'Sty': 0, 'Lut': 1, 'Mar': 2, 'Kwi': 3, 'Maj': 4, 'Cze': 5,
@@ -198,6 +199,86 @@ export default function Orders({
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [activePreset, setActivePreset] = useState<string>('all');
 
+    // ----------------------------------------------------
+    // RMA (REVERSE LOGISTICS) STATE & HANDLERS
+    // ----------------------------------------------------
+    const [rmaReturns, setRmaReturns] = useState<RmaReturn[]>(() => {
+        try {
+            const saved = window.localStorage.getItem('wms-rma-returns');
+            if (saved) return JSON.parse(saved);
+        } catch (e) {
+            console.error('Failed to parse RMA returns:', e);
+        }
+        window.localStorage.setItem('wms-rma-returns', JSON.stringify(INITIAL_RMA_RETURNS));
+        return INITIAL_RMA_RETURNS;
+    });
+
+    const [isCreateRmaModalOpen, setIsCreateRmaModalOpen] = useState(false);
+    const [selectedOrderForRma, setSelectedOrderForRma] = useState<any | null>(null);
+    const [rmaReason, setRmaReason] = useState('Nietrafiony dobór modelu / rozmiaru');
+    const [rmaCarrier, setRmaCarrier] = useState('DPD Standard');
+    const [rmaConditionGrade, setRmaConditionGrade] = useState<ConditionGrade>('GRADE_A');
+    const [rmaNote, setRmaNote] = useState('');
+
+    const handleOpenCreateRma = (order: any) => {
+        sounds.playBeep();
+        setSelectedOrderForRma(order);
+        setRmaReason('Nietrafiony dobór modelu / rozmiaru');
+        setRmaCarrier(order.shippingMethod || 'DPD Standard');
+        setRmaConditionGrade('GRADE_A');
+        setRmaNote('');
+        setIsCreateRmaModalOpen(true);
+    };
+
+    const handleSaveRma = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedOrderForRma) return;
+
+        sounds.playSuccess();
+        const randId = `RMA-${Math.floor(89200 + Math.random() * 800)}`;
+        const returnTracking = `${rmaCarrier.toUpperCase().split(' ')[0]}-RET-${Math.floor(100000 + Math.random() * 900000)}`;
+
+        const orderItems = selectedOrderForRma.items || [];
+        const rmaItems = orderItems.map((item: any) => ({
+            sku: item.sku || 'SKU-UNKNOWN',
+            name: item.name || item.product || 'Artykuł magazynowy',
+            quantity: item.quantity || item.qty || 1,
+            price: item.price || 120.00,
+            conditionGrade: rmaConditionGrade,
+            reason: rmaReason,
+            inspectionNote: rmaNote || 'Wstępne zgłoszenie zwrotu zarejestrowane w panelu dyspozytorskim.',
+            targetLocation: rmaConditionGrade === 'GRADE_A' ? 'A-01-01-01' : rmaConditionGrade === 'GRADE_B' ? 'B-02-01-01' : 'UTYLIZACJA-RW'
+        }));
+
+        const totalRefund = rmaItems.reduce((acc: number, it: any) => acc + (it.price * it.quantity), 0);
+
+        const newRma: RmaReturn = {
+            id: randId,
+            originalOrderId: selectedOrderForRma.id,
+            customerName: selectedOrderForRma.customer || selectedOrderForRma.customerName || 'Klient',
+            returnTrackingNumber: returnTracking,
+            carrier: rmaCarrier,
+            createdAt: `${new Date().getDate()} Wrz, ${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`,
+            status: 'Oczekuje na przyjęcie',
+            items: rmaItems,
+            totalRefundPln: Math.round(totalRefund * 100) / 100,
+            resolution: rmaConditionGrade === 'GRADE_A' ? 'Zwrot na stan (Resale)' : rmaConditionGrade === 'GRADE_B' ? 'Przecena outletowa' : 'Utylizacja RW',
+            assignedRmaSlot: `RMA-01-0${Math.floor(1 + Math.random() * 5)}`
+        };
+
+        const updated = [newRma, ...rmaReturns];
+        setRmaReturns(updated);
+        window.localStorage.setItem('wms-rma-returns', JSON.stringify(updated));
+
+        if (onAddOrderChangeLog) {
+            onAddOrderChangeLog(selectedOrderForRma.id, 'Zgłoszenie Zwrotu RMA', `Zarejestrowano zwrot ${randId} (List zwrotny: ${returnTracking})`);
+        }
+
+        setIsCreateRmaModalOpen(false);
+        setSelectedOrderForRma(null);
+        setRmaNote('');
+    };
+
     const copyToClipboard = (text: string, label: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         navigator.clipboard.writeText(text);
@@ -258,6 +339,11 @@ export default function Orders({
                 setStatusFilter('');
                 setPriorityFilter('');
                 setHasNotesOnly(true);
+                break;
+            case 'rma':
+                setStatusFilter('');
+                setPriorityFilter('');
+                setHasNotesOnly(false);
                 break;
             case 'all':
             default:
@@ -488,6 +574,7 @@ export default function Orders({
                     { id: 'shipped', label: 'Wysłane', count: orders.filter(o => o.status === 'Wysłane' || o.status === 'Dostarczone').length },
                     { id: 'high_priority', label: '⚡ Pilne VIP', count: orders.filter(o => o.priority === 'Wysoki').length },
                     { id: 'notes_only', label: '📝 Z Uwagami', count: orders.filter(o => o.customerNotes || o.specialInstructions || o.deliveryNote).length },
+                    { id: 'rma', label: '🔄 Zwroty RMA', count: rmaReturns.length },
                 ].map(preset => (
                     <button
                         key={preset.id}
@@ -508,8 +595,156 @@ export default function Orders({
                 ))}
             </div>
 
-            <div className="bg-white rounded border border-[#e5e7eb] shadow-sm flex flex-col overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#e5e7eb] flex flex-col md:flex-row gap-4 items-center bg-zinc-50">
+            {activePreset === 'rma' ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-fadeIn">
+                    <div className="p-5 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <RotateCcw className="w-5 h-5 text-indigo-600" />
+                                <h3 className="text-base font-bold text-slate-900">Rejestr Przesyłek Zwrotnych & Reklamacji (RMA)</h3>
+                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800">
+                                    {rmaReturns.length} zgłoszeń
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Obsługa logistyki odzysku (Reverse Logistics), inspekcja jakościowa i kwalifikacja towarów do ponownej sprzedaży lub likwidacji szkody.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => {
+                                    const deliveredOrder = orders.find(o => o.status === 'Wysłane' || o.status === 'Dostarczone') || orders[0];
+                                    handleOpenCreateRma(deliveredOrder);
+                                }}
+                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer border-none"
+                            >
+                                <Plus className="w-4 h-4" /> Nowe Zgłoszenie RMA
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* RMA KPI summary stats */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50/40 border-b border-slate-200 text-xs">
+                        <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                            <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Oczekujące na przyjęcie</span>
+                            <span className="text-lg font-black text-amber-600 font-mono mt-0.5 block">
+                                {rmaReturns.filter(r => r.status === 'Oczekuje na przyjęcie').length} przesyłki
+                            </span>
+                        </div>
+                        <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                            <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">W trakcie inspekcji</span>
+                            <span className="text-lg font-black text-blue-600 font-mono mt-0.5 block">
+                                {rmaReturns.filter(r => r.status === 'W trakcie inspekcji').length}
+                            </span>
+                        </div>
+                        <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                            <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Przyjęte na stan (PZ)</span>
+                            <span className="text-lg font-black text-emerald-600 font-mono mt-0.5 block">
+                                {rmaReturns.filter(r => r.status === 'Zatwierdzony (Na stan)').length}
+                            </span>
+                        </div>
+                        <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                            <span className="text-[10px] text-slate-500 font-mono uppercase block font-bold">Wartość zwrotów</span>
+                            <span className="text-lg font-black text-slate-900 font-mono mt-0.5 block">
+                                {rmaReturns.reduce((acc, r) => acc + (r.totalRefundPln || 0), 0).toFixed(2)} PLN
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* RMA Table */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr className="border-b border-slate-200 bg-slate-100 text-slate-600 font-bold uppercase text-[10px]">
+                                    <th className="py-3 px-4">Numer RMA / Data</th>
+                                    <th className="py-3 px-4">Zamówienie Bazowe</th>
+                                    <th className="py-3 px-4">Klient</th>
+                                    <th className="py-3 px-4">List Zwrotny & Kurier</th>
+                                    <th className="py-3 px-4">Ocena (Grading)</th>
+                                    <th className="py-3 px-4">Status & Bufor</th>
+                                    <th className="py-3 px-4 text-right">Kwota Zwrotu</th>
+                                    <th className="py-3 px-4 text-center">Akcja</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                                {rmaReturns.map((rma) => (
+                                    <tr key={rma.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="py-3 px-4">
+                                            <span className="font-mono font-black text-indigo-700 block">{rma.id}</span>
+                                            <span className="text-[10px] text-slate-400">{rma.createdAt}</span>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedOrderId(rma.originalOrderId)}
+                                                className="text-blue-600 hover:underline font-mono font-bold cursor-pointer bg-transparent border-none p-0"
+                                            >
+                                                {rma.originalOrderId}
+                                            </button>
+                                        </td>
+                                        <td className="py-3 px-4 font-semibold text-slate-800">
+                                            {rma.customerName}
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex items-center gap-1 font-mono font-semibold text-slate-900">
+                                                <Truck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                                <span>{rma.returnTrackingNumber}</span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-500">{rma.carrier}</span>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            {rma.items[0]?.conditionGrade === 'GRADE_A' && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    Klasa A (Pełnowartościowy)
+                                                </span>
+                                            )}
+                                            {rma.items[0]?.conditionGrade === 'GRADE_B' && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                                    Klasa B (Outlet -20%)
+                                                </span>
+                                            )}
+                                            {rma.items[0]?.conditionGrade === 'GRADE_C' && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                    Klasa C (Utylizacja RW)
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold w-fit ${
+                                                    rma.status === 'Zatwierdzony (Na stan)' ? 'bg-emerald-100 text-emerald-800' :
+                                                    rma.status === 'W trakcie inspekcji' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {rma.status}
+                                                </span>
+                                                {rma.assignedRmaSlot && (
+                                                    <span className="text-[10px] font-mono text-purple-700 font-bold">
+                                                        Slot: {rma.assignedRmaSlot}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                                            {rma.totalRefundPln.toFixed(2)} PLN
+                                        </td>
+                                        <td className="py-3 px-4 text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedOrderId(rma.originalOrderId)}
+                                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-bold transition-all cursor-pointer border border-slate-200"
+                                            >
+                                                Karta zlecenia
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-white rounded border border-[#e5e7eb] shadow-sm flex flex-col overflow-hidden">
+                    <div className="px-5 py-3 border-b border-[#e5e7eb] flex flex-col md:flex-row gap-4 items-center bg-zinc-50">
                     <div className="flex items-center gap-2 shrink-0 select-none">
                         <Filter className="w-4 h-4 text-zinc-500" />
                         <span className="font-bold text-zinc-850 text-xs uppercase tracking-wider">Filtry kryteriów</span>
@@ -732,9 +967,25 @@ export default function Orders({
                                         </td>
                                         <td className="py-3 px-4 text-right font-mono font-semibold text-zinc-600">{order.shipmentDate}</td>
                                         <td className="py-3 px-4 text-center">
-                                            <button className="p-1 hover:bg-zinc-150 rounded text-zinc-400 hover:text-zinc-850 transition-colors cursor-pointer bg-transparent border-none">
-                                                <MoreVertical className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center justify-center gap-1">
+                                                {(order.status === 'Wysłane' || order.status === 'Dostarczone') && (
+                                                    <button 
+                                                        onClick={() => handleOpenCreateRma(order)}
+                                                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 cursor-pointer flex items-center gap-1 transition-colors"
+                                                        title="Zgłoś zwrot lub reklamację (RMA) dla tego zamówienia"
+                                                    >
+                                                        <RotateCcw className="w-3 h-3 text-indigo-600" />
+                                                        RMA
+                                                    </button>
+                                                )}
+                                                <button 
+                                                    onClick={() => setSelectedOrderId(order.id)}
+                                                    className="p-1 hover:bg-zinc-150 rounded text-zinc-400 hover:text-zinc-850 transition-colors cursor-pointer bg-transparent border-none"
+                                                    title="Szczegóły zlecenia"
+                                                >
+                                                    <MoreVertical className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -810,6 +1061,7 @@ export default function Orders({
                     </div>
                 </div>
             </div>
+            )}
 
             {isNewOrderModalOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -912,6 +1164,113 @@ export default function Orders({
                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs cursor-pointer shadow border-none"
                                 >
                                     Utwórz zlecenia wyjazdu
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* CREATE RMA RETURN MODAL */}
+            {isCreateRmaModalOpen && selectedOrderForRma && (
+                <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-lg shadow-2xl overflow-hidden font-sans text-sm animate-in zoom-in-95 duration-150">
+                        <div className="px-5 py-4 bg-indigo-900 text-white flex justify-between items-center select-none border-b border-indigo-800">
+                            <div className="flex items-center gap-2">
+                                <RotateCcw className="w-5 h-5 text-indigo-300" />
+                                <h3 className="font-extrabold text-sm tracking-tight">Rejestracja Nowego Zwrotu RMA</h3>
+                            </div>
+                            <button onClick={() => setIsCreateRmaModalOpen(false)} className="text-indigo-200 hover:text-white cursor-pointer font-bold text-lg bg-transparent border-none">×</button>
+                        </div>
+
+                        <form onSubmit={handleSaveRma} className="p-5 space-y-4">
+                            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs space-y-1">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Zamówienie bazowe:</span>
+                                    <strong className="font-mono text-slate-900">{selectedOrderForRma.id}</strong>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Odbiorca:</span>
+                                    <strong className="text-slate-900">{selectedOrderForRma.customer || selectedOrderForRma.customerName}</strong>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                    Przyczyna zwrotu / reklamacji
+                                </label>
+                                <select
+                                    value={rmaReason}
+                                    onChange={(e) => setRmaReason(e.target.value)}
+                                    className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 outline-none focus:border-indigo-500"
+                                >
+                                    <option value="Nietrafiony dobór modelu / rozmiaru">Nietrafiony dobór modelu / rozmiaru</option>
+                                    <option value="Odstąpienie od umowy (14 dni konsumenckie)">Odstąpienie od umowy (14 dni konsumenckie)</option>
+                                    <option value="Uszkodzenie kartonu / towaru w transporcie kurierskim">Uszkodzenie kartonu / towaru w transporcie kurierskim</option>
+                                    <option value="Wada fabryczna artykułu / niezgodność ze specyfikacją">Wada fabryczna artykułu / niezgodność ze specyfikacją</option>
+                                    <option value="Pomyłka w wysyłce (błędne SKU)">Pomyłka w wysyłce (błędne SKU)</option>
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                        Operator przesyłki zwrotnej
+                                    </label>
+                                    <select
+                                        value={rmaCarrier}
+                                        onChange={(e) => setRmaCarrier(e.target.value)}
+                                        className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 outline-none"
+                                    >
+                                        <option value="DPD Standard">DPD Standard</option>
+                                        <option value="InPost Paczkomat">InPost Paczkomat</option>
+                                        <option value="DHL Express">DHL Express</option>
+                                        <option value="Pocztex">Pocztex</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                        Wstępna klasyfikacja stanu
+                                    </label>
+                                    <select
+                                        value={rmaConditionGrade}
+                                        onChange={(e) => setRmaConditionGrade(e.target.value as ConditionGrade)}
+                                        className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 outline-none"
+                                    >
+                                        <option value="GRADE_A">Klasa A (Pełnowartościowy)</option>
+                                        <option value="GRADE_B">Klasa B (Outlet / Naruszone pudełko)</option>
+                                        <option value="GRADE_C">Klasa C (Uszkodzony / Likwidacja RW)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                                    Notatka dyspozytorska / uwagi klienta
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Dodaj szczegóły zgłoszenia reklamacyjnego..."
+                                    value={rmaNote}
+                                    onChange={(e) => setRmaNote(e.target.value)}
+                                    className="w-full p-2 border border-slate-300 rounded-lg text-xs outline-none focus:border-indigo-500 text-slate-900"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCreateRmaModalOpen(false)}
+                                    className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                >
+                                    Anuluj
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer border-none flex items-center gap-1.5"
+                                >
+                                    <RotateCcw className="w-4 h-4" /> Utwórz Zgłoszenie RMA
                                 </button>
                             </div>
                         </form>
