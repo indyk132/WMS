@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer, RotateCcw, PackageCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer, RotateCcw, PackageCheck, AlertCircle, CheckCircle2, Tag } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { RmaReturn, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
+import { RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES } from '../../data/warehouseData';
 
 interface StorageProps {
     zones: any[];
@@ -965,6 +965,31 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                             <span className="font-mono font-bold text-xs text-zinc-700">{(selectedSlot.product.price || 199.99).toFixed(2)} PLN</span>
                                         </div>
                                     </div>
+                                    {(() => {
+                                        const lotBatch = INITIAL_PRODUCT_BATCHES.find(b => b.sku === selectedSlot.product.sku);
+                                        if (!lotBatch) return null;
+                                        return (
+                                            <div className={`sm:col-span-3 p-2.5 rounded-xl border text-xs flex items-center justify-between font-sans ${
+                                                lotBatch.status === 'EXPIRING_SOON'
+                                                    ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                            }`}>
+                                                <div className="flex items-center gap-2 font-mono text-[11px] flex-wrap">
+                                                    <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                    <span>Partia LOT: <strong>{lotBatch.lotNumber}</strong></span>
+                                                    <span className="text-zinc-500">| Ważność: {lotBatch.expiryDate}</span>
+                                                    <span className="text-zinc-400">({lotBatch.quantity} szt.)</span>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                    lotBatch.status === 'EXPIRING_SOON'
+                                                        ? 'bg-amber-200 text-amber-900 animate-pulse'
+                                                        : 'bg-emerald-200 text-emerald-900'
+                                                }`}>
+                                                    {lotBatch.status === 'EXPIRING_SOON' ? '⚠️ Alert FEFO: Krótka data' : '✓ Zgodność FEFO'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             ) : (
                                 <div>

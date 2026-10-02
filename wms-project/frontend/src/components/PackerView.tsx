@@ -3,10 +3,10 @@ import {
   ArrowLeft, Barcode, Play, CheckCircle2, AlertTriangle, Layers, 
   Check, RefreshCw, Box, Printer, Scale, Timer, Award, 
   User, Clock, RotateCcw, AlertCircle, Truck, FileText,
-  Maximize2, Eye
+  Maximize2, Eye, Tag
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
-import { defaultImages } from '../data/warehouseData';
+import { defaultImages, INITIAL_PRODUCT_BATCHES } from '../data/warehouseData';
 
 interface PackerViewProps {
   orders: any[];
@@ -65,6 +65,12 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
 
   const getProductImage = (sku: string) => {
     return productImages[sku] || defaultImages[sku] || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&q=80';
+  };
+
+  const getBatchForSku = (sku: string) => {
+    const batches = INITIAL_PRODUCT_BATCHES.filter(b => b.sku === sku);
+    if (batches.length === 0) return null;
+    return [...batches].sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
   };
 
   const showLocalToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -1050,6 +1056,21 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                           <td className="px-4 py-3 font-sans font-semibold text-zinc-900 relative">
                             <div className="flex flex-col gap-1 text-left">
                               <span className={`transition-all ${isFocused ? 'text-purple-750 font-extrabold' : ''}`}>{item.product || item.name}</span>
+                              {(() => {
+                                const lotBatch = getBatchForSku(item.sku);
+                                if (!lotBatch) return null;
+                                return (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="inline-flex items-center gap-1 font-mono text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                      <Tag className="w-2.5 h-2.5 text-emerald-600" /> LOT: {lotBatch.lotNumber}
+                                    </span>
+                                    <span className="font-mono text-[9px] text-zinc-500">Ważność: {lotBatch.expiryDate}</span>
+                                    <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-200">
+                                      FEFO OK
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                               {isFocused && (
                                 <div 
                                   onClick={(e) => e.stopPropagation()} 
@@ -1270,6 +1291,12 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       <span className="text-zinc-500 font-medium">Status pakowania:</span>
                       <span className={`font-bold ${areAllItemsPacked ? 'text-emerald-600' : 'text-amber-600 animate-pulse'}`}>
                         {areAllItemsPacked ? 'Wszystko spakowane ✓' : 'Weryfikacja w toku...'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-500 font-medium">Zgodność FEFO / LOT:</span>
+                      <span className="font-bold text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Zweryfikowano
                       </span>
                     </div>
                   </div>

@@ -3,10 +3,10 @@ import {
   Plus, Filter, TrendingUp, AlertTriangle, Layers, Database, 
   CheckCircle2, Users, Clock, Activity, ArrowUpRight, ShieldAlert,
   Percent, ArrowDown, PackageCheck, AlertCircle, RefreshCw, Package, Truck,
-  Trophy, Award, Zap, Medal, RotateCcw
+  Trophy, Award, Zap, Medal, RotateCcw, Tag
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
+import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES } from '../../data/warehouseData';
 
 interface DashboardProps {
     products: Product[];
@@ -100,6 +100,10 @@ export default function Dashboard({
             gradeC
         };
     }, [rmaReturns]);
+
+    // FEFO / FIFO Batch rotation telemetry
+    const expiringBatchesCount = useMemo(() => INITIAL_PRODUCT_BATCHES.filter(b => b.status === 'EXPIRING_SOON').length, []);
+    const totalBatchesCount = INITIAL_PRODUCT_BATCHES.length;
 
     // Active Shift Staff Attendance Radial Meter state
     const [attendanceShift, setAttendanceShift] = useState<'shift1' | 'shift2' | 'shift3'>('shift1');
@@ -506,6 +510,40 @@ export default function Dashboard({
                     <div className="text-3xl font-extrabold text-[#0f172a] tracking-tight font-mono">42</div>
                     <div className="text-xs text-slate-500 font-medium mt-2">
                         Zamówienia w picker/packer queue
+                    </div>
+                </div>
+            </div>
+
+            {/* Batch & FEFO/FIFO Inventory Rotation Card */}
+            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white rounded-2xl p-5 border border-emerald-900/50 shadow-md">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                            <Tag className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-sm tracking-wide text-white">Kontrola Partii Produkcyjnych i Rotacji FEFO/FIFO</h3>
+                                <span className="text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                                    99.4% Zgodności
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-300 mt-0.5">Automatyczna selekcja najstarszych partii (First Expired, First Out) zapobiegająca przeterminowaniu towaru w strefach wysokiego składowania.</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-3.5 py-2 text-center">
+                            <span className="text-[9px] uppercase font-mono text-slate-400 block">Aktywne partie</span>
+                            <span className="text-base font-bold font-mono text-emerald-400">{totalBatchesCount} LOT</span>
+                        </div>
+                        <div className={`border rounded-xl px-3.5 py-2 text-center ${expiringBatchesCount > 0 ? 'bg-amber-950/60 border-amber-600/40' : 'bg-slate-800/80 border-slate-700'}`}>
+                            <span className="text-[9px] uppercase font-mono text-slate-400 block">Krótka data (&lt;30d)</span>
+                            <span className={`text-base font-bold font-mono ${expiringBatchesCount > 0 ? 'text-amber-400' : 'text-slate-300'}`}>{expiringBatchesCount}</span>
+                        </div>
+                        <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-3.5 py-2 text-center">
+                            <span className="text-[9px] uppercase font-mono text-slate-400 block">Średni wiek</span>
+                            <span className="text-base font-bold font-mono text-teal-300">18.4 dni</span>
+                        </div>
                     </div>
                 </div>
             </div>

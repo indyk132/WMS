@@ -24,9 +24,10 @@ import {
   X,
   Calculator,
   Code,
-  RotateCcw
+  RotateCcw,
+  Tag
 } from 'lucide-react';
-import { defaultImages, RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS } from '../data/warehouseData';
+import { defaultImages, RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES } from '../data/warehouseData';
 import { sounds } from './SoundEffects';
 
 export interface OrderItem {
@@ -98,6 +99,12 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
       return {};
     }
   });
+
+  const getBatchForSku = (sku: string) => {
+    const matches = INITIAL_PRODUCT_BATCHES.filter(b => b.sku === sku);
+    if (matches.length === 0) return null;
+    return [...matches].sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime())[0];
+  };
 
   const customerHistory = useMemo(() => {
     const actualOrders = (orders || []).filter(o => 
@@ -810,14 +817,26 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                             </div>
                             <div className="flex flex-col">
                               <span>{item.product || 'Artykuł WMS'}</span>
-                              {item.pickedLot && (
-                                <span className="text-[10px] text-slate-450 font-mono mt-0.5">
-                                  Partia: <strong className="text-slate-600">{item.pickedLot}</strong>
-                                  {item.expirationDate && (
-                                    <> (Ważność: <span className="text-amber-600">{item.expirationDate}</span>)</>
-                                  )}
-                                </span>
-                              )}
+                              {(() => {
+                                const lot = item.pickedLot || getBatchForSku(item.sku)?.lotNumber;
+                                const expiry = item.expirationDate || getBatchForSku(item.sku)?.expiryDate;
+                                if (!lot) return null;
+                                return (
+                                  <div className="flex items-center gap-1.5 mt-1 font-mono text-[10px] flex-wrap">
+                                    <span className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                                      <Tag className="w-2.5 h-2.5 text-indigo-500" /> LOT: {lot}
+                                    </span>
+                                    {expiry && (
+                                      <span className="text-slate-500">
+                                        Ważność: <strong className="text-slate-700">{expiry}</strong>
+                                      </span>
+                                    )}
+                                    <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded text-[9px] font-bold">
+                                      FEFO
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>

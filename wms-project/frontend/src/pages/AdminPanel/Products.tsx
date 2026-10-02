@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { 
     Search, RefreshCw, Minus, Plus, Check, Package, X, Percent,
     ShieldAlert, FileText, AlertTriangle, Lock, History, ClipboardList, 
-    CheckCircle2, TrendingUp, AlertOctagon, Download, Wrench, RotateCcw
+    CheckCircle2, TrendingUp, AlertOctagon, Download, Wrench, RotateCcw, Tag
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS } from '../../data/warehouseData';
+import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS, ProductBatch, INITIAL_PRODUCT_BATCHES } from '../../data/warehouseData';
 import { sounds } from '../../components/SoundEffects';
 
 const polishStatusMap: Record<string, string> = {
@@ -62,6 +62,10 @@ export default function Products({
     const [isVatModalOpen, setIsVatModalOpen] = useState(false);
     const [selectedVatCategory, setSelectedVatCategory] = useState('');
     const [selectedVatRate, setSelectedVatRate] = useState<number>(23);
+
+    // FEFO / LOT Batches state
+    const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+    const [batches] = useState<ProductBatch[]>(INITIAL_PRODUCT_BATCHES);
 
     // ----------------------------------------------------
     // OPTION 32: Reorder Point Filter & Alert
@@ -457,6 +461,18 @@ export default function Products({
                         type="button"
                         onClick={() => {
                             sounds.playBeep();
+                            setIsBatchModalOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
+                        title="Zarządzaj partiami produkcyjnymi, numerami LOT i rotacją FEFO"
+                    >
+                        <Tag className="w-4 h-4 text-emerald-200" /> Kontrola Partii LOT ({batches.length})
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
                             setIsRmaStockModalOpen(true);
                         }}
                         className="h-9 px-3.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
@@ -718,6 +734,15 @@ export default function Products({
                                                     )}
                                                 </div>
                                                 <span className="font-bold text-zinc-800">{p.name}</span>
+                                                {batches.some(b => b.sku === p.sku && b.status === 'EXPIRING_SOON') && (
+                                                    <span 
+                                                        onClick={() => setIsBatchModalOpen(true)}
+                                                        className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-100 transition-colors"
+                                                        title="Kliknij, aby otworzyć kontrolę partii LOT (Termin ważności < 30 dni)"
+                                                    >
+                                                        ⚠️ Krótka data
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="py-3 px-4 text-zinc-500">{getCategoryLabel(p.category)}</td>
@@ -1382,6 +1407,72 @@ export default function Products({
                             <button
                                 type="button"
                                 onClick={() => setIsRmaStockModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
+                            >
+                                Zamknij
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FEFO & LOT BATCHES AUDIT MODAL */}
+            {isBatchModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 font-sans">
+                        <div className="p-4 bg-emerald-900 text-white flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2">
+                                <Tag className="w-5 h-5 text-emerald-400" />
+                                <h3 className="font-bold text-sm">Rejestr Partii Produkcyjnych (LOT & FEFO)</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsBatchModalOpen(false)}
+                                className="w-7 h-7 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white flex items-center justify-center cursor-pointer border-none"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                            <div className="text-xs text-zinc-500 flex justify-between items-center">
+                                <span>Partie posortowane wg daty ważności (zasada FEFO - First Expired, First Out).</span>
+                                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Łącznie partii: {batches.length}</span>
+                            </div>
+                            <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-zinc-50 text-zinc-500 font-bold border-b border-zinc-200">
+                                        <tr>
+                                            <th className="py-2.5 px-3">Nr LOT</th>
+                                            <th className="py-2.5 px-3">SKU</th>
+                                            <th className="py-2.5 px-3">Lokalizacja</th>
+                                            <th className="py-2.5 px-3 text-right">Ilość</th>
+                                            <th className="py-2.5 px-3">Ważność (FEFO)</th>
+                                            <th className="py-2.5 px-3 text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100 font-mono">
+                                        {[...batches].sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime()).map(b => (
+                                            <tr key={b.id} className={b.status === 'EXPIRING_SOON' ? 'bg-amber-50/60' : 'hover:bg-zinc-50/50'}>
+                                                <td className="py-2 px-3 font-bold text-indigo-700">{b.lotNumber}</td>
+                                                <td className="py-2 px-3 text-zinc-800">{b.sku}</td>
+                                                <td className="py-2 px-3 text-zinc-600">{b.locationCode}</td>
+                                                <td className="py-2 px-3 text-right font-bold text-zinc-900">{b.quantity} szt.</td>
+                                                <td className="py-2 px-3 text-zinc-700">{b.expiryDate}</td>
+                                                <td className="py-2 px-3 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${b.status === 'EXPIRING_SOON' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                                                        {b.status === 'EXPIRING_SOON' ? 'Krótka data' : 'Optymalna'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex justify-end shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsBatchModalOpen(false)}
                                 className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
                             >
                                 Zamknij

@@ -3,10 +3,10 @@ import {
   ArrowLeft, Barcode, Play, CheckCircle2, MapPin, 
   Check, Timer, Target, AlertTriangle, XCircle, Volume2, ShieldAlert,
   Layers, ShoppingCart, AlertCircle, Lock, Ban, AlertOctagon,
-  Maximize2, Scale, Eye, Box
+  Maximize2, Scale, Eye, Box, Tag
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
-import { defaultImages } from '../data/warehouseData';
+import { defaultImages, INITIAL_PRODUCT_BATCHES } from '../data/warehouseData';
 
 interface PickerViewProps {
   orders: any[];
@@ -24,23 +24,25 @@ const isFoodProduct = (sku: string, category?: string) => {
          category === 'Żywność';
 };
 
-const getMockLotInfo = (sku: string, isFood: boolean) => {
-  const cleanSku = sku.replace(/[^a-zA-Z0-9]/g, '');
-  if (isFood) {
+const getMockLotInfo = (sku: string, isFood?: boolean) => {
+  const matchingBatches = INITIAL_PRODUCT_BATCHES
+    .filter(b => b.sku === sku && b.status !== 'QUARANTINE')
+    .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+  if (matchingBatches.length > 0) {
+    const oldest = matchingBatches[0];
     return {
-      fifoLot: `L-F-${cleanSku}-01`,
-      fifoExp: '2026-07-10',
-      newerLot: `L-F-${cleanSku}-02`,
-      newerExp: '2026-12-15'
-    };
-  } else {
-    return {
-      fifoLot: `L-${cleanSku}-99`,
-      fifoExp: null,
-      newerLot: null,
-      newerExp: null
+      fifoLot: oldest.lotNumber,
+      fifoExp: oldest.expiryDate,
+      status: oldest.status
     };
   }
+  const cleanSku = sku.replace(/[^a-zA-Z0-9]/g, '');
+  return {
+    fifoLot: `LOT-2026-${cleanSku.slice(-4) || 'STD'}`,
+    fifoExp: '2027-12-31',
+    status: 'AVAILABLE'
+  };
 };
 
 export function PickerView({ orders, onUpdateOrder, workerName, products, onBackToMenu }: PickerViewProps) {
@@ -1330,16 +1332,15 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                             </div>
 
                             <div className="mt-2.5">
-                              {isFood ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-250 text-amber-850 text-[10px] font-mono font-bold uppercase rounded-lg shadow-inner select-none animate-pulse">
-                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                   Wymagany lot FIFO: <strong className="text-zinc-950 font-black ml-0.5">{lotInfo.fifoLot}</strong> <span className="text-zinc-400">|</span> Ważność: {lotInfo.fifoExp}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 border border-zinc-200 text-zinc-500 text-[10px] font-mono font-bold uppercase rounded-lg">
-                                  Partia: <strong className="text-zinc-800 font-bold ml-0.5">{lotInfo.fifoLot}</strong>
-                                </span>
-                              )}
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono font-bold uppercase rounded-lg border shadow-3xs ${
+                                lotInfo.status === 'EXPIRING_SOON'
+                                  ? 'bg-amber-50 border-amber-300 text-amber-900 animate-pulse'
+                                  : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
+                              }`}>
+                                <Tag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                Wymóg FEFO: <strong className="text-zinc-950 font-black ml-0.5">{lotInfo.fifoLot}</strong>
+                                {lotInfo.fifoExp && <><span className="text-indigo-300">|</span> Ważność: {lotInfo.fifoExp}</>}
+                              </span>
 
                               {/* Option 13: Instant Shortage Action Button */}
                               {!isDone && !shortageItems[key] && (

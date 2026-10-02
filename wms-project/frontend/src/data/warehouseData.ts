@@ -171,3 +171,70 @@ export const INITIAL_RMA_RETURNS: RmaReturn[] = [
         ]
     }
 ];
+
+// ----------------------------------------------------
+// BATCH, LOT & EXPOSURE (FEFO/FIFO) LOGISTICS
+// ----------------------------------------------------
+export interface ProductBatch {
+    id: string;
+    sku: string;
+    lotNumber: string;
+    expiryDate: string; // YYYY-MM-DD
+    manufactureDate: string;
+    quantity: number;
+    locationCode: string;
+    status: 'AVAILABLE' | 'EXPIRING_SOON' | 'QUARANTINE';
+}
+
+export const INITIAL_PRODUCT_BATCHES: ProductBatch[] = [
+    {
+        id: 'BAT-101',
+        sku: 'SKU-001',
+        lotNumber: 'LOT-2026-0814A',
+        manufactureDate: '2026-01-15',
+        expiryDate: '2026-11-15',
+        quantity: 34,
+        locationCode: 'A-01-01',
+        status: 'EXPIRING_SOON'
+    },
+    {
+        id: 'BAT-102',
+        sku: 'SKU-001',
+        lotNumber: 'LOT-2026-0902B',
+        manufactureDate: '2026-03-10',
+        expiryDate: '2027-03-10',
+        quantity: 50,
+        locationCode: 'A-01-02',
+        status: 'AVAILABLE'
+    },
+    {
+        id: 'BAT-103',
+        sku: 'SKU-004',
+        lotNumber: 'LOT-2026-0740X',
+        manufactureDate: '2025-10-01',
+        expiryDate: '2026-10-25',
+        quantity: 12,
+        locationCode: 'A-01-04',
+        status: 'EXPIRING_SOON'
+    },
+    {
+        id: 'BAT-104',
+        sku: 'SKU-50493',
+        lotNumber: 'LOT-2026-0419C',
+        manufactureDate: '2026-02-01',
+        expiryDate: '2028-02-01',
+        quantity: 45,
+        locationCode: 'C-01-01',
+        status: 'AVAILABLE'
+    },
+    {
+        id: 'BAT-105',
+        sku: 'SKU-002',
+        lotNumber: 'LOT-2026-0511Q',
+        manufactureDate: '2025-06-15',
+        expiryDate: '2026-10-18',
+        quantity: 8,
+        locationCode: 'B-01-02',
+        status: 'QUARANTINE'
+    }
+];
