@@ -6,7 +6,7 @@ import {
   Trophy, Award, Zap, Medal, RotateCcw, Tag
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES } from '../../data/warehouseData';
+import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../../data/warehouseData';
 
 interface DashboardProps {
     products: Product[];
@@ -104,6 +104,10 @@ export default function Dashboard({
     // FEFO / FIFO Batch rotation telemetry
     const expiringBatchesCount = useMemo(() => INITIAL_PRODUCT_BATCHES.filter(b => b.status === 'EXPIRING_SOON').length, []);
     const totalBatchesCount = INITIAL_PRODUCT_BATCHES.length;
+
+    // Quarantine & QA Hold telemetry
+    const activeQuarantineHolds = useMemo(() => INITIAL_QUARANTINE_HOLDS.filter(q => q.status === 'ACTIVE'), []);
+    const totalQuarantineQty = useMemo(() => activeQuarantineHolds.reduce((acc, q) => acc + q.quantity, 0), [activeQuarantineHolds]);
 
     // Active Shift Staff Attendance Radial Meter state
     const [attendanceShift, setAttendanceShift] = useState<'shift1' | 'shift2' | 'shift3'>('shift1');
@@ -543,6 +547,40 @@ export default function Dashboard({
                         <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-3.5 py-2 text-center">
                             <span className="text-[9px] uppercase font-mono text-slate-400 block">Średni wiek</span>
                             <span className="text-base font-bold font-mono text-teal-300">18.4 dni</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* QA Quarantine & Hold Gate Telemetry Card */}
+            <div className="bg-gradient-to-r from-red-950 via-slate-900 to-amber-950 text-white rounded-2xl p-5 border border-red-900/50 shadow-md">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400">
+                            <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-sm tracking-wide text-white">Bramka Kwarantanny Magazynowej (Quarantine & Hold Gate)</h3>
+                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${activeQuarantineHolds.length > 0 ? 'bg-red-500/20 text-red-300 border-red-500/30 animate-pulse' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'}`}>
+                                    {activeQuarantineHolds.length > 0 ? `${activeQuarantineHolds.length} Aktywne Blokady` : 'Brak blokad'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-300 mt-0.5">Wstrzymanie automatycznych wydań i zbiórek dla partii towarów z wadami transportowymi lub brakiem atestu.</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-3.5 py-2 text-center">
+                            <span className="text-[9px] uppercase font-mono text-slate-400 block">Zablokowane sztuki</span>
+                            <span className="text-base font-bold font-mono text-red-400">{totalQuarantineQty} szt.</span>
+                        </div>
+                        <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-3.5 py-2 text-center">
+                            <span className="text-[9px] uppercase font-mono text-slate-400 block">Główne powody</span>
+                            <span className="text-xs font-bold font-mono text-amber-300">Transport / Atest</span>
+                        </div>
+                        <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-3.5 py-2 text-center">
+                            <span className="text-[9px] uppercase font-mono text-slate-400 block">Status bramki</span>
+                            <span className="text-xs font-bold font-mono text-emerald-300">Nadzór Jakości QA</span>
                         </div>
                     </div>
                 </div>

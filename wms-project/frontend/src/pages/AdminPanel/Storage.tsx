@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer, RotateCcw, PackageCheck, AlertCircle, CheckCircle2, Tag } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES } from '../../data/warehouseData';
+import { RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../../data/warehouseData';
 
 interface StorageProps {
     zones: any[];
@@ -986,6 +986,29 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                                                         : 'bg-emerald-200 text-emerald-900'
                                                 }`}>
                                                     {lotBatch.status === 'EXPIRING_SOON' ? '⚠️ Alert FEFO: Krótka data' : '✓ Zgodność FEFO'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        const hold = INITIAL_QUARANTINE_HOLDS.find(q => q.sku === selectedSlot.product.sku && q.status === 'ACTIVE');
+                                        if (!hold) return null;
+                                        return (
+                                            <div className="sm:col-span-3 p-3 rounded-xl border border-red-300 bg-red-50 text-red-950 flex flex-col gap-1 shadow-sm font-sans">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-bold text-xs uppercase flex items-center gap-1.5 text-red-700">
+                                                        <ShieldAlert className="w-4 h-4 text-red-600 animate-pulse" />
+                                                        🚫 Aktywna Kwarantanna QA ({hold.id})
+                                                    </span>
+                                                    <span className="text-[10px] font-mono font-bold bg-red-200 text-red-900 px-2 py-0.5 rounded border border-red-300">
+                                                        LOT: {hold.lotNumber}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-red-800 font-medium">
+                                                    Powód wstrzymania: <strong>{hold.reasonLabel}</strong> ({hold.placedBy}, {hold.holdDate})
+                                                </p>
+                                                <span className="text-[10px] text-red-600 font-mono">
+                                                    Wstrzymano dyspozycje wydań dla tej lokalizacji do decyzji Działu Kontroli Jakości.
                                                 </span>
                                             </div>
                                         );

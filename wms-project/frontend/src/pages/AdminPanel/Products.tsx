@@ -5,7 +5,7 @@ import {
     CheckCircle2, TrendingUp, AlertOctagon, Download, Wrench, RotateCcw, Tag
 } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS, ProductBatch, INITIAL_PRODUCT_BATCHES } from '../../data/warehouseData';
+import { defaultImages, RmaReturn, INITIAL_RMA_RETURNS, ProductBatch, INITIAL_PRODUCT_BATCHES, QuarantineHold, INITIAL_QUARANTINE_HOLDS } from '../../data/warehouseData';
 import { sounds } from '../../components/SoundEffects';
 
 const polishStatusMap: Record<string, string> = {
@@ -66,6 +66,10 @@ export default function Products({
     // FEFO / LOT Batches state
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
     const [batches] = useState<ProductBatch[]>(INITIAL_PRODUCT_BATCHES);
+
+    // Quarantine & Hold Gate state
+    const [isQuarantineModalOpen, setIsQuarantineModalOpen] = useState(false);
+    const [quarantineHolds] = useState<QuarantineHold[]>(INITIAL_QUARANTINE_HOLDS);
 
     // ----------------------------------------------------
     // OPTION 32: Reorder Point Filter & Alert
@@ -473,6 +477,18 @@ export default function Products({
                         type="button"
                         onClick={() => {
                             sounds.playBeep();
+                            setIsQuarantineModalOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
+                        title="Zarządzaj blokadami jakościowymi towarów i kwarantanną magazynową (Quarantine & Hold Gate)"
+                    >
+                        <ShieldAlert className="w-4 h-4 text-amber-200" /> Kwarantanna QA ({quarantineHolds.filter(q => q.status === 'ACTIVE').length})
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
                             setIsRmaStockModalOpen(true);
                         }}
                         className="h-9 px-3.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
@@ -741,6 +757,15 @@ export default function Products({
                                                         title="Kliknij, aby otworzyć kontrolę partii LOT (Termin ważności < 30 dni)"
                                                     >
                                                         ⚠️ Krótka data
+                                                    </span>
+                                                )}
+                                                {quarantineHolds.some(q => q.sku === p.sku && q.status === 'ACTIVE') && (
+                                                    <span 
+                                                        onClick={() => setIsQuarantineModalOpen(true)}
+                                                        className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-100 transition-colors animate-pulse"
+                                                        title="Towar objęty kwarantanną QA - blokada wydań"
+                                                    >
+                                                        🚫 Kwarantanna QA
                                                     </span>
                                                 )}
                                             </div>
@@ -1473,6 +1498,74 @@ export default function Products({
                             <button
                                 type="button"
                                 onClick={() => setIsBatchModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
+                            >
+                                Zamknij
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* QUARANTINE & HOLD GATE AUDIT MODAL */}
+            {isQuarantineModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 font-sans">
+                        <div className="p-4 bg-amber-900 text-white flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2">
+                                <ShieldAlert className="w-5 h-5 text-amber-400" />
+                                <h3 className="font-bold text-sm">Rejestr Kwarantanny Magazynowej (Quarantine & Hold Gate)</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsQuarantineModalOpen(false)}
+                                className="w-7 h-7 rounded-lg bg-amber-800 hover:bg-amber-700 text-white flex items-center justify-center cursor-pointer border-none"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                            <div className="text-xs text-zinc-500 flex justify-between items-center">
+                                <span>Partie i pozycje wstrzymane przed wydaniem ze względów jakościowych lub formalnych.</span>
+                                <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                    Aktywnych blokad: {quarantineHolds.filter(q => q.status === 'ACTIVE').length}
+                                </span>
+                            </div>
+                            <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-zinc-50 text-zinc-500 font-bold border-b border-zinc-200">
+                                        <tr>
+                                            <th className="py-2.5 px-3">Nr Protokołu</th>
+                                            <th className="py-2.5 px-3">Towar / SKU</th>
+                                            <th className="py-2.5 px-3">Lokalizacja</th>
+                                            <th className="py-2.5 px-3">Powód blokady</th>
+                                            <th className="py-2.5 px-3 text-right">Ilość</th>
+                                            <th className="py-2.5 px-3 text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100 font-mono">
+                                        {quarantineHolds.map(q => (
+                                            <tr key={q.id} className="bg-amber-50/40">
+                                                <td className="py-2 px-3 font-bold text-amber-900">{q.id}<div className="text-[10px] text-zinc-400 font-normal">LOT: {q.lotNumber}</div></td>
+                                                <td className="py-2 px-3 text-zinc-800 font-bold">{q.sku}<div className="text-[10px] text-zinc-500 font-normal">{q.productName}</div></td>
+                                                <td className="py-2 px-3 text-zinc-600">{q.locationCode}</td>
+                                                <td className="py-2 px-3 text-zinc-700 font-sans text-[11px]">{q.reasonLabel}</td>
+                                                <td className="py-2 px-3 text-right font-bold text-red-600">{q.quantity} szt.</td>
+                                                <td className="py-2 px-3 text-center">
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">
+                                                        W Kwarantannie
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex justify-end shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsQuarantineModalOpen(false)}
                                 className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
                             >
                                 Zamknij

@@ -6,7 +6,7 @@ import {
   Maximize2, Scale, Eye, Box, Tag
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
-import { defaultImages, INITIAL_PRODUCT_BATCHES } from '../data/warehouseData';
+import { defaultImages, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../data/warehouseData';
 
 interface PickerViewProps {
   orders: any[];
@@ -550,6 +550,13 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
       showFeedback('error', `BLOKADA FIFO! Skanowana partia "${cleanInput}" nie jest najstarsza. Zgodnie z FIFO musisz pobrać partię: ${lotInfo.fifoLot}.`);
       return;
     }
+
+    const activeHold = INITIAL_QUARANTINE_HOLDS.find(q => q.sku === matchedItem.sku && q.status === 'ACTIVE');
+    if (activeHold) {
+      sounds.playError();
+      showFeedback('error', `🚫 BLOKADA KWARANTANNY QA! Artykuł ${matchedItem.sku} jest wstrzymany: ${activeHold.reasonLabel}.`);
+      return;
+    }
     
     const key = `${selectedOrderId}-${matchedItem.sku}`;
     const currentlyPicked = pickedItems[key] || 0;
@@ -592,6 +599,15 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
     const currentlyPicked = pickedItems[key] || 0;
     const targetItem = (selectedOrder?.items || []).find((item: any) => item.sku === sku);
     const targetQty = targetItem ? (targetItem.quantity || targetItem.qty || 0) : 0;
+
+    if (delta > 0) {
+      const activeHold = INITIAL_QUARANTINE_HOLDS.find(q => q.sku === sku && q.status === 'ACTIVE');
+      if (activeHold) {
+        sounds.playError();
+        showFeedback('error', `🚫 BLOKADA KWARANTANNY QA! Artykuł ${sku} jest wstrzymany: ${activeHold.reasonLabel}.`);
+        return;
+      }
+    }
 
     const nextPicked = Math.max(0, Math.min(targetQty, currentlyPicked + delta));
 
@@ -1341,6 +1357,17 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                                 Wymóg FEFO: <strong className="text-zinc-950 font-black ml-0.5">{lotInfo.fifoLot}</strong>
                                 {lotInfo.fifoExp && <><span className="text-indigo-300">|</span> Ważność: {lotInfo.fifoExp}</>}
                               </span>
+
+                              {(() => {
+                                const hold = INITIAL_QUARANTINE_HOLDS.find(q => q.sku === item.sku && q.status === 'ACTIVE');
+                                if (!hold) return null;
+                                return (
+                                  <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 border border-red-300 text-red-900 text-[10px] font-bold rounded-lg animate-pulse" title={hold.notes}>
+                                    <ShieldAlert className="w-3.5 h-3.5 text-red-700 shrink-0" />
+                                    🚫 Kwarantanna QA: {hold.reasonLabel}
+                                  </span>
+                                );
+                              })()}
 
                               {/* Option 13: Instant Shortage Action Button */}
                               {!isDone && !shortageItems[key] && (

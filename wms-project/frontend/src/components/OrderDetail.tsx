@@ -25,9 +25,10 @@ import {
   Calculator,
   Code,
   RotateCcw,
-  Tag
+  Tag,
+  ShieldAlert
 } from 'lucide-react';
-import { defaultImages, RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES } from '../data/warehouseData';
+import { defaultImages, RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../data/warehouseData';
 import { sounds } from './SoundEffects';
 
 export interface OrderItem {
@@ -837,19 +838,40 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
                                   </div>
                                 );
                               })()}
+                              {(() => {
+                                const hold = INITIAL_QUARANTINE_HOLDS.find(q => q.sku === item.sku && q.status === 'ACTIVE');
+                                if (!hold) return null;
+                                return (
+                                  <div className="flex items-center gap-1 font-mono text-[10px] text-red-700 bg-red-50 border border-red-300 px-1.5 py-0.5 rounded font-bold mt-1">
+                                    <ShieldAlert className="w-2.5 h-2.5 text-red-600 shrink-0" /> Wstrzymano: Kwarantanna QA ({hold.reasonLabel})
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-500">{item.zone || 'A1'}</td>
                         <td className="py-3 px-4 text-center font-mono font-bold text-[#0f172a]">{item.quantity} szt.</td>
                         <td className="py-3 px-4 text-right select-none">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase ${
-                            isDone 
-                              ? 'bg-emerald-50 text-emerald-800' 
-                              : 'bg-amber-50 text-amber-800 animate-pulse'
-                          }`}>
-                            {isDone ? 'Spakowano' : 'Do zebrania'}
-                          </span>
+                          {(() => {
+                            const isHold = INITIAL_QUARANTINE_HOLDS.some(q => q.sku === item.sku && q.status === 'ACTIVE');
+                            if (isHold && !isDone) {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-red-100 text-red-800 border border-red-300 animate-pulse">
+                                  Wstrzymano (QA)
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                isDone 
+                                  ? 'bg-emerald-50 text-emerald-800' 
+                                  : 'bg-amber-50 text-amber-800 animate-pulse'
+                              }`}>
+                                {isDone ? 'Spakowano' : 'Do zebrania'}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );

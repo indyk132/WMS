@@ -238,3 +238,50 @@ export const INITIAL_PRODUCT_BATCHES: ProductBatch[] = [
         status: 'QUARANTINE'
     }
 ];
+
+export interface QuarantineHold {
+    id: string;
+    sku: string;
+    lotNumber: string;
+    productName: string;
+    reason: 'USZKODZENIE_TRANSPORTOWE' | 'BRAK_ATESTU' | 'RECALL_PRODUCENTA' | 'KONTROLA_JAKOSCI';
+    reasonLabel: string;
+    holdDate: string;
+    placedBy: string;
+    quantity: number;
+    locationCode: string;
+    status: 'ACTIVE' | 'RELEASED' | 'SCRAPPED';
+    notes?: string;
+}
+
+export const INITIAL_QUARANTINE_HOLDS: QuarantineHold[] = [
+    {
+        id: 'Q-HOLD-101',
+        sku: 'SKU-002',
+        lotNumber: 'LOT-2026-0511Q',
+        productName: 'Olej Silnikowy Syntetyczny 5W-30 5L',
+        reason: 'USZKODZENIE_TRANSPORTOWE',
+        reasonLabel: 'Mikropęknięcie kanistra w transporcie',
+        holdDate: '2026-10-09',
+        placedBy: 'Inspektor QA (T. Wiśniewski)',
+        quantity: 8,
+        locationCode: 'B-01-02',
+        status: 'ACTIVE',
+        notes: 'Wstrzymano wydanie do czasu przepakowania i weryfikacji partii.'
+    },
+    {
+        id: 'Q-HOLD-102',
+        sku: 'SKU-004',
+        lotNumber: 'LOT-2026-0740X',
+        productName: 'Płyn Hamulcowy DOT-4 1L',
+        reason: 'BRAK_ATESTU',
+        reasonLabel: 'Oczekiwanie na certyfikat zgodności partii (TÜV)',
+        holdDate: '2026-10-10',
+        placedBy: 'Dział Jakości (M. Kamiński)',
+        quantity: 12,
+        locationCode: 'A-01-04',
+        status: 'ACTIVE',
+        notes: 'Dostawca dosłał brakujące dokumenty. Planowane zwolnienie partii po audycie.'
+    }
+];
+

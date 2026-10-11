@@ -3,10 +3,10 @@ import {
   ArrowLeft, Barcode, Play, CheckCircle2, AlertTriangle, Layers, 
   Check, RefreshCw, Box, Printer, Scale, Timer, Award, 
   User, Clock, RotateCcw, AlertCircle, Truck, FileText,
-  Maximize2, Eye, Tag
+  Maximize2, Eye, Tag, ShieldAlert
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
-import { defaultImages, INITIAL_PRODUCT_BATCHES } from '../data/warehouseData';
+import { defaultImages, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../data/warehouseData';
 
 interface PackerViewProps {
   orders: any[];
@@ -1071,6 +1071,15 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                                   </div>
                                 );
                               })()}
+                              {(() => {
+                                const hold = INITIAL_QUARANTINE_HOLDS.find(q => q.sku === item.sku && q.status === 'ACTIVE');
+                                if (!hold) return null;
+                                return (
+                                  <div className="flex items-center gap-1 text-[10px] text-red-700 bg-red-50 border border-red-300 px-1.5 py-0.5 rounded font-bold animate-pulse mt-1">
+                                    <ShieldAlert className="w-3 h-3 text-red-600 shrink-0" /> 🚫 Kwarantanna QA: {hold.reasonLabel}
+                                  </div>
+                                );
+                              })()}
                               {isFocused && (
                                 <div 
                                   onClick={(e) => e.stopPropagation()} 
@@ -1297,6 +1306,12 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       <span className="text-zinc-500 font-medium">Zgodność FEFO / LOT:</span>
                       <span className="font-bold text-emerald-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Zweryfikowano
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-500 font-medium">Status kwarantanny QA:</span>
+                      <span className="font-bold text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Zwolniony do obrotu
                       </span>
                     </div>
                   </div>
