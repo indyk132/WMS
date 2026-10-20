@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ZoomIn, ZoomOut, Filter, ShieldAlert, Thermometer, Calendar, Key, Search, LayoutGrid, Layers, Printer, RotateCcw, PackageCheck, AlertCircle, CheckCircle2, Tag } from 'lucide-react';
 import { Product } from '../../services/inventoryApi';
-import { RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../../data/warehouseData';
+import { RmaReturn, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS, CarrierContainer, INITIAL_CARRIER_CONTAINERS } from '../../data/warehouseData';
 
 interface StorageProps {
     zones: any[];
@@ -15,6 +15,8 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
     const [zoomLevel, setZoomLevel] = useState(100);
     const [rackSearch, setRackSearch] = useState('');
     const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
+    const [carrierContainers] = useState<CarrierContainer[]>(INITIAL_CARRIER_CONTAINERS);
+    const [isContainerModalOpen, setIsContainerModalOpen] = useState(false);
     const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'info' | 'warning' } | null>(null);
 
     const [labelsToPrint, setLabelsToPrint] = useState<any[]>([]);
@@ -299,6 +301,15 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                     <button className="h-9 px-4 border border-zinc-300 rounded text-xs font-semibold hover:bg-zinc-50 transition-colors flex items-center gap-2 bg-white cursor-pointer select-none">
                         <Filter className="w-4 h-4 text-zinc-500" />
                         Filtruj korytarze
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setIsContainerModalOpen(true)}
+                        className="h-9 px-3.5 rounded bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer select-none"
+                        title="Zarządzanie nośnikami ładunku: kuwety KLT, europalety EPAL, rollkontenery"
+                    >
+                        <Layers className="w-4 h-4 text-blue-600" />
+                        Nośniki & Palety ({carrierContainers.length})
                     </button>
                 </div>
             </div>
@@ -1296,6 +1307,81 @@ export default function Storage({ zones, products, onToggleLockZone, highlighted
                 }`}>
                     <ShieldAlert className="w-5 h-5 text-[#3b82f6] shrink-0" />
                     <span className="text-xs font-bold leading-tight font-sans text-stone-900">{notification.msg}</span>
+                </div>
+            )}
+
+            {/* CARRIER & PALLET CONTAINER INVENTORY MODAL */}
+            {isContainerModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 font-sans">
+                        <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <Layers className="w-5 h-5 text-blue-400" />
+                                <h3 className="font-bold text-sm">Ewidencja Nośników Ładunku (KLT, EPAL, Rollkontenery)</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsContainerModalOpen(false)}
+                                className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center cursor-pointer border-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto space-y-3">
+                            <div className="flex justify-between items-center text-xs text-zinc-500">
+                                <span>Flota nośników wielokrotnego użytku w obrocie magazynowym.</span>
+                                <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                    Łącznie nośników: {carrierContainers.length}
+                                </span>
+                            </div>
+                            <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-zinc-50 text-zinc-500 font-bold border-b border-zinc-200">
+                                        <tr>
+                                            <th className="py-2.5 px-3">Kod Nośnika</th>
+                                            <th className="py-2.5 px-3">Typ Nośnika</th>
+                                            <th className="py-2.5 px-3">Aktualna Lokalizacja</th>
+                                            <th className="py-2.5 px-3 text-right">Tara / Nośność</th>
+                                            <th className="py-2.5 px-3">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100 font-mono">
+                                        {carrierContainers.map(c => (
+                                            <tr key={c.id} className="hover:bg-zinc-50/50">
+                                                <td className="py-2.5 px-3 font-bold text-blue-700">{c.id}<div className="text-[10px] text-zinc-400 font-normal">{c.barcode}</div></td>
+                                                <td className="py-2.5 px-3 text-zinc-800 font-sans font-medium">{c.typeLabel}</td>
+                                                <td className="py-2.5 px-3 text-zinc-600">{c.currentLocation}</td>
+                                                <td className="py-2.5 px-3 text-right">
+                                                    <span className="font-bold text-zinc-800">{c.tareWeightKg} kg</span>
+                                                    <span className="text-[10px] text-zinc-400 block">max {c.maxCapacityKg} kg</span>
+                                                </td>
+                                                <td className="py-2.5 px-3">
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                        c.status === 'AVAILABLE' 
+                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                                            : c.status === 'IN_USE'
+                                                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                                                    }`}>
+                                                        {c.status === 'AVAILABLE' ? 'Dostępny' : c.status === 'IN_USE' ? 'W użyciu' : 'Serwis'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setIsContainerModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none"
+                            >
+                                Zamknij
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

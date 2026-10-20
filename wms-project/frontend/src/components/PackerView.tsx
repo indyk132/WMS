@@ -6,7 +6,7 @@ import {
   Maximize2, Eye, Tag, ShieldAlert
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
-import { defaultImages, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../data/warehouseData';
+import { defaultImages, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS, CarrierContainer, INITIAL_CARRIER_CONTAINERS } from '../data/warehouseData';
 
 interface PackerViewProps {
   orders: any[];
@@ -18,6 +18,8 @@ interface PackerViewProps {
 
 export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onBackToMenu }: PackerViewProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedPalletId, setSelectedPalletId] = useState<string>('NONE');
+  const [isToteReleased, setIsToteReleased] = useState<boolean>(false);
   const [cartonSize, setCartonSize] = useState('Carton-M'); 
   const [weightKg, setWeightKg] = useState(3.45);
   const [isGiftConfirmed, setIsGiftConfirmed] = useState(false);
@@ -1313,6 +1315,51 @@ export function PackerView({ orders, onUpdateOrder, workerName, currentUser, onB
                       <span className="font-bold text-emerald-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Zwolniony do obrotu
                       </span>
+                    </div>
+
+                    {/* Carrier Container & Pallet Consolidation */}
+                    <div className="pt-2.5 border-t border-zinc-150 space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-500 font-medium">Kuweta kompletacji:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
+                            KLT-401
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              sounds.playSuccess();
+                              setIsToteReleased(true);
+                              showLocalToast('Pojemnik KLT-401 został zwolniony i przekazany do strefy czystych nośników.', 'success');
+                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                              isToteReleased
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-300'
+                            }`}
+                          >
+                            {isToteReleased ? 'Zwolniono ✓' : 'Zwolnij KLT'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-500 font-medium">Paleta wysyłkowa:</span>
+                        <select
+                          value={selectedPalletId}
+                          onChange={(e) => {
+                            sounds.playBeep();
+                            setSelectedPalletId(e.target.value);
+                            showLocalToast(`Przypisano paletę konsolidacyjną: ${e.target.value === 'NONE' ? 'Brak (paczka luzem)' : e.target.value}`, 'info');
+                          }}
+                          className="font-mono text-[11px] font-bold bg-white border border-zinc-300 rounded px-2 py-1 text-zinc-800 cursor-pointer"
+                        >
+                          <option value="NONE">Brak (Paczka luzem)</option>
+                          <option value="EPAL-881">EPAL-881 (Drewniana 1200x800)</option>
+                          <option value="EPAL-882">EPAL-882 (Drewniana 1200x800)</option>
+                          <option value="ROLL-102">ROLL-102 (Wózek siatkowy)</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>

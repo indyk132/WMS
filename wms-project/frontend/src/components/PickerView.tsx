@@ -6,7 +6,7 @@ import {
   Maximize2, Scale, Eye, Box, Tag
 } from 'lucide-react';
 import { sounds } from './SoundEffects';
-import { defaultImages, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../data/warehouseData';
+import { defaultImages, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS, CarrierContainer, INITIAL_CARRIER_CONTAINERS } from '../data/warehouseData';
 
 interface PickerViewProps {
   orders: any[];
@@ -47,6 +47,9 @@ const getMockLotInfo = (sku: string, isFood?: boolean) => {
 
 export function PickerView({ orders, onUpdateOrder, workerName, products, onBackToMenu }: PickerViewProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [containersList, setContainersList] = useState<CarrierContainer[]>(() => INITIAL_CARRIER_CONTAINERS);
+  const [activeContainerId, setActiveContainerId] = useState<string>('KLT-401');
+  const [isContainerModalOpen, setIsContainerModalOpen] = useState<boolean>(false);
 
   // Helper to parse location code for sorting
   const parseLocationCode = (code: string) => {
@@ -1212,6 +1215,20 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                       6. Pojemnik #{currentToteNumber} (Wózek pełny)
                     </button>
 
+                    {/* Carrier Container Assignment */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playBeep();
+                        setIsContainerModalOpen(true);
+                      }}
+                      className="flex-grow sm:flex-none h-11 px-3.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                      title="Wybierz lub zeskanuj przypisaną kuwetę KLT"
+                    >
+                      <Box className="w-4 h-4 text-blue-600" />
+                      Nośnik: {activeContainerId} (Tara: {containersList.find(c => c.id === activeContainerId)?.tareWeightKg || 1.85} kg)
+                    </button>
+
                     <button
                       onClick={() => {
                         sounds.playBeep();
@@ -1792,6 +1809,71 @@ export function PickerView({ orders, onUpdateOrder, workerName, products, onBack
                   Zamknij podgląd
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CARRIER CONTAINER ASSIGNMENT MODAL */}
+      {isContainerModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 font-sans">
+            <div className="p-4 bg-[#0052CC] text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Box className="w-5 h-5 text-blue-200" />
+                <h3 className="font-bold text-sm">Wybór Nośnika Kompletacyjnego (KLT / Pojemnik)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsContainerModalOpen(false)}
+                className="w-7 h-7 rounded-lg bg-blue-700 hover:bg-blue-600 text-white flex items-center justify-center cursor-pointer border-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-zinc-600">
+                Wybierz nośnik pobrany ze strefy bufora czystych pojemników do obsługi zlecenia <strong className="text-zinc-900 font-mono">{selectedOrderId}</strong>:
+              </p>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {containersList.filter(c => c.type === 'KLT_BOX').map(c => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      sounds.playSuccess();
+                      setActiveContainerId(c.id);
+                      setIsContainerModalOpen(false);
+                      showFeedback('success', `Przypisano nośnik kompletacyjny ${c.id} (Tara: ${c.tareWeightKg} kg, Max: ${c.maxCapacityKg} kg).`);
+                    }}
+                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                      activeContainerId === c.id
+                        ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300'
+                        : 'bg-zinc-50 border-zinc-200 hover:border-zinc-400'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-blue-700">{c.id}</span>
+                        <span className="text-[11px] font-bold text-zinc-900">{c.typeLabel}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 font-mono">Lokalizacja: {c.currentLocation}</span>
+                    </div>
+                    <div className="text-right font-mono text-[11px]">
+                      <span className="block font-bold text-zinc-700">Tara: {c.tareWeightKg} kg</span>
+                      <span className="text-[10px] text-zinc-500">Max: {c.maxCapacityKg} kg</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsContainerModalOpen(false)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs cursor-pointer border-none"
+              >
+                Zamknij
+              </button>
             </div>
           </div>
         </div>

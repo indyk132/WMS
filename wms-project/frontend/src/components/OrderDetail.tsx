@@ -28,7 +28,7 @@ import {
   Tag,
   ShieldAlert
 } from 'lucide-react';
-import { defaultImages, RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS } from '../data/warehouseData';
+import { defaultImages, RmaReturn, ConditionGrade, INITIAL_RMA_RETURNS, INITIAL_PRODUCT_BATCHES, INITIAL_QUARANTINE_HOLDS, CarrierContainer, INITIAL_CARRIER_CONTAINERS } from '../data/warehouseData';
 import { sounds } from './SoundEffects';
 
 export interface OrderItem {
@@ -950,6 +950,29 @@ export function OrderDetail({ order, onBack, onUpdateStatus, onAddChangeLog, onU
 
             <div className="border-t border-slate-100 pt-3.5 mt-5 text-[11px] text-slate-400 font-mono select-none">
               Ostatnia modyfikacja: <strong className="text-slate-600">{order.internalNotesActor || 'SYSTEM_OS'}</strong>
+            </div>
+          </div>
+
+          {/* Logistics Container & Pallet Unit Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3 font-sans">
+            <h3 className="font-extrabold text-xs text-slate-900 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2.5">
+              <Box className="w-4.5 h-4.5 text-[#2563eb]" /> Nośniki Transportowe & Paletyzacja
+            </h3>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl">
+                <span className="text-[10px] text-blue-700 font-bold block uppercase font-mono">Nośnik zbiórki</span>
+                <span className="font-mono font-black text-sm text-blue-950 mt-0.5 block">KLT-401</span>
+                <span className="text-[10px] text-blue-600 font-mono">Tara: 1.85 kg (Pojemnik KLT)</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[10px] text-slate-500 font-bold block uppercase font-mono">Paleta wysyłkowa</span>
+                <span className="font-mono font-black text-sm text-slate-900 mt-0.5 block">EPAL-881</span>
+                <span className="text-[10px] text-slate-500 font-mono">Europaleta 1200x800 (22.5 kg)</span>
+              </div>
+            </div>
+            <div className="flex justify-between items-center text-[11px] pt-1 text-slate-500 font-mono border-t border-slate-100">
+              <span>Łączna waga tary nośników:</span>
+              <strong className="text-slate-800">24.35 kg (Wliczona do listu DPD)</strong>
             </div>
           </div>
 

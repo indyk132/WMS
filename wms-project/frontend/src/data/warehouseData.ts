@@ -285,3 +285,89 @@ export const INITIAL_QUARANTINE_HOLDS: QuarantineHold[] = [
     }
 ];
 
+export interface CarrierContainer {
+    id: string;
+    type: 'KLT_BOX' | 'EPAL_PALLET' | 'ROLLCONTAINER' | 'HALF_PALLET';
+    typeLabel: string;
+    barcode: string;
+    status: 'AVAILABLE' | 'IN_USE' | 'DAMAGED' | 'WASHING_CLEANING';
+    currentLocation: string;
+    assignedOrderId?: string;
+    assignedWorker?: string;
+    tareWeightKg: number;
+    maxCapacityKg: number;
+    lastInspectionDate: string;
+}
+
+export const INITIAL_CARRIER_CONTAINERS: CarrierContainer[] = [
+    {
+        id: 'KLT-401',
+        type: 'KLT_BOX',
+        typeLabel: 'Pojemnik KLT-6428 (Niebieski)',
+        barcode: 'KLT-401-PL',
+        status: 'AVAILABLE',
+        currentLocation: 'Strefa Kompletacji A',
+        tareWeightKg: 1.85,
+        maxCapacityKg: 25.0,
+        lastInspectionDate: '2026-10-01'
+    },
+    {
+        id: 'KLT-402',
+        type: 'KLT_BOX',
+        typeLabel: 'Pojemnik KLT-6428 (Niebieski)',
+        barcode: 'KLT-402-PL',
+        status: 'IN_USE',
+        currentLocation: 'Stacja Pakowania ST-02',
+        assignedOrderId: 'ORD-2026-0814',
+        assignedWorker: 'Marek Kowalski',
+        tareWeightKg: 1.85,
+        maxCapacityKg: 25.0,
+        lastInspectionDate: '2026-10-05'
+    },
+    {
+        id: 'KLT-403',
+        type: 'KLT_BOX',
+        typeLabel: 'Pojemnik KLT-4314 (Czerwony)',
+        barcode: 'KLT-403-PL',
+        status: 'AVAILABLE',
+        currentLocation: 'Strefa Kompletacji B',
+        tareWeightKg: 1.20,
+        maxCapacityKg: 15.0,
+        lastInspectionDate: '2026-09-28'
+    },
+    {
+        id: 'EPAL-881',
+        type: 'EPAL_PALLET',
+        typeLabel: 'Europaleta Drewniana EPAL 1 (1200x800)',
+        barcode: 'EPAL-881-PL',
+        status: 'AVAILABLE',
+        currentLocation: 'Regał Wysoki R-02-01',
+        tareWeightKg: 22.5,
+        maxCapacityKg: 1500.0,
+        lastInspectionDate: '2026-08-15'
+    },
+    {
+        id: 'EPAL-882',
+        type: 'EPAL_PALLET',
+        typeLabel: 'Europaleta Drewniana EPAL 1 (1200x800)',
+        barcode: 'EPAL-882-PL',
+        status: 'IN_USE',
+        currentLocation: 'Strefa Wydań Rampa R1',
+        assignedOrderId: 'ORD-2026-0812',
+        tareWeightKg: 22.5,
+        maxCapacityKg: 1500.0,
+        lastInspectionDate: '2026-09-10'
+    },
+    {
+        id: 'ROLL-102',
+        type: 'ROLLCONTAINER',
+        typeLabel: 'Wózek Siatkowy Rollkontener 3-ścienny',
+        barcode: 'ROLL-102-PL',
+        status: 'AVAILABLE',
+        currentLocation: 'Ekspedycja Kurierska DPD',
+        tareWeightKg: 31.0,
+        maxCapacityKg: 500.0,
+        lastInspectionDate: '2026-09-20'
+    }
+];
+

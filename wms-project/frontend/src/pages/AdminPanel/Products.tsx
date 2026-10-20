@@ -71,6 +71,9 @@ export default function Products({
     const [isQuarantineModalOpen, setIsQuarantineModalOpen] = useState(false);
     const [quarantineHolds] = useState<QuarantineHold[]>(INITIAL_QUARANTINE_HOLDS);
 
+    // Palletization & Container packaging state
+    const [isPalletModalOpen, setIsPalletModalOpen] = useState(false);
+
     // ----------------------------------------------------
     // OPTION 32: Reorder Point Filter & Alert
     // ----------------------------------------------------
@@ -489,6 +492,18 @@ export default function Products({
                         type="button"
                         onClick={() => {
                             sounds.playBeep();
+                            setIsPalletModalOpen(true);
+                        }}
+                        className="h-9 px-3.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
+                        title="Zarządzaj normami paletyzacji i nośnikami opakowań zbiorczych"
+                    >
+                        <Package className="w-4 h-4 text-blue-200" /> Paletyzacja SKU
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            sounds.playBeep();
                             setIsRmaStockModalOpen(true);
                         }}
                         className="h-9 px-3.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm border-none"
@@ -768,6 +783,13 @@ export default function Products({
                                                         🚫 Kwarantanna QA
                                                     </span>
                                                 )}
+                                                <span 
+                                                    onClick={() => setIsPalletModalOpen(true)}
+                                                    className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 transition-colors" 
+                                                    title="Norma paletyzacji na europalecie EPAL"
+                                                >
+                                                    📦 {p.stock > 100 ? '96 szt./EPAL' : p.stock > 30 ? '48 szt./EPAL' : '24 szt./KLT'}
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="py-3 px-4 text-zinc-500">{getCategoryLabel(p.category)}</td>
@@ -1566,6 +1588,63 @@ export default function Products({
                             <button
                                 type="button"
                                 onClick={() => setIsQuarantineModalOpen(false)}
+                                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
+                            >
+                                Zamknij
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PALLETIZATION & PACKAGING NORMS MODAL */}
+            {isPalletModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 font-sans">
+                        <div className="p-4 bg-blue-900 text-white flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2">
+                                <Package className="w-5 h-5 text-blue-300" />
+                                <h3 className="font-bold text-sm">Normy Paletyzacji i Pojemników Logistycznych</h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsPalletModalOpen(false)}
+                                className="w-7 h-7 rounded-lg bg-blue-800 hover:bg-blue-700 text-white flex items-center justify-center cursor-pointer border-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                            <p className="text-xs text-zinc-600">
+                                Wzorcowe przypisanie nośników transportowych dla poszczególnych asortymentów:
+                            </p>
+                            <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-zinc-50 text-zinc-500 font-bold border-b border-zinc-200">
+                                        <tr>
+                                            <th className="py-2.5 px-3">Kod SKU</th>
+                                            <th className="py-2.5 px-3">Nazwa Towaru</th>
+                                            <th className="py-2.5 px-3">Nośnik bazowy</th>
+                                            <th className="py-2.5 px-3 text-right">Norma na nośnik</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-100 font-mono">
+                                        {products.slice(0, 6).map(p => (
+                                            <tr key={p.sku} className="hover:bg-zinc-50/50">
+                                                <td className="py-2 px-3 font-bold text-blue-700">{p.sku}</td>
+                                                <td className="py-2 px-3 text-zinc-800 font-sans">{p.name}</td>
+                                                <td className="py-2 px-3 text-zinc-600 font-sans">{p.stock > 30 ? 'Europaleta EPAL 1' : 'Pojemnik KLT-6428'}</td>
+                                                <td className="py-2 px-3 text-right font-bold text-zinc-900">{p.stock > 100 ? '96 szt./pal' : p.stock > 30 ? '48 szt./pal' : '24 szt./klt'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex justify-end shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsPalletModalOpen(false)}
                                 className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer border-none shadow-sm"
                             >
                                 Zamknij

@@ -137,6 +137,7 @@ export default function Orders({
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
+    const [containerFilter, setContainerFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
@@ -359,6 +360,8 @@ export default function Orders({
         const matchesNotesOnly = hasNotesOnly ? Boolean(customerInstruction && String(customerInstruction).trim().length > 0) : true;
         const matchesStatus = statusFilter ? order.status === statusFilter : true;
         const matchesPriority = priorityFilter ? order.priority === priorityFilter : true;
+        const isPallet = (order.items?.length || 0) > 4;
+        const matchesContainer = !containerFilter ? true : containerFilter === 'EPAL' ? isPallet : !isPallet;
         const matchesSearch = debouncedSearchQuery
             ? (order.id && String(order.id).toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
             (order.customer && String(order.customer).toLowerCase().includes(debouncedSearchQuery.toLowerCase())) ||
@@ -374,7 +377,7 @@ export default function Orders({
             matchesDate = isDateWithinLastNDays(order.shipmentDate, 7);
         }
 
-        return matchesStatus && matchesPriority && matchesSearch && matchesDate && matchesNotesOnly;
+        return matchesStatus && matchesPriority && matchesSearch && matchesDate && matchesNotesOnly && matchesContainer;
     });
 
     React.useEffect(() => {
@@ -789,6 +792,16 @@ export default function Orders({
                             <option value="Normalny">Normalny</option>
                         </select>
 
+                        <select
+                            value={containerFilter}
+                            onChange={(e) => setContainerFilter(e.target.value)}
+                            className="h-8 pl-2 pr-6 rounded border border-zinc-300 bg-white text-xs text-zinc-800 outline-none cursor-pointer"
+                        >
+                            <option value="">Nośnik: Wszystkie</option>
+                            <option value="KLT">Kuweta KLT</option>
+                            <option value="EPAL">Paleta EPAL</option>
+                        </select>
+
                         <button
                             type="button"
                             onClick={() => setHasNotesOnly(!hasNotesOnly)}
@@ -858,6 +871,7 @@ export default function Orders({
                             <th className="py-3 px-4 font-bold">Klient</th>
                             <th className="py-3 px-4 font-bold">Miejsce przeznaczenia</th>
                             <th className="py-3 px-4 font-bold">Zawartość</th>
+                            <th className="py-3 px-4 font-bold">Nośnik</th>
                             <th className="py-3 px-4 font-bold">Status wysyłki</th>
                             <th className="py-3 px-4 font-bold">Priorytet</th>
                             <th className="py-3 px-4 text-right font-bold">Planowany załadunek</th>
@@ -867,7 +881,7 @@ export default function Orders({
                         <tbody className="divide-y divide-zinc-200 text-xs font-semibold text-zinc-800">
                         {paginatedOrders.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="py-8 text-center text-zinc-505 font-bold bg-white">Brak zamówień odpowiadających kryteriom filtrowania.</td>
+                                <td colSpan={10} className="py-8 text-center text-zinc-505 font-bold bg-white">Brak zamówień odpowiadających kryteriom filtrowania.</td>
                             </tr>
                         ) : (
                             paginatedOrders.map(order => {
@@ -948,6 +962,12 @@ export default function Orders({
                                         <td className="py-3 px-4 text-zinc-650">{order.destination}</td>
                                         <td className="py-3 px-4 text-zinc-800">
                                             {renderItems(order.items)}
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <span className="inline-flex items-center gap-1 font-mono text-[10.5px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                                <Box className="w-3 h-3 text-blue-600" />
+                                                {(order.items?.length || 0) > 4 ? 'EPAL-881' : 'KLT-401'}
+                                            </span>
                                         </td>
                                         <td className="py-3 px-4">
                                             {(() => {
